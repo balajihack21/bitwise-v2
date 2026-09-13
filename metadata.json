@@ -1,0 +1,8 @@
+{
+  "name": "Bitwise Learning Hub",
+  "description": "A comprehensive tech elearning platform featuring Judge0 sandbox test case validation, sequential challenge unlocking, code playground, structured courses, and an AI-powered tutor.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
