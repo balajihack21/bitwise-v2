@@ -25,7 +25,7 @@ import {
   addDoc,
   serverTimestamp
 } from 'firebase/firestore';
-import { User, UserProgress, Course, SubmissionRecord, CourseProgressDetail, ProctorStatus, InstructorAccount, CourseInstructorAssignment } from '../types';
+import { User, UserProgress, Course, SubmissionRecord, CourseProgressDetail, ProctorStatus, InstructorAccount, CourseInstructorAssignment, CourseInternalAssessment } from '../types';
 import { MOCK_COURSES } from '../constants';
 
 // The Firebase configuration provided by the user
@@ -1043,6 +1043,7 @@ export interface StudentOverview {
   assignedInstructors?: { uid: string; email?: string; name?: string }[];
   courseInstructorAssignments?: CourseInstructorAssignment[];
   moduleDeadlineOverrides?: Record<string, Record<string, string>>;
+  internalAssessments?: Record<string, CourseInternalAssessment>;
 }
 
 const normalizeAssignedInstructors = (userData: any, instructorCatalog: InstructorAccount[] = []): { uid: string; email?: string; name?: string }[] => {

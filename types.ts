@@ -129,6 +129,17 @@ export interface CourseProgressDetail {
   isEnrolled: boolean;
 }
 
+export interface CourseInternalAssessment {
+  learningScore: number;
+  efficiencyScore: number;
+  deadlinePenaltyPercent: number;
+  codingTest1Enabled: boolean;
+  codingTest1Marks: number;
+  codingTest2Enabled: boolean;
+  codingTest2Marks: number;
+  totalInternalMarks: number;
+}
+
 export type ProctorStatus = 'CLEAN' | 'WARNING' | 'FLAGGED' | 'EXCUSED';
 
 export interface ProctorLogEntry {

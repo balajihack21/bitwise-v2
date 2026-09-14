@@ -1,6 +1,6 @@
 // ...existing code...
 import React, { useState, useEffect, useMemo } from 'react';
-import { Course, Lesson, Module, ProctorStatus, User } from '../types';
+import { Course, Lesson, Module, ProctorStatus, User, CourseInternalAssessment } from '../types';
 import { doc, getDoc, setDoc, collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { sanitizeForFirestore } from '../services/firebase';
@@ -355,6 +355,104 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
 
     await setStudentModuleDeadlineOverride(student.uid, courseId, moduleId, dateValue || null);
+
+    const course = courses.find(item => item.id === courseId);
+    const autoPenalty = getAutoCalculatedDeadlinePenalty(student, courseId, course);
+    await updateStudentInternalAssessment({
+      ...student,
+      moduleDeadlineOverrides: nextOverrides,
+      internalAssessments: student.internalAssessments || {}
+    }, courseId, { deadlinePenaltyPercent: autoPenalty });
+  };
+
+  const getDefaultInternalAssessment = (): CourseInternalAssessment => ({
+    learningScore: 0,
+    efficiencyScore: 0,
+    deadlinePenaltyPercent: 0,
+    codingTest1Enabled: false,
+    codingTest1Marks: 0,
+    codingTest2Enabled: false,
+    codingTest2Marks: 0,
+    totalInternalMarks: 0
+  });
+
+  const getAutoCalculatedDeadlinePenalty = (student: StudentOverview, courseId: string, course?: Course): number => {
+    const courseModules = course?.modules || [];
+    if (courseModules.length === 0) return 0;
+
+    const missedModules = courseModules.filter(module => {
+      const originalDeadline = module.endDate;
+      if (!originalDeadline) return false;
+      const hasOverride = !!student.moduleDeadlineOverrides?.[courseId]?.[module.id];
+      return new Date(originalDeadline) < new Date() && !hasOverride;
+    });
+
+    return Math.min(10, missedModules.length * 10);
+  };
+
+  const computeInternalAssessment = (student: StudentOverview, courseId: string, course?: Course): CourseInternalAssessment => {
+    const existing: Partial<CourseInternalAssessment> = student.internalAssessments?.[courseId] || {};
+    const courseModules = course?.modules || [];
+    const totalLessons = courseModules.reduce((sum, module) => sum + (module.lessons?.length || 0), 0);
+    const completedLessonsForCourse = courseModules.reduce((sum, module) => {
+      return sum + module.lessons.filter(lesson => student.completedLessonIds.includes(lesson.id)).length;
+    }, 0);
+    const totalProblems = courseModules.reduce((sum, module) => sum + module.lessons.filter(lesson => lesson.type === 'problem').length, 0);
+    const acceptedSubmissions = (student.submissions || []).filter(sub => sub.courseId === courseId && sub.status === 'ACCEPTED').length;
+    const learningScore = totalLessons > 0 ? Math.min(50, Math.round((completedLessonsForCourse / totalLessons) * 50)) : 0;
+    const efficiencyScore = totalProblems > 0 ? Math.min(50, Math.round((acceptedSubmissions / totalProblems) * 50)) : 0;
+    const deadlinePenaltyPercent = getAutoCalculatedDeadlinePenalty(student, courseId, course);
+    const codingTest1Marks = existing.codingTest1Enabled ? (existing.codingTest1Marks || 0) : 0;
+    const codingTest2Marks = existing.codingTest2Enabled ? (existing.codingTest2Marks || 0) : 0;
+    const rawScore = learningScore + efficiencyScore + codingTest1Marks + codingTest2Marks;
+    const penaltyAppliedScore = rawScore * (1 - (deadlinePenaltyPercent / 100));
+    const totalInternalMarks = Math.max(0, Math.min(100, Math.round(penaltyAppliedScore)));
+
+    return {
+      learningScore,
+      efficiencyScore,
+      deadlinePenaltyPercent,
+      codingTest1Enabled: !!existing.codingTest1Enabled,
+      codingTest1Marks: Math.min(25, codingTest1Marks),
+      codingTest2Enabled: !!existing.codingTest2Enabled,
+      codingTest2Marks: Math.min(25, codingTest2Marks),
+      totalInternalMarks
+    };
+  };
+
+  const updateStudentInternalAssessment = async (student: StudentOverview, courseId: string, updatedFields: Partial<CourseInternalAssessment>) => {
+    const course = courses.find(item => item.id === courseId);
+    const baseAssessment = computeInternalAssessment(student, courseId, course);
+    const autoDeadlinePenalty = getAutoCalculatedDeadlinePenalty(student, courseId, course);
+    const rawScore =
+      (updatedFields.learningScore ?? baseAssessment.learningScore) +
+      (updatedFields.efficiencyScore ?? baseAssessment.efficiencyScore) +
+      ((updatedFields.codingTest1Enabled ?? baseAssessment.codingTest1Enabled) ? (updatedFields.codingTest1Marks ?? baseAssessment.codingTest1Marks) : 0) +
+      ((updatedFields.codingTest2Enabled ?? baseAssessment.codingTest2Enabled) ? (updatedFields.codingTest2Marks ?? baseAssessment.codingTest2Marks) : 0);
+    const nextAssessment: CourseInternalAssessment = {
+      ...baseAssessment,
+      ...updatedFields,
+      deadlinePenaltyPercent: autoDeadlinePenalty,
+      totalInternalMarks: Math.max(0, Math.min(100, Math.round(rawScore * (1 - (autoDeadlinePenalty / 100)))))
+    };
+
+    const nextInternalAssessments = {
+      ...(student.internalAssessments || {}),
+      [courseId]: nextAssessment
+    };
+
+    setStudents(prev => prev.map(s => s.uid === student.uid ? { ...s, internalAssessments: nextInternalAssessments } : s));
+    if (selectedStudentForDetails && selectedStudentForDetails.uid === student.uid) {
+      setSelectedStudentForDetails({ ...selectedStudentForDetails, internalAssessments: nextInternalAssessments });
+    }
+
+    try {
+      await setDoc(doc(db, 'users', student.uid), {
+        internalAssessments: sanitizeForFirestore(nextInternalAssessments)
+      }, { merge: true });
+    } catch (e) {
+      console.warn('Unable to save internal assessment to Firestore:', e);
+    }
   };
 
   const handleSaveModalProctorReview = async () => {
@@ -2907,6 +3005,105 @@ solve()`
                               </button>
                             </div>
 
+                            {isInstructor && (
+                              <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-3">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600">Internal Marks</span>
+                                  <span className="text-[11px] font-bold text-bitwise-700">
+                                    {computeInternalAssessment(selectedStudentForDetails, cp.courseId, fullCourse).totalInternalMarks}/100
+                                  </span>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                                  <div className="bg-white border border-slate-200 rounded-lg p-2">
+                                    <div className="text-slate-500">Learning 50%</div>
+                                    <div className="mt-1 font-bold text-slate-900">
+                                      {computeInternalAssessment(selectedStudentForDetails, cp.courseId, fullCourse).learningScore}%
+                                    </div>
+                                  </div>
+                                  <div className="bg-white border border-slate-200 rounded-lg p-2">
+                                    <div className="text-slate-500">Efficiency 50%</div>
+                                    <div className="mt-1 font-bold text-slate-900">
+                                      {computeInternalAssessment(selectedStudentForDetails, cp.courseId, fullCourse).efficiencyScore}%
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="space-y-2 text-[11px]">
+                                  <div className="flex items-center justify-between gap-2 rounded-lg bg-white border border-slate-200 px-2 py-1.5">
+                                    <span>Deadline Penalty</span>
+                                    <span className="min-w-[3.5rem] rounded bg-slate-100 px-2 py-1 text-right font-bold text-slate-700">
+                                      {computeInternalAssessment(selectedStudentForDetails, cp.courseId, fullCourse).deadlinePenaltyPercent}%
+                                    </span>
+                                  </div>
+
+                                  <div className="rounded-lg bg-white border border-slate-200 p-2 space-y-2">
+                                    <label className="flex items-center justify-between gap-2">
+                                      <span>Coding Test 1</span>
+                                      <input
+                                        type="checkbox"
+                                        checked={computeInternalAssessment(selectedStudentForDetails, cp.courseId, fullCourse).codingTest1Enabled}
+                                        onChange={async (e) => {
+                                          const current = computeInternalAssessment(selectedStudentForDetails, cp.courseId, fullCourse);
+                                          await updateStudentInternalAssessment(selectedStudentForDetails, cp.courseId, {
+                                            codingTest1Enabled: e.target.checked,
+                                            codingTest1Marks: e.target.checked ? (current.codingTest1Marks || 0) : 0
+                                          });
+                                        }}
+                                      />
+                                    </label>
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      max={25}
+                                      value={computeInternalAssessment(selectedStudentForDetails, cp.courseId, fullCourse).codingTest1Marks}
+                                      disabled={!computeInternalAssessment(selectedStudentForDetails, cp.courseId, fullCourse).codingTest1Enabled}
+                                      onChange={async (e) => {
+                                        const value = Math.min(25, Math.max(0, Number(e.target.value || 0)));
+                                        await updateStudentInternalAssessment(selectedStudentForDetails, cp.courseId, {
+                                          codingTest1Enabled: true,
+                                          codingTest1Marks: value
+                                        });
+                                      }}
+                                      className="w-full border border-slate-200 rounded px-2 py-1.5 focus:outline-none focus:border-bitwise-500 disabled:bg-slate-100"
+                                    />
+                                  </div>
+
+                                  <div className="rounded-lg bg-white border border-slate-200 p-2 space-y-2">
+                                    <label className="flex items-center justify-between gap-2">
+                                      <span>Coding Test 2</span>
+                                      <input
+                                        type="checkbox"
+                                        checked={computeInternalAssessment(selectedStudentForDetails, cp.courseId, fullCourse).codingTest2Enabled}
+                                        onChange={async (e) => {
+                                          const current = computeInternalAssessment(selectedStudentForDetails, cp.courseId, fullCourse);
+                                          await updateStudentInternalAssessment(selectedStudentForDetails, cp.courseId, {
+                                            codingTest2Enabled: e.target.checked,
+                                            codingTest2Marks: e.target.checked ? (current.codingTest2Marks || 0) : 0
+                                          });
+                                        }}
+                                      />
+                                    </label>
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      max={25}
+                                      value={computeInternalAssessment(selectedStudentForDetails, cp.courseId, fullCourse).codingTest2Marks}
+                                      disabled={!computeInternalAssessment(selectedStudentForDetails, cp.courseId, fullCourse).codingTest2Enabled}
+                                      onChange={async (e) => {
+                                        const value = Math.min(25, Math.max(0, Number(e.target.value || 0)));
+                                        await updateStudentInternalAssessment(selectedStudentForDetails, cp.courseId, {
+                                          codingTest2Enabled: true,
+                                          codingTest2Marks: value
+                                        });
+                                      }}
+                                      className="w-full border border-slate-200 rounded px-2 py-1.5 focus:outline-none focus:border-bitwise-500 disabled:bg-slate-100"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
                             {/* Expandable Syllabus Checklist */}
                             {isExpanded && fullCourse && fullCourse.modules && (
                               <div className="mt-2 space-y-2 max-h-48 overflow-y-auto pr-1">
@@ -2916,19 +3113,26 @@ solve()`
                                     <div key={mod.id} className="bg-slate-50 p-2 rounded-lg text-xs">
                                       <div className="font-bold text-slate-700 mb-1 text-[11px] flex items-center justify-between gap-2">
                                         <span>{mod.title}</span>
-                                        {(isInstructor || !isInstructor) && (
-                                          <label className="flex items-center gap-1 bg-white border border-slate-200 rounded px-1.5 py-0.5 text-[10px] text-slate-600">
-                                            <span>Extend</span>
-                                            <input
-                                              type="date"
-                                              value={selectedStudentForDetails.moduleDeadlineOverrides?.[cp.courseId]?.[mod.id] || mod.endDate || ''}
-                                              onChange={async (e) => {
-                                                await handleModuleDeadlineOverride(selectedStudentForDetails, cp.courseId, mod.id, e.target.value);
-                                              }}
-                                              className="bg-transparent outline-none"
-                                            />
-                                          </label>
-                                        )}
+                                        <div className="flex items-center gap-1">
+                                          {selectedStudentForDetails.moduleDeadlineOverrides?.[cp.courseId]?.[mod.id] && (
+                                            <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-700 px-1.5 py-0.5 font-bold uppercase tracking-wide">
+                                              Extended
+                                            </span>
+                                          )}
+                                          {(isInstructor || !isInstructor) && (
+                                            <label className="flex items-center gap-1 bg-white border border-slate-200 rounded px-1.5 py-0.5 text-[10px] text-slate-600">
+                                              <span>Extend</span>
+                                              <input
+                                                type="date"
+                                                value={selectedStudentForDetails.moduleDeadlineOverrides?.[cp.courseId]?.[mod.id] || mod.endDate || ''}
+                                                onChange={async (e) => {
+                                                  await handleModuleDeadlineOverride(selectedStudentForDetails, cp.courseId, mod.id, e.target.value);
+                                                }}
+                                                className="bg-transparent outline-none"
+                                              />
+                                            </label>
+                                          )}
+                                        </div>
                                       </div>
                                       <div className="space-y-1 pl-2">
                                         {mod.lessons.map(les => {

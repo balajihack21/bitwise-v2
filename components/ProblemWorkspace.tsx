@@ -102,6 +102,7 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
 
   const [showSettingsModal, setShowSettingsModal] = useState<boolean>(false);
   const [unlockedNextLesson, setUnlockedNextLesson] = useState<Lesson | null>(null);
+  const [isSplitScreenMode, setIsSplitScreenMode] = useState<boolean>(false);
 
   // Proctored Exam / Focus Lock Tracking State
   const [sessionTabSwitches, setSessionTabSwitches] = useState<number>(0);
@@ -140,6 +141,17 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
+  }, []);
+
+  useEffect(() => {
+    const updateSplitScreenState = () => {
+      const isLikelySplit = window.screen && window.screen.availWidth > 0 && window.innerWidth < window.screen.availWidth * 0.8;
+      setIsSplitScreenMode(isLikelySplit);
+    };
+
+    updateSplitScreenState();
+    window.addEventListener('resize', updateSplitScreenState);
+    return () => window.removeEventListener('resize', updateSplitScreenState);
   }, []);
 
   // Proctoring & Anti-Cheat: Tab Switch & Focus Loss Detection
@@ -222,6 +234,11 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
 
   // Keyboard Tab Indentation Handler
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (isSplitScreenMode) {
+      e.preventDefault();
+      return;
+    }
+
     // Block system screenshot keys
     // PrintScreen, Ctrl+PrintScreen, Meta+Shift+S (Snipping Tool), Meta+PrintScreen, Windows+S
     // Note: Windows keys mapping can be tricky in browser
@@ -252,6 +269,7 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
 
   // Run Sample Test Cases
   const handleRunSampleTests = async () => {
+    if (isSplitScreenMode) return;
     if (!code.trim() || isRunning || isSubmitting) return;
 
     setIsRunning(true);
@@ -313,6 +331,7 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
 
   // Submit Solution (validates ALL test cases including hidden ones)
   const handleSubmitSolution = async () => {
+    if (isSplitScreenMode) return;
     if (!code.trim() || isRunning || isSubmitting) return;
 
     setIsSubmitting(true);
@@ -430,12 +449,12 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
   return (
     <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col w-screen h-screen overflow-hidden text-slate-100 select-none-area animate-fade-in">
       {/* Top Proctored Exam Header Bar */}
-      <header className="h-14 bg-slate-900 border-b border-slate-800 px-4 flex items-center justify-between shrink-0 shadow-lg">
-        <div className="flex items-center gap-3">
+      <header className="h-12 bg-slate-900 border-b border-slate-800 px-3 flex items-center justify-between shrink-0 shadow-lg">
+        <div className="flex items-center gap-2 min-w-0">
           {/* Proctored Badge */}
-          <div className="flex items-center gap-2 bg-emerald-950/80 border border-emerald-500/40 px-3 py-1 rounded-full text-xs font-bold text-emerald-300">
+          <div className="flex items-center gap-2 bg-emerald-950/80 border border-emerald-500/40 px-2.5 py-0.5 rounded-full text-[10px] font-bold text-emerald-300">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span>PROCTORED CHALLENGE MODE</span>
+            <span>PROCTORED MODE</span>
           </div>
 
           <span className="text-slate-600 hidden sm:inline">|</span>
@@ -448,21 +467,21 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
         </div>
 
         {/* Center Live Timer & Proctoring Stats */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2">
           {/* Active Timer */}
-          <div className="flex items-center gap-1.5 bg-slate-950 border border-slate-800 px-3 py-1 rounded-lg text-xs font-mono text-slate-300">
+          <div className="flex items-center gap-1 bg-slate-950 border border-slate-800 px-2 py-0.5 rounded-lg text-[10px] font-mono text-slate-300">
             <i className="fa-regular fa-clock text-bitwise-400"></i>
             <span>{formatTimer(elapsedSeconds)}</span>
           </div>
 
           {/* Tab Switch / Focus Loss Counter */}
-          <div className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-mono font-bold border transition-colors ${
+          <div className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold border transition-colors ${
             sessionTabSwitches > 0 
               ? 'bg-red-950/80 text-red-400 border-red-800 animate-pulse' 
               : 'bg-slate-950 text-slate-400 border-slate-800'
           }`}>
             <i className="fa-solid fa-eye-slash"></i>
-            <span>Tab Switches: {sessionTabSwitches}</span>
+            <span>{sessionTabSwitches}</span>
           </div>
         </div>
 
@@ -471,29 +490,29 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
           {/* Fullscreen toggle */}
           <button
             onClick={toggleFullscreen}
-            className="px-2.5 py-1.5 text-xs text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg border border-slate-700 transition-colors flex items-center gap-1.5"
+            className="px-2 py-1 text-[10px] text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg border border-slate-700 transition-colors flex items-center gap-1"
             title="Toggle Fullscreen Mode"
           >
             <i className={`fa-solid ${isFullscreen ? 'fa-compress' : 'fa-expand'}`}></i>
-            <span className="hidden md:inline">{isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}</span>
+            <span className="hidden md:inline">{isFullscreen ? 'Exit' : 'Full'}</span>
           </button>
 
           {/* Exit Challenge Button with Guard */}
           <button
             onClick={() => setShowExitConfirmModal(true)}
-            className="px-3 py-1.5 text-xs font-bold text-red-300 hover:text-white bg-red-950/60 hover:bg-red-900 border border-red-800/80 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
+            className="px-2.5 py-1 text-[10px] font-bold text-red-300 hover:text-white bg-red-950/60 hover:bg-red-900 border border-red-800/80 rounded-lg transition-colors flex items-center gap-1 shadow-sm"
             title="Exit proctored environment"
           >
             <i className="fa-solid fa-arrow-right-from-bracket"></i>
-            <span>Exit Challenge</span>
+            <span>Exit</span>
           </button>
         </div>
       </header>
 
-      {/* Main Split Layout: Left Problem & Right Editor */}
-      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden bg-slate-950">
-        {/* Left Column: Problem Description & Submissions */}
-        <div className="lg:w-1/2 flex flex-col border-b lg:border-b-0 lg:border-r border-slate-800 bg-slate-950">
+      {/* Single-column workspace layout */}
+      <div className="flex-1 flex flex-col overflow-hidden bg-slate-950">
+        {/* Problem Description & Submissions */}
+        <div className="w-full flex flex-col border-b border-slate-800 bg-slate-950">
           {/* Tab Navigation */}
           <div className="flex items-center justify-between px-4 py-2 bg-slate-900/90 border-b border-slate-800 text-xs shrink-0">
             <div className="flex gap-1">
@@ -711,9 +730,16 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
           )}
         </div>
 
-        {/* Right Column: Code Editor & Judge0 Test Runner */}
-        <div className="lg:w-1/2 flex flex-col bg-slate-900">
+        {/* Code Editor & Judge0 Test Runner */}
+        <div className="w-full flex flex-col bg-slate-900">
           {/* Editor Toolbar */}
+          {isSplitScreenMode && (
+            <div className="px-4 py-3 bg-red-950/80 border-b border-red-800 text-red-100 text-[12px] font-bold flex items-center justify-center gap-2 shrink-0 shadow-inner">
+              <i className="fa-solid fa-triangle-exclamation text-red-300"></i>
+              Fullscreen mode is required to continue this challenge. Split-screen editing is disabled.
+            </div>
+          )}
+
           <div className="flex items-center justify-between px-4 py-2 bg-slate-800 border-b border-slate-700 shrink-0">
             <div className="flex items-center gap-3">
               {/* Language Selector */}
@@ -766,14 +792,25 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
           <div className="flex-1 relative bg-slate-950 min-h-[260px] overflow-hidden flex flex-col">
             <textarea
               value={code}
-              onChange={(e) => setCode(e.target.value)}
+              onChange={(e) => {
+                if (!isSplitScreenMode) setCode(e.target.value);
+              }}
               onKeyDown={handleKeyDown}
-              onCopy={(e) => e.preventDefault()}
-              onPaste={(e) => e.preventDefault()}
-              onCut={(e) => e.preventDefault()}
+              onCopy={(e) => {
+                if (isSplitScreenMode) e.preventDefault();
+              }}
+              onPaste={(e) => {
+                if (isSplitScreenMode) e.preventDefault();
+              }}
+              onCut={(e) => {
+                if (isSplitScreenMode) e.preventDefault();
+              }}
+              readOnly={isSplitScreenMode}
               spellCheck={false}
-              className="w-full h-full p-4 bg-slate-950 text-slate-100 font-mono text-sm leading-relaxed resize-none focus:outline-none focus:ring-0 border-none select-text"
-              placeholder="// Write your code to solve the challenge..."
+              className={`w-full h-full p-4 font-mono text-sm leading-relaxed resize-none focus:outline-none focus:ring-0 border-none select-text ${
+                isSplitScreenMode ? 'bg-slate-900 text-slate-500 cursor-not-allowed' : 'bg-slate-950 text-slate-100'
+              }`}
+              placeholder={isSplitScreenMode ? '// Editing disabled while split-screen is active' : '// Write your code to solve the challenge...'}
             />
           </div>
 
@@ -823,31 +860,33 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
               </div>
 
               {/* Run & Submit Actions */}
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleRunSampleTests}
-                  disabled={isRunning || isSubmitting}
-                  className="px-3.5 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
-                >
-                  {isRunning ? (
-                    <><i className="fa-solid fa-spinner fa-spin"></i> Running...</>
-                  ) : (
-                    <><i className="fa-solid fa-play text-xs text-emerald-400"></i> Run Tests</>
-                  )}
-                </button>
+              {!isSplitScreenMode && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleRunSampleTests}
+                    disabled={isRunning || isSubmitting}
+                    className="px-3.5 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
+                  >
+                    {isRunning ? (
+                      <><i className="fa-solid fa-spinner fa-spin"></i> Running...</>
+                    ) : (
+                      <><i className="fa-solid fa-play text-xs text-emerald-400"></i> Run Tests</>
+                    )}
+                  </button>
 
-                <button
-                  onClick={handleSubmitSolution}
-                  disabled={isRunning || isSubmitting}
-                  className="px-4 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold rounded-lg shadow-md transition-all disabled:opacity-50 flex items-center gap-1.5"
-                >
-                  {isSubmitting ? (
-                    <><i className="fa-solid fa-circle-notch fa-spin"></i> Submitting...</>
-                  ) : (
-                    <><i className="fa-solid fa-cloud-arrow-up"></i> Submit Solution</>
-                  )}
-                </button>
-              </div>
+                  <button
+                    onClick={handleSubmitSolution}
+                    disabled={isRunning || isSubmitting}
+                    className="px-4 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold rounded-lg shadow-md transition-all disabled:opacity-50 flex items-center gap-1.5"
+                  >
+                    {isSubmitting ? (
+                      <><i className="fa-solid fa-circle-notch fa-spin"></i> Submitting...</>
+                    ) : (
+                      <><i className="fa-solid fa-cloud-arrow-up"></i> Submit Solution</>
+                    )}
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Test Case Content Area */}
