@@ -621,7 +621,32 @@ export const loginUser = async (email: string, password: string): Promise<User> 
     }
   }
 
-  // 4. Match against existing local / seeded accounts before trying Firebase Auth.
+  // 4. Resolve existing instructor profiles before consulting the local cache.
+  // Older instructor records were created without a Firebase Auth account, so use
+  // their persisted password (or the manager's default) for the local fallback.
+  try {
+    const instructorSnap = await getDocs(query(collection(db, 'instructors'), where('email', '==', cleanEmail)));
+    if (!instructorSnap.empty) {
+      const instructorDoc = instructorSnap.docs[0];
+      const instructorData = instructorDoc.data();
+      const storedPassword = String(instructorData.password || 'instructor123');
+      if (password === storedPassword) {
+        return {
+          username: instructorData.name || instructorData.displayName || cleanEmail.split('@')[0],
+          role: 'instructor',
+          email: instructorData.email || cleanEmail,
+          uid: instructorData.uid || instructorDoc.id,
+          assignedCourseIds: Array.isArray(instructorData.assignedCourseIds)
+            ? instructorData.assignedCourseIds
+            : getInstructorAssignedCourses(cleanEmail, instructorData.uid || instructorDoc.id)
+        };
+      }
+    }
+  } catch (e) {
+    // Continue to Firebase Auth and the other supported account sources.
+  }
+
+  // 5. Match against existing local / seeded accounts before trying Firebase Auth.
   // This prevents seeded student records from being treated as brand-new users when the password is the DOB.
   try {
     const accounts = getStoredAccounts();
@@ -2302,16 +2327,35 @@ export const fetchInstructorsList = async (): Promise<InstructorAccount[]> => {
 /**
  * Save / Update an instructor profile and their assigned courses
  */
-export const saveInstructorAccount = async (instructor: InstructorAccount): Promise<void> => {
+export const saveInstructorAccount = async (instructor: InstructorAccount, password = instructor.password || 'instructor123'): Promise<void> => {
   const cleanEmail = instructor.email.toLowerCase().trim();
   const uid = instructor.uid || `inst_${Date.now()}`;
   const payload: InstructorAccount = {
     uid,
     email: cleanEmail,
     name: instructor.name || cleanEmail.split('@')[0],
+    password,
     assignedCourseIds: Array.from(new Set(instructor.assignedCourseIds || [])),
     createdAt: instructor.createdAt || new Date().toISOString()
   };
+
+  // Create the Auth identity in a separate Firebase app so the current admin session stays signed in.
+  try {
+    const authAppName = `instructor-provision-${cleanEmail.replace(/[^a-z0-9]/g, '-')}`;
+    const authApp = getApps().find(candidate => candidate.name === authAppName)
+      || initializeApp(firebaseConfig, authAppName);
+    const instructorAuth = getAuth(authApp);
+    try {
+      const credential = await createUserWithEmailAndPassword(instructorAuth, cleanEmail, password);
+      await updateProfile(credential.user, { displayName: payload.name }).catch(() => {});
+    } catch (authError: any) {
+      // auth/email-already-in-use means the account is already provisioned; its existing password is retained.
+      if (authError?.code !== 'auth/email-already-in-use') throw authError;
+    }
+    await signOut(instructorAuth).catch(() => {});
+  } catch (e) {
+    console.warn('Firebase instructor Auth provisioning warning:', e);
+  }
 
   // Remove from deleted list if re-adding
   try {
@@ -2339,6 +2383,7 @@ export const saveInstructorAccount = async (instructor: InstructorAccount): Prom
     if (aIdx >= 0) {
       accounts[aIdx].role = 'instructor';
       accounts[aIdx].username = payload.name;
+      accounts[aIdx].password = password;
       accounts[aIdx].assignedCourseIds = payload.assignedCourseIds;
     } else {
       accounts.push({
@@ -2359,6 +2404,7 @@ export const saveInstructorAccount = async (instructor: InstructorAccount): Prom
     const instDoc = doc(db, 'instructors', uid);
     await setDoc(instDoc, sanitizeForFirestore({
       ...payload,
+      password,
       updatedAt: new Date().toISOString()
     }), { merge: true });
 
@@ -2368,6 +2414,7 @@ export const saveInstructorAccount = async (instructor: InstructorAccount): Prom
       email: cleanEmail,
       displayName: payload.name,
       role: 'instructor',
+      password,
       assignedCourseIds: payload.assignedCourseIds,
       updatedAt: new Date().toISOString()
     }), { merge: true });

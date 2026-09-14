@@ -38,6 +38,7 @@ export interface InstructorAccount {
   uid: string;
   email: string;
   name: string;
+  password?: string;
   assignedCourseIds: string[];
   createdAt?: string;
 }

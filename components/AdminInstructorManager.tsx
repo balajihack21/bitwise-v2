@@ -168,11 +168,12 @@ export const AdminInstructorManager: React.FC<AdminInstructorManagerProps> = ({
         uid: `inst-${Date.now()}`,
         name: newName.trim(),
         email: emailClean,
+        password: newPassword,
         assignedCourseIds: newSelectedCourses,
         createdAt: new Date().toISOString()
       };
 
-      await saveInstructorAccount(newInst);
+      await saveInstructorAccount(newInst, newPassword);
 
       // If courses were pre-selected, update them
       if (newSelectedCourses.length > 0) {
