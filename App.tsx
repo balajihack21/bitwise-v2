@@ -26,7 +26,8 @@ import {
   saveCoursesToFirestore,
   getInstructorAssignedCourses,
   fetchInstructorsList,
-  loadUserModuleDeadlineOverrides
+  loadUserModuleDeadlineOverrides,
+  loadUserScheduledCodingTests
 } from './services/firebase';
 
 const App: React.FC = () => {
@@ -162,6 +163,7 @@ const App: React.FC = () => {
         });
 
         const loadedOverrides = await loadUserModuleDeadlineOverrides(fbUser.uid);
+        const loadedScheduledTests = await loadUserScheduledCodingTests(fbUser.uid);
         const activeUser: User = {
           username: fbUser.displayName || cleanEmail.split('@')[0] || (role === 'admin' ? 'Admin' : (role === 'instructor' ? 'Instructor' : 'Student')),
           role,
@@ -169,7 +171,8 @@ const App: React.FC = () => {
           uid: fbUser.uid,
           assignedCourseIds: assignedCourses,
           courseInstructorAssignments,
-          moduleDeadlineOverrides: loadedOverrides
+          moduleDeadlineOverrides: loadedOverrides,
+          scheduledCodingTests: loadedScheduledTests
         };
         setUser(activeUser);
         localStorage.setItem('bitwise_active_user', JSON.stringify(activeUser));

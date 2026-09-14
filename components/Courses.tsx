@@ -92,6 +92,71 @@ const Courses: React.FC<CoursesProps> = ({
   const [isTranslating, setIsTranslating] = useState(false);
   const [lockedNotice, setLockedNotice] = useState<string | null>(null);
 
+  const getCourseCodingTests = (course: Course) => {
+    const schedule = course.codingTestSchedule || user?.scheduledCodingTests?.[course.id] || {};
+    const legacy = [
+      { key: 'codingTest1Date', label: 'Coding Test 1', date: schedule.codingTest1Date, problemId: schedule.codingTest1ProblemId },
+      { key: 'codingTest2Date', label: 'Coding Test 2', date: schedule.codingTest2Date, problemId: schedule.codingTest2ProblemId }
+    ].filter(item => !!item.date);
+
+    const arrayTests = (schedule.tests || []).filter(test => !!test.date && test.enabled !== false).map(test => {
+      const selectedProblemIds = Array.isArray(test.problemIds) && test.problemIds.length > 0
+        ? test.problemIds
+        : test.problemId ? [test.problemId] : [];
+
+      return {
+        key: `codingtest_${test.id}`,
+        label: test.title || 'Coding Test',
+        date: test.date,
+        problemId: selectedProblemIds[0]
+      };
+    });
+
+    return [...legacy, ...arrayTests].filter((item, index, arr) => arr.findIndex(other => other.key === item.key) === index);
+  };
+
+  const getCourseCodingTestProblemIds = (course: Course, key: string): string[] => {
+    const schedule = course.codingTestSchedule || user?.scheduledCodingTests?.[course.id] || {};
+    const legacyProblemId = key === 'codingTest1Date'
+      ? schedule.codingTest1ProblemId
+      : key === 'codingTest2Date'
+        ? schedule.codingTest2ProblemId
+        : undefined;
+
+    if (legacyProblemId) {
+      return [legacyProblemId];
+    }
+
+    const test = (schedule.tests || []).find(item => `codingtest_${item.id}` === key);
+    if (test) {
+      const selectedProblemIds = Array.isArray(test.problemIds) && test.problemIds.length > 0
+        ? test.problemIds
+        : test.problemId ? [test.problemId] : [];
+      return selectedProblemIds.filter(Boolean);
+    }
+
+    return [];
+  };
+
+  const getCourseCodingTestLesson = (course: Course, key: string): Lesson | null => {
+    const problemLessons = course.modules
+      .flatMap(module => module.lessons)
+      .filter(lesson => lesson.type === 'problem');
+
+    const problemIds = getCourseCodingTestProblemIds(course, key);
+    if (problemIds.length > 0) {
+      const completedProblemIds = new Set(progress.completedLessonIds || []);
+      const nextUnfinished = problemIds
+        .map(problemId => problemLessons.find(lesson => lesson.id === problemId))
+        .find(lesson => lesson && !completedProblemIds.has(lesson.id));
+
+      return nextUnfinished || problemLessons.find(lesson => problemIds.includes(lesson.id)) || problemLessons[0] || null;
+    }
+
+    const fallbackIndex = key === 'codingTest1Date' ? 0 : key === 'codingTest2Date' ? 1 : 0;
+    return problemLessons[fallbackIndex] || problemLessons[0] || null;
+  };
+
   const isModuleExtended = (course: Course, moduleId: string) => {
     const override = user?.moduleDeadlineOverrides?.[course.id]?.[moduleId];
     const originalEndDate = course.modules.find(m => m.id === moduleId)?.endDate;
@@ -330,6 +395,46 @@ const Courses: React.FC<CoursesProps> = ({
           </div>
         )}
         
+        {(() => {
+          const tests = getCourseCodingTests(selectedCourse);
+          if (tests.length === 0) return null;
+
+          return (
+            <div className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+              {tests.map(test => {
+                const isOpen = !!test.date && new Date(test.date) <= new Date();
+                const testLesson = getCourseCodingTestLesson(selectedCourse, test.key as 'codingTest1Date' | 'codingTest2Date');
+                const testProblemIds = getCourseCodingTestProblemIds(selectedCourse, test.key as 'codingTest1Date' | 'codingTest2Date');
+
+                return (
+                  <div key={test.key} className="rounded-2xl border border-slate-200 bg-slate-50 p-3 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Scheduled</div>
+                      <div className="text-sm font-bold text-slate-900">{test.label}</div>
+                      <div className="text-[11px] text-slate-500">
+                        {new Date(test.date!).toLocaleDateString()} · {isOpen ? `Available now (${testProblemIds.length} problem${testProblemIds.length === 1 ? '' : 's'})` : 'Upcoming'}
+                      </div>
+                    </div>
+                    {isOpen && testLesson ? (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedLesson(testLesson)}
+                        className="rounded-xl bg-bitwise-600 text-white px-3 py-2 text-xs font-bold hover:bg-bitwise-700 transition-colors"
+                      >
+                        Open {testProblemIds.length > 1 ? 'Next Problem' : test.label}
+                      </button>
+                    ) : (
+                      <span className="rounded-full bg-slate-200 text-slate-600 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide">
+                        Locked
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
+
         {/* Main Grid: Sidebar + Lesson/Problem Area */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-[84vh] min-h-[600px]">
           {/* Sidebar: Modules & Sequential Lessons */}

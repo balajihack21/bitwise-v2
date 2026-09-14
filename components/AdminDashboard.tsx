@@ -48,7 +48,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   currentUser
 }) => {
   const isInstructor = currentUser?.role === 'instructor';
-  const [activeTab, setActiveTab] = useState<'courses' | 'instructors' | 'students' | 'submissions' | 'firebase'>('courses');
+  const canManageCourseTests = currentUser?.role === 'instructor' || currentUser?.role === 'admin';
+  const [activeTab, setActiveTab] = useState<'courses' | 'instructors' | 'students' | 'submissions' | 'firebase' | 'coding-tests'>('courses');
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [isEditingNew, setIsEditingNew] = useState<boolean>(false);
   const [assignModalCourse, setAssignModalCourse] = useState<Course | null>(null);
@@ -365,6 +366,49 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }, courseId, { deadlinePenaltyPercent: autoPenalty });
   };
 
+  const handleStudentCodingTestScheduleUpdate = async (
+    student: StudentOverview,
+    courseId: string,
+    testKey: 'codingTest1Date' | 'codingTest2Date',
+    dateValue: string
+  ) => {
+    const course = courses.find(item => item.id === courseId);
+    const availableProblemLessons = (course?.modules || [])
+      .flatMap(module => module.lessons)
+      .filter(lesson => lesson.type === 'problem');
+    const desiredProblemId = testKey === 'codingTest1Date'
+      ? (availableProblemLessons[0]?.id || course?.codingTestSchedule?.codingTest1ProblemId)
+      : (availableProblemLessons[1]?.id || availableProblemLessons[0]?.id || course?.codingTestSchedule?.codingTest2ProblemId);
+
+    const nextCourseSchedule = {
+      ...(course?.codingTestSchedule || {})
+    };
+
+    if (dateValue) {
+      nextCourseSchedule[testKey] = dateValue;
+      if (desiredProblemId) {
+        nextCourseSchedule[testKey === 'codingTest1Date' ? 'codingTest1ProblemId' : 'codingTest2ProblemId'] = desiredProblemId;
+      }
+    } else {
+      delete nextCourseSchedule[testKey];
+      delete nextCourseSchedule[testKey === 'codingTest1Date' ? 'codingTest1ProblemId' : 'codingTest2ProblemId'];
+    }
+
+    const nextCourses = courses.map(item => item.id === courseId ? { ...item, codingTestSchedule: nextCourseSchedule } : item);
+    onUpdateCourses(nextCourses);
+    setStudents(prev => prev.map(s => s.uid === student.uid ? { ...s, scheduledCodingTests: { ...((s.scheduledCodingTests || {})), [courseId]: nextCourseSchedule } } : s));
+    if (selectedStudentForDetails && selectedStudentForDetails.uid === student.uid) {
+      setSelectedStudentForDetails({ ...selectedStudentForDetails, scheduledCodingTests: { ...((selectedStudentForDetails.scheduledCodingTests || {})), [courseId]: nextCourseSchedule } });
+    }
+
+    try {
+      const courseRef = doc(db, 'courses', courseId);
+      await setDoc(courseRef, { codingTestSchedule: sanitizeForFirestore(nextCourseSchedule) }, { merge: true });
+    } catch (e) {
+      console.warn('Unable to save course coding test schedule:', e);
+    }
+  };
+
   const getDefaultInternalAssessment = (): CourseInternalAssessment => ({
     learningScore: 0,
     efficiencyScore: 0,
@@ -390,9 +434,108 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     return Math.min(10, missedModules.length * 10);
   };
 
+  const getAutoCalculatedCodingTestMarks = (student: StudentOverview, courseId: string, course?: Course): { codingTest1Marks: number; codingTest2Marks: number; totalCodingTestMarks: number } => {
+    const schedule: any = course?.codingTestSchedule || student?.scheduledCodingTests?.[courseId] || {};
+    const normalizeProblemIds = (values: Array<string | undefined | null>) => Array.from(new Set(values.filter((value): value is string => !!value)));
+    const parseSubmissionDate = (value?: string) => {
+      if (!value) return 0;
+      const direct = new Date(value);
+      if (!Number.isNaN(direct.getTime())) return direct.getTime();
+
+      const matched = value.match(/(\d{1,2}):(\d{2}):(\d{2})\s*(AM|PM)?\s*,\s*(\d{1,2})\/(\d{1,2})\/(\d{4})/i);
+      if (matched) {
+        const [, hh, mm, ss, meridiem, month, day, year] = matched;
+        let hour = Number(hh);
+        const minute = Number(mm);
+        const second = Number(ss);
+        const monthIndex = Number(month) - 1;
+        const dom = Number(day);
+        const fullYear = Number(year);
+        if (meridiem) {
+          const ampm = meridiem.toUpperCase();
+          if (ampm === 'PM' && hour < 12) hour += 12;
+          if (ampm === 'AM' && hour === 12) hour = 0;
+        }
+        return Date.UTC(fullYear, monthIndex, dom, hour, minute, second);
+      }
+
+      const isoMatch = value.match(/(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
+      if (isoMatch) {
+        const [, year, month, day, hour, minute, second] = isoMatch;
+        return Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second));
+      }
+
+      return 0;
+    };
+
+    const getProblemIdsForSlot = (dateKey: 'codingTest1Date' | 'codingTest2Date', legacyKey: 'codingTest1ProblemId' | 'codingTest2ProblemId') => {
+      const explicitDate = schedule[dateKey];
+      const allTests = Array.isArray(schedule.tests) ? schedule.tests.filter((test: any) => test.enabled !== false) : [];
+
+      if (explicitDate) {
+        const matchedTests = allTests.filter((test: any) => test.date === explicitDate);
+        return normalizeProblemIds([
+          schedule[legacyKey],
+          ...matchedTests.flatMap((test: any) => Array.isArray(test.problemIds) ? test.problemIds : (test.problemId ? [test.problemId] : []))
+        ]);
+      }
+
+      const legacyProblemIds = normalizeProblemIds([schedule[legacyKey]]);
+      if (legacyProblemIds.length > 0) return legacyProblemIds;
+      return [];
+    };
+
+    const getTimeBasedProblemScore = (problemIds: string[]) => {
+      if (problemIds.length === 0) return 0;
+      const problemScores = problemIds.map(problemId => {
+        const submissions = (student.submissions || [])
+          .filter(sub => sub.courseId === courseId && sub.problemId === problemId)
+          .sort((a, b) => {
+            const first = parseSubmissionDate((a as any).timestamp || (a as any).createdAt);
+            const second = parseSubmissionDate((b as any).timestamp || (b as any).createdAt);
+            return first - second;
+          });
+        if (submissions.length === 0) return 0;
+
+        const accepted = submissions.filter(sub => sub.status === 'ACCEPTED');
+        if (accepted.length === 0) return 0;
+
+        const acceptedAt = parseSubmissionDate(accepted[0].timestamp || (accepted[0] as any).createdAt);
+        const firstAttemptAt = parseSubmissionDate(submissions[0].timestamp || (submissions[0] as any).createdAt);
+
+        if (!acceptedAt || !firstAttemptAt) return 0;
+
+        const elapsedMinutes = Math.max(0, (acceptedAt - firstAttemptAt) / 60000);
+        const timeScore = 25 * Math.max(0, 1 - (elapsedMinutes / 45));
+        return Math.min(25, Math.round(Math.max(5, timeScore)));
+      });
+
+      return Math.min(25, problemScores.reduce((sum, score) => sum + score, 0));
+    };
+
+    const ct1ProblemIds = getProblemIdsForSlot('codingTest1Date', 'codingTest1ProblemId');
+    const ct2ProblemIds = getProblemIdsForSlot('codingTest2Date', 'codingTest2ProblemId');
+    const codingTest1Marks = getTimeBasedProblemScore(ct1ProblemIds);
+    const codingTest2Marks = getTimeBasedProblemScore(ct2ProblemIds);
+    const totalCodingTestMarks = Math.min(50, codingTest1Marks + codingTest2Marks);
+
+    return { codingTest1Marks, codingTest2Marks, totalCodingTestMarks };
+  };
+
   const computeInternalAssessment = (student: StudentOverview, courseId: string, course?: Course): CourseInternalAssessment => {
     const existing: Partial<CourseInternalAssessment> = student.internalAssessments?.[courseId] || {};
     const courseModules = course?.modules || [];
+    const schedule: any = course?.codingTestSchedule || student?.scheduledCodingTests?.[courseId] || {};
+    const hasTest1 = Boolean(
+      schedule?.codingTest1Date ||
+      schedule?.codingTest1ProblemId ||
+      (Array.isArray(schedule?.tests) && schedule.tests.some((test: any) => test.date === schedule?.codingTest1Date || test.problemId === schedule?.codingTest1ProblemId || (Array.isArray(test.problemIds) && test.problemIds.includes(schedule?.codingTest1ProblemId))))
+    );
+    const hasTest2 = Boolean(
+      schedule?.codingTest2Date ||
+      schedule?.codingTest2ProblemId ||
+      (Array.isArray(schedule?.tests) && schedule.tests.some((test: any) => test.date === schedule?.codingTest2Date || test.problemId === schedule?.codingTest2ProblemId || (Array.isArray(test.problemIds) && test.problemIds.includes(schedule?.codingTest2ProblemId))))
+    );
     const totalLessons = courseModules.reduce((sum, module) => sum + (module.lessons?.length || 0), 0);
     const completedLessonsForCourse = courseModules.reduce((sum, module) => {
       return sum + module.lessons.filter(lesson => student.completedLessonIds.includes(lesson.id)).length;
@@ -402,8 +545,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const learningScore = totalLessons > 0 ? Math.min(50, Math.round((completedLessonsForCourse / totalLessons) * 50)) : 0;
     const efficiencyScore = totalProblems > 0 ? Math.min(50, Math.round((acceptedSubmissions / totalProblems) * 50)) : 0;
     const deadlinePenaltyPercent = getAutoCalculatedDeadlinePenalty(student, courseId, course);
-    const codingTest1Marks = existing.codingTest1Enabled ? (existing.codingTest1Marks || 0) : 0;
-    const codingTest2Marks = existing.codingTest2Enabled ? (existing.codingTest2Marks || 0) : 0;
+    const autoCodingTestMarks = getAutoCalculatedCodingTestMarks(student, courseId, course);
+    const resolveStoredMark = (storedValue: number | undefined, autoValue: number) => {
+      if (storedValue === undefined) return autoValue;
+      if (storedValue === 0 && autoValue > 0) return autoValue;
+      return storedValue;
+    };
+    const codingTest1Enabled = existing.codingTest1Enabled === undefined
+      ? hasTest1
+      : !!existing.codingTest1Enabled || autoCodingTestMarks.codingTest1Marks > 0;
+    const codingTest2Enabled = existing.codingTest2Enabled === undefined
+      ? hasTest2
+      : !!existing.codingTest2Enabled || autoCodingTestMarks.codingTest2Marks > 0;
+    const codingTest1Marks = codingTest1Enabled ? resolveStoredMark(existing.codingTest1Marks, autoCodingTestMarks.codingTest1Marks) : 0;
+    const codingTest2Marks = codingTest2Enabled ? resolveStoredMark(existing.codingTest2Marks, autoCodingTestMarks.codingTest2Marks) : 0;
     const rawScore = learningScore + efficiencyScore + codingTest1Marks + codingTest2Marks;
     const penaltyAppliedScore = rawScore * (1 - (deadlinePenaltyPercent / 100));
     const totalInternalMarks = Math.max(0, Math.min(100, Math.round(penaltyAppliedScore)));
@@ -412,9 +567,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       learningScore,
       efficiencyScore,
       deadlinePenaltyPercent,
-      codingTest1Enabled: !!existing.codingTest1Enabled,
+      codingTest1Enabled,
       codingTest1Marks: Math.min(25, codingTest1Marks),
-      codingTest2Enabled: !!existing.codingTest2Enabled,
+      codingTest2Enabled,
       codingTest2Marks: Math.min(25, codingTest2Marks),
       totalInternalMarks
     };
@@ -1073,6 +1228,19 @@ public class Main {
             </button>
           )}
 
+          {!isInstructor && (
+            <button
+              onClick={() => { setActiveTab('coding-tests'); setEditingCourse(null); }}
+              className={`flex-1 py-2.5 px-4 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2 ${
+                activeTab === 'coding-tests'
+                  ? 'bg-amber-600 text-white shadow-sm'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <i className="fa-solid fa-flask"></i> Coding Tests
+            </button>
+          )}
+
           <button
             onClick={() => { setActiveTab('students'); setEditingCourse(null); }}
             className={`flex-1 py-2.5 px-4 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2 ${
@@ -1107,6 +1275,224 @@ public class Main {
             </button>
           )}
         </div>
+
+        {activeTab === 'coding-tests' && !isInstructor && (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">Coding Test Manager</h2>
+                <p className="text-sm text-slate-500">Add, update, or remove individual coding test entries per course without editing the whole course curriculum.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const nextCourses = [...courses].map(course => {
+                    const currentTests = course.codingTestSchedule?.tests || [];
+                    const defaultProblem = course.modules.flatMap(m => m.lessons).find(l => l.type === 'problem');
+                    const nextEntry = {
+                      id: `ct-${Date.now()}`,
+                      title: `Coding Test ${currentTests.length + 1}`,
+                      date: new Date().toISOString().slice(0, 10),
+                      problemId: defaultProblem?.id,
+                      problemIds: defaultProblem ? [defaultProblem.id] : [],
+                      enabled: true
+                    };
+                    return {
+                      ...course,
+                      codingTestSchedule: {
+                        ...(course.codingTestSchedule || {}),
+                        tests: [...currentTests, nextEntry]
+                      }
+                    };
+                  });
+                  onUpdateCourses(nextCourses);
+                }}
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl"
+              >
+                <i className="fa-solid fa-plus mr-1"></i> Add Test
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {courses.map(course => {
+                const tests = course.codingTestSchedule?.tests || [];
+                if (tests.length === 0) {
+                  return (
+                    <div key={course.id} className="border border-dashed border-slate-300 rounded-xl p-4 bg-slate-50 text-sm text-slate-500">
+                      {course.title} — no coding tests configured yet.
+                    </div>
+                  );
+                }
+
+                return (
+                  <div key={course.id} className="border border-slate-200 rounded-xl p-4 bg-slate-50">
+                    <div className="font-bold text-slate-900 mb-3">{course.title}</div>
+                    <div className="space-y-3">
+                      {tests.map((test) => {
+                        const problemIds = Array.isArray(test.problemIds) && test.problemIds.length > 0
+                          ? test.problemIds
+                          : test.problemId ? [test.problemId] : [];
+
+                        return (
+                          <div key={test.id} className="bg-white border border-slate-200 rounded-lg p-3 space-y-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <input
+                                value={test.title}
+                                onChange={(e) => {
+                                  const nextCourses = courses.map(item => item.id === course.id ? {
+                                    ...item,
+                                    codingTestSchedule: {
+                                      ...(item.codingTestSchedule || {}),
+                                      tests: (item.codingTestSchedule?.tests || []).map(entry => entry.id === test.id ? { ...entry, title: e.target.value } : entry)
+                                    }
+                                  } : item);
+                                  onUpdateCourses(nextCourses);
+                                }}
+                                className="font-bold text-sm text-slate-800 bg-transparent border-b border-slate-200 focus:border-bitwise-500 outline-none flex-1"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const nextCourses = courses.map(item => item.id === course.id ? {
+                                    ...item,
+                                    codingTestSchedule: {
+                                      ...(item.codingTestSchedule || {}),
+                                      tests: (item.codingTestSchedule?.tests || []).filter(entry => entry.id !== test.id)
+                                    }
+                                  } : item);
+                                  onUpdateCourses(nextCourses);
+                                }}
+                                className="text-red-600 text-xs font-bold"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                              <label className="text-xs text-slate-600">
+                                <span className="block mb-1 font-bold">Date</span>
+                                <input
+                                  type="date"
+                                  value={test.date || ''}
+                                  onChange={(e) => {
+                                    const nextCourses = courses.map(item => item.id === course.id ? {
+                                      ...item,
+                                      codingTestSchedule: {
+                                        ...(item.codingTestSchedule || {}),
+                                        tests: (item.codingTestSchedule?.tests || []).map(entry => entry.id === test.id ? { ...entry, date: e.target.value } : entry)
+                                      }
+                                    } : item);
+                                    onUpdateCourses(nextCourses);
+                                  }}
+                                  className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm"
+                                />
+                              </label>
+                              <label className="text-xs text-slate-600 md:col-span-2">
+                                <span className="block mb-1 font-bold">Problem(s)</span>
+                                <div className="space-y-2">
+                                  {problemIds.length === 0 && (
+                                    <div className="text-xs text-slate-500">No problem selected yet.</div>
+                                  )}
+                                  {problemIds.map((problemId, problemIndex) => (
+                                    <div key={`${test.id}-problem-${problemIndex}`} className="flex items-center gap-2">
+                                      <select
+                                        value={problemId || ''}
+                                        onChange={(e) => {
+                                          const nextProblemIds = [...problemIds];
+                                          nextProblemIds[problemIndex] = e.target.value;
+                                          const nextCourses = courses.map(item => item.id === course.id ? {
+                                            ...item,
+                                            codingTestSchedule: {
+                                              ...(item.codingTestSchedule || {}),
+                                              tests: (item.codingTestSchedule?.tests || []).map(entry => entry.id === test.id ? {
+                                                ...entry,
+                                                problemId: nextProblemIds.find(Boolean) || '',
+                                                problemIds: nextProblemIds
+                                              } : entry)
+                                            }
+                                          } : item);
+                                          onUpdateCourses(nextCourses);
+                                        }}
+                                        className="w-full border border-slate-300 rounded px-2 py-1.5 text-sm"
+                                      >
+                                        <option value="">Select problem</option>
+                                        {course.modules.flatMap(module => module.lessons).filter(lesson => lesson.type === 'problem').map(problem => (
+                                          <option key={problem.id} value={problem.id}>{problem.title}</option>
+                                        ))}
+                                      </select>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const nextProblemIds = problemIds.filter((_, index) => index !== problemIndex);
+                                          const nextCourses = courses.map(item => item.id === course.id ? {
+                                            ...item,
+                                            codingTestSchedule: {
+                                              ...(item.codingTestSchedule || {}),
+                                              tests: (item.codingTestSchedule?.tests || []).map(entry => entry.id === test.id ? {
+                                                ...entry,
+                                                problemId: nextProblemIds.find(Boolean) || '',
+                                                problemIds: nextProblemIds
+                                              } : entry)
+                                            }
+                                          } : item);
+                                          onUpdateCourses(nextCourses);
+                                        }}
+                                        className="text-red-600 text-xs font-bold whitespace-nowrap"
+                                      >
+                                        Remove
+                                      </button>
+                                    </div>
+                                  ))}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const nextProblemIds = [...problemIds, ''];
+                                      const nextCourses = courses.map(item => item.id === course.id ? {
+                                        ...item,
+                                        codingTestSchedule: {
+                                          ...(item.codingTestSchedule || {}),
+                                          tests: (item.codingTestSchedule?.tests || []).map(entry => entry.id === test.id ? {
+                                            ...entry,
+                                            problemId: nextProblemIds.find(Boolean) || '',
+                                            problemIds: nextProblemIds
+                                          } : entry)
+                                        }
+                                      } : item);
+                                      onUpdateCourses(nextCourses);
+                                    }}
+                                    className="mt-2 inline-flex items-center px-2.5 py-1.5 rounded-lg border border-dashed border-amber-300 bg-amber-50 text-amber-700 text-[10px] font-bold uppercase tracking-wide"
+                                  >
+                                    <i className="fa-solid fa-plus mr-1"></i> Add Problem
+                                  </button>
+                                </div>
+                              </label>
+                            </div>
+                            <label className="text-xs text-slate-600 flex items-center gap-2 pt-1">
+                              <input
+                                type="checkbox"
+                                checked={test.enabled !== false}
+                                onChange={(e) => {
+                                  const nextCourses = courses.map(item => item.id === course.id ? {
+                                    ...item,
+                                    codingTestSchedule: {
+                                      ...(item.codingTestSchedule || {}),
+                                      tests: (item.codingTestSchedule?.tests || []).map(entry => entry.id === test.id ? { ...entry, enabled: e.target.checked } : entry)
+                                    }
+                                  } : item);
+                                  onUpdateCourses(nextCourses);
+                                }}
+                              />
+                              Active
+                            </label>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* TAB 1: COURSE MANAGEMENT */}
         {activeTab === 'courses' && (
@@ -3005,7 +3391,7 @@ solve()`
                               </button>
                             </div>
 
-                            {isInstructor && (
+                            {canManageCourseTests && (
                               <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-3">
                                 <div className="flex items-center justify-between">
                                   <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600">Internal Marks</span>
@@ -3038,8 +3424,19 @@ solve()`
                                   </div>
 
                                   <div className="rounded-lg bg-white border border-slate-200 p-2 space-y-2">
-                                    <label className="flex items-center justify-between gap-2">
+                                    <div className="flex items-center justify-between gap-2">
                                       <span>Coding Test 1</span>
+                                      <input
+                                        type="date"
+                                        value={(fullCourse?.codingTestSchedule?.codingTest1Date || selectedStudentForDetails.scheduledCodingTests?.[cp.courseId]?.codingTest1Date || '')}
+                                        onChange={async (e) => {
+                                          await handleStudentCodingTestScheduleUpdate(selectedStudentForDetails, cp.courseId, 'codingTest1Date', e.target.value);
+                                        }}
+                                        className="border border-slate-200 rounded px-1.5 py-1 focus:outline-none focus:border-bitwise-500"
+                                      />
+                                    </div>
+                                    <label className="flex items-center justify-between gap-2">
+                                      <span>Enable Marks</span>
                                       <input
                                         type="checkbox"
                                         checked={computeInternalAssessment(selectedStudentForDetails, cp.courseId, fullCourse).codingTest1Enabled}
@@ -3070,8 +3467,19 @@ solve()`
                                   </div>
 
                                   <div className="rounded-lg bg-white border border-slate-200 p-2 space-y-2">
-                                    <label className="flex items-center justify-between gap-2">
+                                    <div className="flex items-center justify-between gap-2">
                                       <span>Coding Test 2</span>
+                                      <input
+                                        type="date"
+                                        value={(fullCourse?.codingTestSchedule?.codingTest2Date || selectedStudentForDetails.scheduledCodingTests?.[cp.courseId]?.codingTest2Date || '')}
+                                        onChange={async (e) => {
+                                          await handleStudentCodingTestScheduleUpdate(selectedStudentForDetails, cp.courseId, 'codingTest2Date', e.target.value);
+                                        }}
+                                        className="border border-slate-200 rounded px-1.5 py-1 focus:outline-none focus:border-bitwise-500"
+                                      />
+                                    </div>
+                                    <label className="flex items-center justify-between gap-2">
+                                      <span>Enable Marks</span>
                                       <input
                                         type="checkbox"
                                         checked={computeInternalAssessment(selectedStudentForDetails, cp.courseId, fullCourse).codingTest2Enabled}

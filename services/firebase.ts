@@ -109,6 +109,40 @@ export const loadUserModuleDeadlineOverrides = async (userUid?: string): Promise
   }
 };
 
+export const loadUserScheduledCodingTests = async (userUid?: string): Promise<Record<string, {
+  codingTest1Date?: string;
+  codingTest2Date?: string;
+  codingTest1ProblemId?: string;
+  codingTest2ProblemId?: string;
+}>> => {
+  if (!userUid) return {};
+
+  try {
+    const snap = await getDoc(doc(db, 'users', userUid));
+    const data = snap.exists() ? (snap.data() || {}) : {};
+    return data.scheduledCodingTests || {};
+  } catch (e) {
+    return {};
+  }
+};
+
+export const saveUserScheduledCodingTests = async (userUid: string, schedule: Record<string, {
+  codingTest1Date?: string;
+  codingTest2Date?: string;
+  codingTest1ProblemId?: string;
+  codingTest2ProblemId?: string;
+}>) => {
+  if (!userUid) return;
+
+  try {
+    await setDoc(doc(db, 'users', userUid), {
+      scheduledCodingTests: sanitizeForFirestore(schedule)
+    }, { merge: true });
+  } catch (e) {
+    console.warn('Unable to save scheduled coding tests to Firestore:', e);
+  }
+};
+
 /**
  * Local accounts registry for offline / unconfigured Firebase Auth fallback
  */
@@ -1043,6 +1077,12 @@ export interface StudentOverview {
   assignedInstructors?: { uid: string; email?: string; name?: string }[];
   courseInstructorAssignments?: CourseInstructorAssignment[];
   moduleDeadlineOverrides?: Record<string, Record<string, string>>;
+  scheduledCodingTests?: Record<string, {
+    codingTest1Date?: string;
+    codingTest2Date?: string;
+    codingTest1ProblemId?: string;
+    codingTest2ProblemId?: string;
+  }>;
   internalAssessments?: Record<string, CourseInternalAssessment>;
 }
 
@@ -1475,6 +1515,8 @@ export const fetchAllStudentsFromFirestore = async (customCatalog?: Course[], in
         assignedInstructors,
         courseInstructorAssignments: uData.courseInstructorAssignments || [],
         moduleDeadlineOverrides: uData.moduleDeadlineOverrides || {},
+        scheduledCodingTests: uData.scheduledCodingTests || {},
+        internalAssessments: uData.internalAssessments || {},
         xp,
         streakDays: streak,
         completedLessonsCount: completedCount,

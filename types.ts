@@ -31,6 +31,7 @@ export interface User {
   dept?: string;
   year?: string;
   moduleDeadlineOverrides?: Record<string, Record<string, string>>;
+  scheduledCodingTests?: Record<string, CourseCodingTestSchedule>;
 }
 
 export interface InstructorAccount {
@@ -81,6 +82,23 @@ export interface Module {
   endDate?: string;
 }
 
+export interface CourseCodingTestDefinition {
+  id: string;
+  title: string;
+  date?: string;
+  problemId?: string;
+  problemIds?: string[];
+  enabled?: boolean;
+}
+
+export interface CourseCodingTestSchedule {
+  codingTest1Date?: string;
+  codingTest2Date?: string;
+  codingTest1ProblemId?: string;
+  codingTest2ProblemId?: string;
+  tests?: CourseCodingTestDefinition[];
+}
+
 export interface Course {
   id: string;
   title: string;
@@ -95,6 +113,7 @@ export interface Course {
   assignedInstructorEmail?: string;
   assignedInstructorName?: string;
   assignedInstructorId?: string;
+  codingTestSchedule?: CourseCodingTestSchedule;
 }
 
 export interface ChatMessage {
@@ -137,6 +156,8 @@ export interface CourseInternalAssessment {
   codingTest1Marks: number;
   codingTest2Enabled: boolean;
   codingTest2Marks: number;
+  codingTest1Date?: string;
+  codingTest2Date?: string;
   totalInternalMarks: number;
 }
 
