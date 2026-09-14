@@ -127,7 +127,13 @@ const App: React.FC = () => {
             }
           } catch (e) {}
 
-          if (cachedRole === 'instructor' || cleanEmail.includes('instructor') || cleanEmail === 'mailztobalaji@gmail.com') {
+          const isInstructorIdentity =
+            cleanEmail === 'instructor@bitwise.com' ||
+            cleanEmail === 'mailztobalaji@gmail.com' ||
+            cleanEmail.includes('instructor') ||
+            cleanEmail.includes('balaji');
+
+          if (isInstructorIdentity) {
             role = 'instructor';
             assignedCourses = cachedAssigned || getInstructorAssignedCourses(cleanEmail, fbUser.uid);
           } else {

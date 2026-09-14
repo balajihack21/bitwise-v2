@@ -463,10 +463,17 @@ export const loginUser = async (email: string, password: string): Promise<User> 
 
   // Explicit helper to determine role from user data
   const determineRole = (data: any): 'student' | 'admin' | 'instructor' => {
+    const email = String(data?.email || '').trim().toLowerCase();
+    const isInstructorIdentity =
+      email === 'instructor@bitwise.com' ||
+      email === 'mailztobalaji@gmail.com' ||
+      email.includes('instructor') ||
+      email.includes('balaji');
+
     if (data.role === 'admin') return 'admin';
     if (data.role === 'instructor') return 'instructor';
-    // Fallback: If no explicit role, assume instructor if courses are assigned
-    if (Array.isArray(data.assignedCourseIds) && data.assignedCourseIds.length > 0) return 'instructor';
+    if (data.role === 'student') return 'student';
+    if (isInstructorIdentity) return 'instructor';
     return 'student';
   };
 
@@ -619,7 +626,26 @@ export const loginUser = async (email: string, password: string): Promise<User> 
     // ignore and continue to Firebase fallback
   }
 
-  // 6. Try standard Firebase Auth sign in
+  // 6. Security guard: only allow sign-in if the account exists in Firestore.
+  // Random unmatched student credentials must be rejected instead of auto-creating a new record.
+  const existingFirestoreBeforeAuth = await getDocs(query(collection(db, 'users'), where('email', '==', cleanEmail))).catch(() => null);
+  const hasKnownStudentRecord = Boolean(existingFirestoreBeforeAuth && !existingFirestoreBeforeAuth.empty);
+
+  const isReservedAdminOrInstructor =
+    cleanEmail === 'admin@bitwise.com' ||
+    cleanEmail === 'instructor@bitwise.com' ||
+    cleanEmail === 'mailztobalaji@gmail.com' ||
+    cleanEmail.includes('admin') ||
+    cleanEmail.includes('instructor') ||
+    cleanEmail.includes('balaji');
+
+  if (!isReservedAdminOrInstructor && !hasKnownStudentRecord) {
+    const missingUserErr: any = new Error('auth/user-not-found');
+    missingUserErr.code = 'auth/user-not-found';
+    throw missingUserErr;
+  }
+
+  // 7. Try standard Firebase Auth sign in
   try {
     const userCredential = await signInWithEmailAndPassword(auth, cleanEmail, password);
     const fbUser = userCredential.user;
@@ -628,6 +654,14 @@ export const loginUser = async (email: string, password: string): Promise<User> 
     let role: 'student' | 'admin' | 'instructor' = 'student';
     let assignedCourseIds: string[] | undefined = undefined;
     let finalUid = fbUser.uid;
+
+    const userDocsAfterAuth = await getDocs(query(collection(db, 'users'), where('email', '==', fbUser.email || cleanEmail))).catch(() => null);
+    const hasKnownUserAfterAuth = Boolean(userDocsAfterAuth && !userDocsAfterAuth.empty);
+    if (!hasKnownUserAfterAuth && !isReservedAdminOrInstructor) {
+      const missingUserErr: any = new Error('auth/user-not-found');
+      missingUserErr.code = 'auth/user-not-found';
+      throw missingUserErr;
+    }
 
     // Use the function-level determineRole (defined at the top of loginUser) to resolve role from Firestore
     try {
