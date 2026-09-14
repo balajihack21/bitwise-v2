@@ -11,16 +11,17 @@ const getCalculatedInternalAssessment = (student: StudentOverview, courseId: str
   const totalProblems = courseModules.reduce((sum, module) => sum + module.lessons.filter(lesson => lesson.type === 'problem').length, 0);
   const acceptedSubmissions = (student.submissions || []).filter(sub => sub.courseId === courseId && sub.status === 'ACCEPTED').length;
 
-  const missedModules = courseModules.filter(module => {
+  const penaltyModules = courseModules.filter(module => {
     const originalDeadline = module.endDate;
     if (!originalDeadline) return false;
-    const hasOverride = !!student.moduleDeadlineOverrides?.[courseId]?.[module.id];
-    return new Date(originalDeadline) < new Date() && !hasOverride;
+    const extendedDeadline = student.moduleDeadlineOverrides?.[courseId]?.[module.id];
+    if (extendedDeadline && new Date(extendedDeadline) > new Date(originalDeadline)) return true;
+    return new Date(originalDeadline) < new Date() && !extendedDeadline;
   });
-  const deadlinePenaltyPercent = missedModules.length > 0 ? Math.min(10, missedModules.length * 10) : 0;
+  const deadlinePenaltyPercent = penaltyModules.length > 0 ? Math.min(10, penaltyModules.length * 10) : 0;
 
-  const learningScore = totalLessons > 0 ? Math.min(50, Math.round((completedLessons / totalLessons) * 50)) : 0;
-  const efficiencyScore = totalProblems > 0 ? Math.min(50, Math.round((acceptedSubmissions / totalProblems) * 50)) : 0;
+  const learningScore = totalLessons > 0 ? Math.min(25, Math.round((completedLessons / totalLessons) * 25)) : 0;
+  const efficiencyScore = totalProblems > 0 ? Math.min(25, Math.round((acceptedSubmissions / totalProblems) * 25)) : 0;
   const codingTest1Marks = existing.codingTest1Enabled ? (existing.codingTest1Marks || 0) : 0;
   const codingTest2Marks = existing.codingTest2Enabled ? (existing.codingTest2Marks || 0) : 0;
   const rawScore = learningScore + efficiencyScore + codingTest1Marks + codingTest2Marks;

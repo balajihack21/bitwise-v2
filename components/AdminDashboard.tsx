@@ -49,6 +49,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 }) => {
   const isInstructor = currentUser?.role === 'instructor';
   const canManageCourseTests = currentUser?.role === 'instructor' || currentUser?.role === 'admin';
+  const canViewInternalMarks = currentUser?.role === 'instructor' || currentUser?.role === 'admin';
   const [activeTab, setActiveTab] = useState<'courses' | 'instructors' | 'students' | 'submissions' | 'firebase' | 'coding-tests'>('courses');
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [isEditingNew, setIsEditingNew] = useState<boolean>(false);
@@ -424,14 +425,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const courseModules = course?.modules || [];
     if (courseModules.length === 0) return 0;
 
-    const missedModules = courseModules.filter(module => {
+    const penaltyModules = courseModules.filter(module => {
       const originalDeadline = module.endDate;
       if (!originalDeadline) return false;
-      const hasOverride = !!student.moduleDeadlineOverrides?.[courseId]?.[module.id];
-      return new Date(originalDeadline) < new Date() && !hasOverride;
+      const extendedDeadline = student.moduleDeadlineOverrides?.[courseId]?.[module.id];
+      if (extendedDeadline && new Date(extendedDeadline) > new Date(originalDeadline)) return true;
+      return new Date(originalDeadline) < new Date() && !extendedDeadline;
     });
 
-    return Math.min(10, missedModules.length * 10);
+    return Math.min(10, penaltyModules.length * 10);
   };
 
   const getAutoCalculatedCodingTestMarks = (student: StudentOverview, courseId: string, course?: Course): { codingTest1Marks: number; codingTest2Marks: number; totalCodingTestMarks: number } => {
@@ -471,17 +473,36 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const getProblemIdsForSlot = (dateKey: 'codingTest1Date' | 'codingTest2Date', legacyKey: 'codingTest1ProblemId' | 'codingTest2ProblemId') => {
       const explicitDate = schedule[dateKey];
       const allTests = Array.isArray(schedule.tests) ? schedule.tests.filter((test: any) => test.enabled !== false) : [];
+      const slotIndex = dateKey === 'codingTest1Date' ? 0 : 1;
 
       if (explicitDate) {
         const matchedTests = allTests.filter((test: any) => test.date === explicitDate);
-        return normalizeProblemIds([
-          schedule[legacyKey],
-          ...matchedTests.flatMap((test: any) => Array.isArray(test.problemIds) ? test.problemIds : (test.problemId ? [test.problemId] : []))
-        ]);
+        if (matchedTests.length > 0) {
+          return normalizeProblemIds([
+            schedule[legacyKey],
+            ...matchedTests.flatMap((test: any) => Array.isArray(test.problemIds) ? test.problemIds : (test.problemId ? [test.problemId] : []))
+          ]);
+        }
       }
 
       const legacyProblemIds = normalizeProblemIds([schedule[legacyKey]]);
       if (legacyProblemIds.length > 0) return legacyProblemIds;
+
+      if (allTests.length > 0) {
+        const orderedTests = [...allTests].sort((a: any, b: any) => {
+          const aTime = a.date ? new Date(a.date).getTime() : 0;
+          const bTime = b.date ? new Date(b.date).getTime() : 0;
+          return aTime - bTime;
+        });
+        const targetTest = orderedTests[slotIndex] || orderedTests[0];
+        if (targetTest) {
+          return normalizeProblemIds([
+            ...(Array.isArray(targetTest.problemIds) ? targetTest.problemIds : (targetTest.problemId ? [targetTest.problemId] : [])),
+            schedule[legacyKey]
+          ]);
+        }
+      }
+
       return [];
     };
 
@@ -526,14 +547,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const existing: Partial<CourseInternalAssessment> = student.internalAssessments?.[courseId] || {};
     const courseModules = course?.modules || [];
     const schedule: any = course?.codingTestSchedule || student?.scheduledCodingTests?.[courseId] || {};
+    const allTests = Array.isArray(schedule?.tests) ? schedule.tests.filter((test: any) => test.enabled !== false) : [];
     const hasTest1 = Boolean(
       schedule?.codingTest1Date ||
       schedule?.codingTest1ProblemId ||
+      allTests[0] ||
       (Array.isArray(schedule?.tests) && schedule.tests.some((test: any) => test.date === schedule?.codingTest1Date || test.problemId === schedule?.codingTest1ProblemId || (Array.isArray(test.problemIds) && test.problemIds.includes(schedule?.codingTest1ProblemId))))
     );
     const hasTest2 = Boolean(
       schedule?.codingTest2Date ||
       schedule?.codingTest2ProblemId ||
+      allTests[1] ||
       (Array.isArray(schedule?.tests) && schedule.tests.some((test: any) => test.date === schedule?.codingTest2Date || test.problemId === schedule?.codingTest2ProblemId || (Array.isArray(test.problemIds) && test.problemIds.includes(schedule?.codingTest2ProblemId))))
     );
     const totalLessons = courseModules.reduce((sum, module) => sum + (module.lessons?.length || 0), 0);
@@ -542,23 +566,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }, 0);
     const totalProblems = courseModules.reduce((sum, module) => sum + module.lessons.filter(lesson => lesson.type === 'problem').length, 0);
     const acceptedSubmissions = (student.submissions || []).filter(sub => sub.courseId === courseId && sub.status === 'ACCEPTED').length;
-    const learningScore = totalLessons > 0 ? Math.min(50, Math.round((completedLessonsForCourse / totalLessons) * 50)) : 0;
-    const efficiencyScore = totalProblems > 0 ? Math.min(50, Math.round((acceptedSubmissions / totalProblems) * 50)) : 0;
+    const learningScore = totalLessons > 0 ? Math.min(25, Math.round((completedLessonsForCourse / totalLessons) * 25)) : 0;
+    const efficiencyScore = totalProblems > 0 ? Math.min(25, Math.round((acceptedSubmissions / totalProblems) * 25)) : 0;
     const deadlinePenaltyPercent = getAutoCalculatedDeadlinePenalty(student, courseId, course);
     const autoCodingTestMarks = getAutoCalculatedCodingTestMarks(student, courseId, course);
-    const resolveStoredMark = (storedValue: number | undefined, autoValue: number) => {
+    const resolveStoredMark = (storedValue: number | undefined, autoValue: number, isEnabled: boolean) => {
+      if (!isEnabled) return 0;
       if (storedValue === undefined) return autoValue;
       if (storedValue === 0 && autoValue > 0) return autoValue;
       return storedValue;
     };
-    const codingTest1Enabled = existing.codingTest1Enabled === undefined
-      ? hasTest1
-      : !!existing.codingTest1Enabled || autoCodingTestMarks.codingTest1Marks > 0;
-    const codingTest2Enabled = existing.codingTest2Enabled === undefined
-      ? hasTest2
-      : !!existing.codingTest2Enabled || autoCodingTestMarks.codingTest2Marks > 0;
-    const codingTest1Marks = codingTest1Enabled ? resolveStoredMark(existing.codingTest1Marks, autoCodingTestMarks.codingTest1Marks) : 0;
-    const codingTest2Marks = codingTest2Enabled ? resolveStoredMark(existing.codingTest2Marks, autoCodingTestMarks.codingTest2Marks) : 0;
+    const codingTest1Enabled = hasTest1 && (!!existing.codingTest1Enabled || autoCodingTestMarks.codingTest1Marks > 0 || !!schedule?.codingTest1Date || !!schedule?.codingTest1ProblemId);
+    const codingTest2Enabled = hasTest2 && (!!existing.codingTest2Enabled || autoCodingTestMarks.codingTest2Marks > 0 || !!schedule?.codingTest2Date || !!schedule?.codingTest2ProblemId);
+    const codingTest1Marks = resolveStoredMark(existing.codingTest1Marks, autoCodingTestMarks.codingTest1Marks, codingTest1Enabled);
+    const codingTest2Marks = resolveStoredMark(existing.codingTest2Marks, autoCodingTestMarks.codingTest2Marks, codingTest2Enabled);
     const rawScore = learningScore + efficiencyScore + codingTest1Marks + codingTest2Marks;
     const penaltyAppliedScore = rawScore * (1 - (deadlinePenaltyPercent / 100));
     const totalInternalMarks = Math.max(0, Math.min(100, Math.round(penaltyAppliedScore)));
@@ -1140,30 +1161,34 @@ public class Main {
           </div>
 
           <div className="flex items-center gap-3">
-            <button
-              onClick={async () => {
-                const data = await exportFirestoreToJSON();
-                console.log('Downloaded Firestore Data:', data);
-                alert('Downloading Firestore JSON...');
-              }}
-              className="px-3 py-2 bg-slate-800 text-white text-xs font-bold rounded-lg hover:bg-slate-950 cursor-pointer"
-            >
-              Export DB
-            </button>
-            <button
-              onClick={async () => {
-                if (!window.confirm('Migrate: normalize missing assignedCourseIds / assignedInstructorId for students? This will NOT delete any user or progress data.')) return;
-                try {
-                  const res = await sanitizeStudentAssignments();
-                  alert(`Migration done. Updated: ${res.updated}, Skipped: ${res.skipped}, Errors: ${res.errors}`);
-                } catch (e: any) {
-                  alert('Migration failed: ' + (e?.message || e));
-                }
-              }}
-              className="px-3 py-2 bg-amber-600 text-white text-xs font-bold rounded-lg hover:bg-amber-700 cursor-pointer"
-            >
-              Migrate Assignment Fields
-            </button>
+            {!isInstructor && (
+              <>
+                <button
+                  onClick={async () => {
+                    const data = await exportFirestoreToJSON();
+                    console.log('Downloaded Firestore Data:', data);
+                    alert('Downloading Firestore JSON...');
+                  }}
+                  className="px-3 py-2 bg-slate-800 text-white text-xs font-bold rounded-lg hover:bg-slate-950 cursor-pointer"
+                >
+                  Export DB
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!window.confirm('Migrate: normalize missing assignedCourseIds / assignedInstructorId for students? This will NOT delete any user or progress data.')) return;
+                    try {
+                      const res = await sanitizeStudentAssignments();
+                      alert(`Migration done. Updated: ${res.updated}, Skipped: ${res.skipped}, Errors: ${res.errors}`);
+                    } catch (e: any) {
+                      alert('Migration failed: ' + (e?.message || e));
+                    }
+                  }}
+                  className="px-3 py-2 bg-amber-600 text-white text-xs font-bold rounded-lg hover:bg-amber-700 cursor-pointer"
+                >
+                  Migrate Assignment Fields
+                </button>
+              </>
+            )}
             {/* Credentials Pill */}
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-600 flex items-center gap-3">
               <div>
@@ -2666,6 +2691,22 @@ solve()`
                                         +{student.enrolledCourses.length - 3} more courses...
                                       </div>
                                     )}
+
+                                    {canViewInternalMarks && (
+                                      <div className="mt-3 border-t border-slate-200 pt-2 space-y-1.5">
+                                        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Internal Marks</div>
+                                        {(student.enrolledCourses || []).slice(0, 3).map((cp) => {
+                                          const fullCourse = courses.find(c => c.id === cp.courseId);
+                                          const assessment = computeInternalAssessment(student, cp.courseId, fullCourse);
+                                          return (
+                                            <div key={`${student.uid}-${cp.courseId}-marks`} className="flex items-center justify-between gap-2 rounded-md bg-slate-50 border border-slate-200 px-2 py-1 text-[10px] text-slate-700">
+                                              <span className="truncate max-w-[120px]" title={cp.courseTitle}>{cp.courseTitle}</span>
+                                              <span className="font-bold text-bitwise-700">{assessment.totalInternalMarks}/100</span>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
                                   </div>
                                 </td>
 
@@ -3391,7 +3432,7 @@ solve()`
                               </button>
                             </div>
 
-                            {canManageCourseTests && (
+                            {canViewInternalMarks && (
                               <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-3">
                                 <div className="flex items-center justify-between">
                                   <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600">Internal Marks</span>
@@ -3402,13 +3443,13 @@ solve()`
 
                                 <div className="grid grid-cols-2 gap-2 text-[11px]">
                                   <div className="bg-white border border-slate-200 rounded-lg p-2">
-                                    <div className="text-slate-500">Learning 50%</div>
+                                    <div className="text-slate-500">Learning 25%</div>
                                     <div className="mt-1 font-bold text-slate-900">
                                       {computeInternalAssessment(selectedStudentForDetails, cp.courseId, fullCourse).learningScore}%
                                     </div>
                                   </div>
                                   <div className="bg-white border border-slate-200 rounded-lg p-2">
-                                    <div className="text-slate-500">Efficiency 50%</div>
+                                    <div className="text-slate-500">Efficiency 25%</div>
                                     <div className="mt-1 font-bold text-slate-900">
                                       {computeInternalAssessment(selectedStudentForDetails, cp.courseId, fullCourse).efficiencyScore}%
                                     </div>

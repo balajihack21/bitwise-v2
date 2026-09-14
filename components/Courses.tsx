@@ -157,6 +157,36 @@ const Courses: React.FC<CoursesProps> = ({
     return problemLessons[fallbackIndex] || problemLessons[0] || null;
   };
 
+  const getActiveCodingTestForLesson = (course: Course, lessonId?: string) => {
+    const schedule = course.codingTestSchedule || user?.scheduledCodingTests?.[course.id] || {};
+    const entries = [
+      { key: 'codingTest1Date', label: 'Coding Test 1', date: schedule.codingTest1Date, problemIds: getCourseCodingTestProblemIds(course, 'codingTest1Date') },
+      { key: 'codingTest2Date', label: 'Coding Test 2', date: schedule.codingTest2Date, problemIds: getCourseCodingTestProblemIds(course, 'codingTest2Date') },
+      ...((schedule.tests || []).filter((test: any) => test.enabled !== false).map((test: any) => {
+        const problemIds = Array.isArray(test.problemIds) && test.problemIds.length > 0
+          ? test.problemIds
+          : test.problemId ? [test.problemId] : [];
+        return { key: `codingtest_${test.id}`, label: test.title || 'Coding Test', date: test.date, problemIds: problemIds.filter(Boolean) };
+      }))
+    ].filter(item => !!item.date && item.problemIds.length > 0);
+
+    const activeOpenTest = entries.find(item => new Date(item.date) <= new Date());
+    if (!activeOpenTest) return null;
+
+    if (!lessonId) return activeOpenTest;
+
+    const matchesSelectedLesson = activeOpenTest.problemIds.includes(lessonId);
+    if (matchesSelectedLesson) {
+      return activeOpenTest;
+    }
+
+    const fallback = entries.find(item => {
+      const allProblemIds = item.problemIds || [];
+      return allProblemIds.some(id => id === lessonId) || item.key === activeOpenTest.key;
+    });
+    return fallback || activeOpenTest;
+  };
+
   const isModuleExtended = (course: Course, moduleId: string) => {
     const override = user?.moduleDeadlineOverrides?.[course.id]?.[moduleId];
     const originalEndDate = course.modules.find(m => m.id === moduleId)?.endDate;
@@ -611,18 +641,30 @@ const Courses: React.FC<CoursesProps> = ({
 
             {selectedLesson ? (
               selectedLesson.type === 'problem' ? (
-                /* Interactive Judge0 Problem Workspace */
-                <ProblemWorkspace
-                  lesson={selectedLesson}
-                  course={selectedCourse}
-                  user={user}
-                  progress={progress}
-                  onProgressUpdate={onProgressUpdate}
-                  onNavigateToLesson={(nextL) => setSelectedLesson(nextL)}
-                  onClose={() => setSelectedLesson(null)}
-                  onOpenPlayground={onOpenPlayground}
-                  onActivateWorkspace={() => { /* handled by parent via view state if needed */ }}
-                />
+                (() => {
+                  const contest = getActiveCodingTestForLesson(selectedCourse, selectedLesson.id);
+                  const contestProblemLessons = contest?.problemIds
+                    ?.map(problemId => selectedCourse.modules.flatMap(module => module.lessons).find(lesson => lesson.id === problemId))
+                    .filter((lesson): lesson is Lesson => !!lesson) || [];
+
+                  return (
+                    <ProblemWorkspace
+                      lesson={selectedLesson}
+                      course={selectedCourse}
+                      user={user}
+                      progress={progress}
+                      contestTitle={contest?.label}
+                      contestProblems={contestProblemLessons}
+                      contestDurationMinutes={45}
+                      contestEndsAt={contest?.date ? new Date(new Date(contest.date).getTime() + 45 * 60 * 1000).toISOString() : undefined}
+                      onProgressUpdate={onProgressUpdate}
+                      onNavigateToLesson={(nextL) => setSelectedLesson(nextL)}
+                      onClose={() => setSelectedLesson(null)}
+                      onOpenPlayground={onOpenPlayground}
+                      onActivateWorkspace={() => { /* handled by parent via view state if needed */ }}
+                    />
+                  );
+                })()
               ) : (
                 /* Article / Conceptual Lesson Layout */
                 <div className="flex-1 overflow-y-auto p-8 flex flex-col justify-between">

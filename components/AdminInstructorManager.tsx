@@ -375,14 +375,40 @@ export const AdminInstructorManager: React.FC<AdminInstructorManagerProps> = ({
           {/* Student List */}
           {isLoadingStudents ? <div>Loading...</div> : studentList.length > 0 && (
             <div className="space-y-2 mt-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 border rounded-xl bg-slate-50 px-3 py-2">
+                <div className="text-xs font-bold text-slate-700">
+                  Matched Students: <span className="text-blue-700">{studentList.length}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedStudentUids(new Set(studentList.map(s => s.uid).filter(Boolean)))}
+                    className="px-2.5 py-1.5 bg-slate-900 text-white text-[10px] font-bold rounded-lg cursor-pointer hover:bg-slate-800"
+                  >
+                    Select All Filtered
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedStudentUids(new Set())}
+                    className="px-2.5 py-1.5 border border-slate-200 bg-white text-slate-700 text-[10px] font-bold rounded-lg cursor-pointer hover:bg-slate-50"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+
               {studentList.map(s => (
                 <div key={s.uid} className="flex items-center gap-2 p-2 border rounded-lg">
-                  <input type="checkbox" onChange={e => {
-                    const next = new Set(selectedStudentUids);
-                    if (e.target.checked) next.add(s.uid!);
-                    else next.delete(s.uid!);
-                    setSelectedStudentUids(next);
-                  }} />
+                  <input
+                    type="checkbox"
+                    checked={selectedStudentUids.has(s.uid)}
+                    onChange={e => {
+                      const next = new Set(selectedStudentUids);
+                      if (e.target.checked) next.add(s.uid!);
+                      else next.delete(s.uid!);
+                      setSelectedStudentUids(next);
+                    }}
+                  />
                   <span className="text-xs">{s.username} - {s.regNo}</span>
                 </div>
               ))}
@@ -412,7 +438,8 @@ export const AdminInstructorManager: React.FC<AdminInstructorManagerProps> = ({
                   </select>
                   <button
                     onClick={async () => {
-                      if (selectedStudentUids.size === 0) {
+                      const selectedIds = Array.from(selectedStudentUids);
+                      if (selectedIds.length === 0) {
                         showToast('Select at least one student.', 'error');
                         return;
                       }
@@ -426,10 +453,11 @@ export const AdminInstructorManager: React.FC<AdminInstructorManagerProps> = ({
                       }
                       const inst = instructors.find(i => i.email.toLowerCase() === selectedInstructorEmail.toLowerCase());
                       const res = await bulkAssignStudentsToCourse(
-                        Array.from(selectedStudentUids),
+                        selectedIds,
                         selectedCourseId,
                         inst?.uid
                       );
+                      setSelectedStudentUids(new Set());
                       showToast(`Assigned ${res.success} students, failed ${res.failed}`);
                     }}
                     className="bg-blue-600 text-white px-3 py-2 rounded text-xs font-bold cursor-pointer hover:bg-blue-700"
