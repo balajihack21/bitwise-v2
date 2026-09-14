@@ -1,0 +1,10 @@
+console.log('DEBUG fetch filter:');
+console.log('instructorUid:', 'inst-1789308126978');
+console.log('instructorCourseIds should include:', 'python-programming');
+console.log('Arun assignedCourseIds:', ['python-programming']);
+console.log('Arun assignedInstructorId:', 'inst-1789308126978');
+console.log('Arun courseInstructorAssignments:', [{instructorId: 'inst-1789308126978', courseId: 'python-programming'}]);
+console.log('---');
+console.log('Filter logic checks:');
+console.log('direct assignment?', 'inst-1789308126978' === 'inst-1789308126978' || [{instructorId:'inst-1789308126978'}].some(a=>a.instructorId==='inst-1789308126978'));
+console.log('course assignment?', ['python-programming'].some(c=>['python-programming'].includes(c)));

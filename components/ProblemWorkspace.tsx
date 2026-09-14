@@ -53,6 +53,7 @@ interface ProblemWorkspaceProps {
   onNavigateToLesson: (nextLesson: Lesson) => void;
   onClose?: () => void;
   onOpenPlayground?: (code: string, language: string) => void;
+  onActivateWorkspace?: () => void;
 }
 
 const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
@@ -63,7 +64,8 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
   onProgressUpdate,
   onNavigateToLesson,
   onClose,
-  onOpenPlayground
+  onOpenPlayground,
+  onActivateWorkspace
 }) => {
   const problemMeta = lesson.problem;
   const username = user?.username || 'guest';

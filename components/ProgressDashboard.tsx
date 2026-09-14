@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Course, User, UserProgress, Lesson, InstructorAccount } from '../types';
 import { getCourseProgress } from '../services/progressService';
 import { fetchInstructorsList } from '../services/firebase';
@@ -28,11 +28,62 @@ const ProgressDashboard: React.FC<ProgressDashboardProps> = ({
       const map: Record<string, string> = {};
       list.forEach((inst: InstructorAccount) => {
         map[inst.uid] = inst.name || inst.email || inst.uid;
+        if (inst.email) map[inst.email.toLowerCase().trim()] = inst.name || inst.email;
       });
       setInstructorMap(map);
     }).catch(() => {});
     return () => { cancelled = true; };
   }, []);
+
+  const resolveInstructorName = (assignment: { instructorId?: string; instructorEmail?: string; courseId?: string }) => {
+    const candidates = [
+      assignment.instructorId,
+      assignment.instructorEmail,
+      assignment.instructorId?.trim().toLowerCase(),
+      assignment.instructorEmail?.trim().toLowerCase(),
+      (assignment.courseId ? courses.find(c => c.id === assignment.courseId)?.assignedInstructors?.[0]?.uid : undefined),
+      (assignment.courseId ? courses.find(c => c.id === assignment.courseId)?.assignedInstructors?.[0]?.email : undefined),
+      (assignment.courseId ? courses.find(c => c.id === assignment.courseId)?.assignedInstructors?.map(i => i.uid).join(',') : undefined)
+    ].filter(Boolean) as string[];
+
+    for (const candidate of candidates) {
+      const lowerCandidate = candidate.toLowerCase();
+      const directMatch = instructorMap[candidate] || instructorMap[lowerCandidate];
+      if (directMatch) return directMatch;
+    }
+
+    const courseInstructor = courses.find(c => c.id === assignment.courseId)?.assignedInstructors || [];
+    const courseMatch = courseInstructor.find(inst =>
+      inst.uid === assignment.instructorId || inst.email?.toLowerCase() === assignment.instructorEmail?.toLowerCase()
+    );
+
+    if (courseMatch?.name) return courseMatch.name;
+    if (assignment.instructorEmail) return assignment.instructorEmail.split('@')[0];
+    if (assignment.instructorId) return assignment.instructorId;
+    return 'Unknown Instructor';
+  };
+
+  const studentInstructorNames = useMemo(() => {
+    const resolved = new Set<string>();
+    const courseIds = new Set(user?.assignedCourseIds || []);
+
+    if (user?.courseInstructorAssignments?.length) {
+      user.courseInstructorAssignments.forEach((assignment) => {
+        const name = resolveInstructorName(assignment);
+        if (name) resolved.add(name);
+      });
+    }
+
+    courses.forEach(course => {
+      if (courseIds.size > 0 && !courseIds.has(course.id)) return;
+      (course.assignedInstructors || []).forEach(inst => {
+        const name = inst.name || inst.email || 'Unknown Instructor';
+        if (name) resolved.add(name);
+      });
+    });
+
+    return Array.from(resolved);
+  }, [courses, user]);
   // Aggregate stats
   let totalProblems = 0;
   let totalSolvedProblems = 0;
@@ -73,6 +124,23 @@ const ProgressDashboard: React.FC<ProgressDashboardProps> = ({
           >
             <i className="fa-solid fa-award text-bitwise-600"></i> View Certificates
           </button>
+        </div>
+      </div>
+
+      <div className="mb-6 bg-violet-50 border border-violet-200 rounded-2xl p-4 text-sm text-violet-900">
+        <div className="flex items-center gap-2 font-bold mb-1">
+          <i className="fa-solid fa-user-tie text-violet-700"></i>
+          Assigned Instructor
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {studentInstructorNames.length > 0
+            ? studentInstructorNames.map((name, index) => (
+                <span key={`${name}-${index}`} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white border border-violet-200 text-violet-700 font-semibold text-xs">
+                  <i className="fa-solid fa-chalkboard-user text-[10px]"></i>
+                  {name}
+                </span>
+              ))
+            : <span className="text-violet-700/80">No instructor assigned yet.</span>}
         </div>
       </div>
 

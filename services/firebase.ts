@@ -161,6 +161,101 @@ export const saveStoredAccounts = (accounts: LocalAccount[]) => {
   }
 };
 
+const normalizeIdentityToken = (value?: string): string =>
+  String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .replace(/[^a-z0-9]/g, '');
+
+const findStoredStudentByIdentity = (email?: string, regNo?: string) => {
+  const accounts = getStoredAccounts();
+  const normalizedEmail = normalizeIdentityToken(email);
+  const normalizedRegNo = normalizeIdentityToken(regNo);
+
+  return accounts.find((account) => {
+    const emailMatch = normalizedEmail && normalizeIdentityToken(account.email) === normalizedEmail;
+    const regMatch = normalizedRegNo && normalizeIdentityToken((account as any).regNo) === normalizedRegNo;
+    const usernameMatch = normalizedRegNo && normalizeIdentityToken(account.username) === normalizedRegNo;
+    return Boolean(emailMatch || regMatch || usernameMatch);
+  });
+};
+
+const findFirestoreStudentByIdentity = async (email?: string, regNo?: string) => {
+  const normalizedEmail = normalizeIdentityToken(email);
+  const normalizedRegNo = normalizeIdentityToken(regNo);
+  if (!normalizedEmail && !normalizedRegNo) return null;
+
+  try {
+    const candidateDocs = [] as any[];
+    if (normalizedEmail) {
+      const emailSnap = await getDocs(query(collection(db, 'users'), where('email', '==', email?.trim().toLowerCase())));
+      candidateDocs.push(...emailSnap.docs);
+    }
+
+    const allUsers = await getDocs(collection(db, 'users'));
+    const byReg = allUsers.docs.filter(docSnap => {
+      const data = docSnap.data();
+      return normalizedRegNo && normalizeIdentityToken(data.regNo) === normalizedRegNo;
+    });
+    candidateDocs.push(...byReg);
+
+    const unique = new Map<string, any>();
+    candidateDocs.forEach(docSnap => {
+      if (docSnap && docSnap.id) unique.set(docSnap.id, docSnap);
+    });
+
+    return Array.from(unique.values())[0] || null;
+  } catch (e) {
+    return null;
+  }
+};
+
+const resolveCanonicalStudentUid = async (preferredUid?: string, fallbackEmail?: string, fallbackRegNo?: string): Promise<string> => {
+  const queryEmail = String(fallbackEmail || '').trim().toLowerCase();
+  const queryRegNo = String(fallbackRegNo || '').trim();
+
+  try {
+    const usersSnap = await getDocs(collection(db, 'users'));
+    const candidateDocs = usersSnap.docs.filter(docSnap => {
+      const data = docSnap.data();
+      const sameUid = Boolean(preferredUid && docSnap.id === preferredUid);
+      const sameEmail = Boolean(queryEmail && String(data.email || '').trim().toLowerCase() === queryEmail);
+      const sameRegNo = Boolean(queryRegNo && String(data.regNo || '').trim() === queryRegNo);
+      return sameUid || sameEmail || sameRegNo;
+    });
+
+    if (candidateDocs.length === 0) {
+      if (preferredUid) return preferredUid;
+      if (queryEmail) {
+        const localMatch = getStoredAccounts().find(account => normalizeIdentityToken(account.email) === normalizeIdentityToken(queryEmail));
+        if (localMatch?.uid) return localMatch.uid;
+      }
+      if (queryRegNo) {
+        const localMatch = getStoredAccounts().find(account => normalizeIdentityToken((account as any)?.regNo) === normalizeIdentityToken(queryRegNo));
+        if (localMatch?.uid) return localMatch.uid;
+      }
+      return preferredUid || '';
+    }
+
+    const canonicalDoc = [...candidateDocs].sort((a, b) => {
+      const aIsSeed = a.id.startsWith('seed_');
+      const bIsSeed = b.id.startsWith('seed_');
+      if (aIsSeed !== bIsSeed) return aIsSeed ? -1 : 1;
+      const aScore = Number((a.data()?.assignedCourseIds || []).length) + Number((a.data()?.courseInstructorAssignments || []).length);
+      const bScore = Number((b.data()?.assignedCourseIds || []).length) + Number((b.data()?.courseInstructorAssignments || []).length);
+      if (aScore !== bScore) return bScore - aScore;
+      const aCreated = new Date(a.data()?.createdAt || 0).getTime();
+      const bCreated = new Date(b.data()?.createdAt || 0).getTime();
+      return bCreated - aCreated;
+    })[0];
+
+    return canonicalDoc?.id || preferredUid || '';
+  } catch (e) {
+    return preferredUid || '';
+  }
+};
+
 /**
  * Register a new user in Firebase Auth and Firestore with graceful fallback
  */
@@ -168,16 +263,47 @@ export const registerUser = async (
   email: string, 
   password: string, 
   displayName: string, 
-  role: 'student' | 'admin' | 'instructor' = 'student'
+  role: 'student' | 'admin' | 'instructor' = 'student',
+  regNo?: string
 ): Promise<User> => {
   const cleanEmail = email.trim().toLowerCase();
+
+  const existingAccount = findStoredStudentByIdentity(cleanEmail, regNo);
+  if (existingAccount && role === 'student') {
+    return {
+      username: existingAccount.username,
+      role: existingAccount.role,
+      email: existingAccount.email,
+      uid: existingAccount.uid,
+      assignedCourseIds: existingAccount.assignedCourseIds
+    };
+  }
+
+  const existingFirestoreUser = await findFirestoreStudentByIdentity(cleanEmail, regNo);
+  if (existingFirestoreUser && role === 'student') {
+    const data = existingFirestoreUser.data();
+    return {
+      username: data.displayName || data.email?.split('@')[0] || 'Student',
+      role: data.role || 'student',
+      email: data.email || cleanEmail,
+      uid: existingFirestoreUser.id,
+      assignedCourseIds: Array.isArray(data.assignedCourseIds) ? data.assignedCourseIds : undefined
+    };
+  }
+
   const isEmailAdmin = cleanEmail === DEFAULT_ADMIN_CREDENTIALS.email.toLowerCase() || cleanEmail.startsWith('admin');
-  const isEmailInstructor = cleanEmail === DEFAULT_INSTRUCTOR_CREDENTIALS.email.toLowerCase() || cleanEmail.includes('instructor');
-  const userRole: 'student' | 'admin' | 'instructor' = 
-    isEmailAdmin || role === 'admin' 
-      ? 'admin' 
-      : isEmailInstructor || role === 'instructor' 
-      ? 'instructor' 
+  const isEmailInstructor = cleanEmail === DEFAULT_INSTRUCTOR_CREDENTIALS.email.toLowerCase() || cleanEmail.includes('instructor') || cleanEmail === 'mailztobalaji@gmail.com';
+  const isInstructorByAccount = (() => {
+    try {
+      const stored = getStoredAccounts();
+      return stored.some(a => a.email.toLowerCase() === cleanEmail && a.role === 'instructor');
+    } catch { return false; }
+  })();
+  const userRole: 'student' | 'admin' | 'instructor' =
+    isEmailAdmin || role === 'admin'
+      ? 'admin'
+      : isEmailInstructor || isInstructorByAccount || role === 'instructor'
+      ? 'instructor'
       : 'student';
   const uname = displayName.trim() || cleanEmail.split('@')[0];
 
@@ -316,12 +442,37 @@ export const registerUser = async (
 /**
  * Log in an existing user with Email and Password
  */
+const normalizePasswordValue = (value?: string): string => String(value || '').trim().replace(/\s+/g, '').replace(/-/g, '');
+
+const isPasswordMatch = (storedAccount: any, enteredPassword: string): boolean => {
+  const entered = String(enteredPassword || '').trim();
+  if (!entered) return false;
+
+  const directMatch = String(storedAccount?.password || '').trim() === entered;
+  if (directMatch) return true;
+
+  const dobMatch = normalizePasswordValue(storedAccount?.dob) === normalizePasswordValue(entered);
+  if (dobMatch) return true;
+
+  const emailMatch = String(storedAccount?.email || '').trim().toLowerCase() === entered.toLowerCase();
+  return emailMatch;
+};
+
 export const loginUser = async (email: string, password: string): Promise<User> => {
   const cleanEmail = email.trim().toLowerCase();
-  
+
+  // Explicit helper to determine role from user data
+  const determineRole = (data: any): 'student' | 'admin' | 'instructor' => {
+    if (data.role === 'admin') return 'admin';
+    if (data.role === 'instructor') return 'instructor';
+    // Fallback: If no explicit role, assume instructor if courses are assigned
+    if (Array.isArray(data.assignedCourseIds) && data.assignedCourseIds.length > 0) return 'instructor';
+    return 'student';
+  };
+
   // 1. Direct check for Admin Master credentials
   if (
-    (cleanEmail === 'admin' || cleanEmail === 'admin@bitwise.com') && 
+    (cleanEmail === 'admin' || cleanEmail === 'admin@bitwise.com') &&
     (password === 'admin123' || password === 'Admin@123')
   ) {
     try {
@@ -402,7 +553,73 @@ export const loginUser = async (email: string, password: string): Promise<User> 
     }
   }
 
-  // 4. Try standard Firebase Auth sign in
+  // 4. Match against existing local / seeded accounts before trying Firebase Auth.
+  // This prevents seeded student records from being treated as brand-new users when the password is the DOB.
+  try {
+    const accounts = getStoredAccounts();
+    const existingByEmail = accounts.filter(account => account.email.toLowerCase().trim() === cleanEmail);
+    if (existingByEmail.length > 0) {
+      const accountMatch = existingByEmail.find(account => isPasswordMatch(account, password));
+      if (accountMatch) {
+        const assigned = accountMatch.role === 'instructor'
+          ? (accountMatch.assignedCourseIds || getInstructorAssignedCourses(accountMatch.email, accountMatch.uid))
+          : undefined;
+
+        return {
+          username: accountMatch.username,
+          role: accountMatch.role,
+          email: accountMatch.email,
+          uid: accountMatch.uid,
+          assignedCourseIds: assigned
+        };
+      }
+      const wrongPasswordErr: any = new Error('auth/wrong-password');
+      wrongPasswordErr.code = 'auth/wrong-password';
+      throw wrongPasswordErr;
+    }
+  } catch (e) {
+    if ((e as any)?.code === 'auth/wrong-password' || (e as any)?.message === 'auth/wrong-password') {
+      throw e;
+    }
+    // ignore and continue to Firebase/Auth fallback
+  }
+
+  // 5. Check Firestore users collection by email and DOB before Firebase sign-in.
+  try {
+    const usersCol = await getDocs(query(collection(db, 'users'), where('email', '==', cleanEmail)));
+    if (!usersCol.empty) {
+      const seededMatch = usersCol.docs.find(docSnap => {
+        const data = docSnap.data();
+        const dobMatches = normalizePasswordValue(data.dob) === normalizePasswordValue(password);
+        const storedPasswordMatches = String(data.password || '').trim() === String(password || '').trim();
+        return dobMatches || storedPasswordMatches;
+      });
+
+      if (seededMatch) {
+        const data = seededMatch.data();
+        const role = determineRole(data);
+        const assignedCourseIds = Array.isArray(data.assignedCourseIds) ? data.assignedCourseIds : undefined;
+        return {
+          username: data.displayName || data.email?.split('@')[0] || 'Student',
+          role,
+          email: data.email || cleanEmail,
+          uid: seededMatch.id,
+          assignedCourseIds
+        };
+      }
+
+      const wrongPasswordErr: any = new Error('auth/wrong-password');
+      wrongPasswordErr.code = 'auth/wrong-password';
+      throw wrongPasswordErr;
+    }
+  } catch (e) {
+    if ((e as any)?.code === 'auth/wrong-password' || (e as any)?.message === 'auth/wrong-password') {
+      throw e;
+    }
+    // ignore and continue to Firebase fallback
+  }
+
+  // 6. Try standard Firebase Auth sign in
   try {
     const userCredential = await signInWithEmailAndPassword(auth, cleanEmail, password);
     const fbUser = userCredential.user;
@@ -410,44 +627,115 @@ export const loginUser = async (email: string, password: string): Promise<User> 
     // Fetch user role from Firestore
     let role: 'student' | 'admin' | 'instructor' = 'student';
     let assignedCourseIds: string[] | undefined = undefined;
+    let finalUid = fbUser.uid;
+
+    // Use the function-level determineRole (defined at the top of loginUser) to resolve role from Firestore
     try {
-      const userDocRef = doc(db, 'users', fbUser.uid);
-      const snap = await getDoc(userDocRef);
-      if (snap.exists()) {
-        const data = snap.data();
-        if (data.role === 'admin') role = 'admin';
-        else if (data.role === 'instructor') role = 'instructor';
-        if (Array.isArray(data.assignedCourseIds)) assignedCourseIds = data.assignedCourseIds;
+      // Prioritize looking up by email to find the existing instructor/user record UID
+      const usersCol = await getDocs(query(collection(db, 'users'), where('email', '==', fbUser.email || cleanEmail)));
+      let userDocRef = doc(db, 'users', fbUser.uid);
+
+      if (!usersCol.empty) {
+        // Prefer the user doc whose uid matches an instructor record (to avoid duplicate auth UIDs)
+        let bestDoc = usersCol.docs[0];
+        try {
+          const instSnap = await getDocs(collection(db, 'instructors'));
+          const instIds = new Set(instSnap.docs.map(d => d.id));
+          const matched = usersCol.docs.find(d => instIds.has(d.id));
+          if (matched) bestDoc = matched;
+        } catch (e) { /* ignore */ }
+        const docSnap = bestDoc;
+        const fbUserDoc = docSnap.data();
+        finalUid = docSnap.id;
+        userDocRef = doc(db, 'users', finalUid);
+        role = determineRole(fbUserDoc);
+        if (Array.isArray(fbUserDoc.assignedCourseIds)) assignedCourseIds = fbUserDoc.assignedCourseIds;
         await updateDoc(userDocRef, { lastLogin: new Date().toISOString() }).catch(() => {});
       } else {
-        if (fbUser.email?.toLowerCase().includes('admin')) role = 'admin';
-        else if (fbUser.email?.toLowerCase().includes('instructor')) role = 'instructor';
-        assignedCourseIds = role === 'instructor' ? getInstructorAssignedCourses(fbUser.email || cleanEmail, fbUser.uid) : undefined;
-        await setDoc(userDocRef, sanitizeForFirestore({
-          uid: fbUser.uid,
-          email: fbUser.email || '',
-          displayName: fbUser.displayName || fbUser.email?.split('@')[0] || 'User',
-          role,
-          assignedCourseIds,
-          lastLogin: new Date().toISOString()
-        })).catch(() => {});
+        // Fallback: check / create
+        const snap = await getDoc(userDocRef);
+        if (snap.exists()) {
+          const data = snap.data();
+          role = determineRole(data);
+          if (Array.isArray(data.assignedCourseIds)) assignedCourseIds = data.assignedCourseIds;
+          await updateDoc(userDocRef, { lastLogin: new Date().toISOString() }).catch(() => {});
+        } else {
+          if (fbUser.email?.toLowerCase().includes('admin')) role = 'admin';
+          else if (fbUser.email?.toLowerCase().includes('instructor')) role = 'instructor';
+          assignedCourseIds = role === 'instructor' ? getInstructorAssignedCourses(fbUser.email || cleanEmail, fbUser.uid) : undefined;
+          await setDoc(userDocRef, sanitizeForFirestore({
+            uid: fbUser.uid,
+            email: fbUser.email || '',
+            displayName: fbUser.displayName || fbUser.email?.split('@')[0] || 'User',
+            role,
+            assignedCourseIds,
+            createdAt: new Date().toISOString(),
+            lastLogin: new Date().toISOString()
+          })).catch(() => {});
+        }
       }
     } catch (err) {
       console.warn('Firestore fetch user doc error:', err);
-      if (fbUser.email?.toLowerCase().includes('admin')) role = 'admin';
-      else if (fbUser.email?.toLowerCase().includes('instructor')) role = 'instructor';
-      if (role === 'instructor') assignedCourseIds = getInstructorAssignedCourses(fbUser.email || cleanEmail, fbUser.uid);
+      // Fallback (same logic)
+      try {
+        const usersCol = await getDocs(query(collection(db, 'users'), where('email', '==', fbUser.email || cleanEmail)));
+        if (!usersCol.empty) {
+          let bestDoc = usersCol.docs[0];
+          try {
+            const instSnap = await getDocs(collection(db, 'instructors'));
+            const instIds = new Set(instSnap.docs.map(d => d.id));
+            const matched = usersCol.docs.find(d => instIds.has(d.id));
+            if (matched) bestDoc = matched;
+          } catch (e) { /* ignore */ }
+          const fbUserDoc = bestDoc.data();
+          role = determineRole(fbUserDoc);
+          if (Array.isArray(fbUserDoc.assignedCourseIds)) assignedCourseIds = fbUserDoc.assignedCourseIds;
+          finalUid = bestDoc.id;
+        } else {
+          if (fbUser.email?.toLowerCase().includes('admin')) role = 'admin';
+          else if (fbUser.email?.toLowerCase().includes('instructor')) role = 'instructor';
+        }
+      } catch (e2) {
+        if (fbUser.email?.toLowerCase().includes('admin')) role = 'admin';
+        else if (fbUser.email?.toLowerCase().includes('instructor')) role = 'instructor';
+      }
+      if (role === 'instructor') assignedCourseIds = getInstructorAssignedCourses(fbUser.email || cleanEmail, finalUid || fbUser.uid);
     }
 
     if (role === 'instructor' && (!assignedCourseIds || assignedCourseIds.length === 0)) {
-      assignedCourseIds = getInstructorAssignedCourses(fbUser.email || cleanEmail, fbUser.uid);
+      assignedCourseIds = getInstructorAssignedCourses(fbUser.email || cleanEmail, finalUid || fbUser.uid);
+    }
+
+    // Sync fetched data back to local registry using the matched document UID
+    try {
+      const accounts = getStoredAccounts();
+      const idx = accounts.findIndex(a => a.email.toLowerCase() === cleanEmail);
+      if (idx !== -1) {
+        if (accounts[idx].uid !== finalUid || accounts[idx].role !== role || JSON.stringify(accounts[idx].assignedCourseIds) !== JSON.stringify(assignedCourseIds)) {
+          accounts[idx] = { ...accounts[idx], uid: finalUid, role, assignedCourseIds };
+          saveStoredAccounts(accounts);
+        }
+      } else {
+        accounts.push({
+          uid: finalUid,
+          email: cleanEmail,
+          username: fbUser.displayName || fbUser.email?.split('@')[0] || 'User',
+          password: '',
+          role,
+          assignedCourseIds,
+          createdAt: new Date().toISOString()
+        });
+        saveStoredAccounts(accounts);
+      }
+    } catch (e) {
+      console.warn('Sync to local cache warn:', e);
     }
 
     return {
       username: fbUser.displayName || fbUser.email?.split('@')[0] || 'Student',
       role,
       email: fbUser.email || undefined,
-      uid: fbUser.uid,
+      uid: finalUid,
       assignedCourseIds
     };
   } catch (authError: any) {
@@ -496,10 +784,28 @@ export const loginUser = async (email: string, password: string): Promise<User> 
         };
       }
 
-      // If user hasn't created account yet under local mode, auto-register them
-      const autoRole: 'student' | 'admin' | 'instructor' = 
-        cleanEmail.includes('admin') ? 'admin' : cleanEmail.includes('instructor') ? 'instructor' : 'student';
-      return await registerUser(cleanEmail, password, cleanEmail.split('@')[0], autoRole);
+      // Do not auto-create a new student during login. Only allow login for existing records.
+      const userDocs = await getDocs(query(collection(db, 'users'), where('email', '==', cleanEmail))).catch(() => null);
+      if (userDocs && !userDocs.empty) {
+        const existingDoc = userDocs.docs.find(docSnap => {
+          const data = docSnap.data();
+          return normalizePasswordValue(data.dob) === normalizePasswordValue(password) || String(data.password || '').trim() === String(password || '').trim();
+        });
+        if (existingDoc) {
+          const data = existingDoc.data();
+          return {
+            username: data.displayName || data.email?.split('@')[0] || 'Student',
+            role: determineRole(data),
+            email: data.email || cleanEmail,
+            uid: existingDoc.id,
+            assignedCourseIds: Array.isArray(data.assignedCourseIds) ? data.assignedCourseIds : undefined
+          };
+        }
+      }
+
+      const missingUserErr: any = new Error('auth/user-not-found');
+      missingUserErr.code = 'auth/user-not-found';
+      throw missingUserErr;
     }
 
     throw authError;
@@ -555,12 +861,36 @@ export const logoutFirebase = async (): Promise<void> => {
 export const saveUserProgressToFirestore = async (userId: string, progress: UserProgress): Promise<void> => {
   if (!userId) return;
   try {
-    const progressDocRef = doc(db, 'user_progress', userId);
+    let activeUser: any = null;
+    try {
+      const raw = localStorage.getItem('bitwise_active_user');
+      if (raw) activeUser = JSON.parse(raw);
+    } catch (e) { /* ignore */ }
+
+    const canonicalUid = await resolveCanonicalStudentUid(userId, activeUser?.email, activeUser?.regNo);
+    const targetUid = canonicalUid || userId;
+
+    const progressDocRef = doc(db, 'user_progress', targetUid);
     const sanitizedPayload = sanitizeForFirestore({
       ...progress,
       updatedAt: new Date().toISOString()
     });
     await setDoc(progressDocRef, sanitizedPayload, { merge: true });
+
+    const allUsers = await getDocs(collection(db, 'users'));
+    const duplicateUserDocs = allUsers.docs.filter(docSnap => {
+      const data = docSnap.data();
+      const sameEmail = activeUser?.email && String(data.email || '').trim().toLowerCase() === String(activeUser.email).trim().toLowerCase();
+      const sameRegNo = activeUser?.regNo && String(data.regNo || '').trim() === String(activeUser.regNo).trim();
+      const sameUid = docSnap.id === userId || docSnap.id === targetUid;
+      return sameEmail || sameRegNo || sameUid;
+    });
+
+    for (const duplicateDoc of duplicateUserDocs) {
+      if (duplicateDoc.id === targetUid) continue;
+      const altProgressDocRef = doc(db, 'user_progress', duplicateDoc.id);
+      await setDoc(altProgressDocRef, sanitizedPayload, { merge: true }).catch(() => {});
+    }
   } catch (err) {
     console.error('Failed to sync progress to Firestore:', err);
   }
@@ -572,7 +902,15 @@ export const saveUserProgressToFirestore = async (userId: string, progress: User
 export const loadUserProgressFromFirestore = async (userId: string): Promise<UserProgress | null> => {
   if (!userId) return null;
   try {
-    const progressDocRef = doc(db, 'user_progress', userId);
+    let activeUser: any = null;
+    try {
+      const raw = localStorage.getItem('bitwise_active_user');
+      if (raw) activeUser = JSON.parse(raw);
+    } catch (e) { /* ignore */ }
+
+    const canonicalUid = await resolveCanonicalStudentUid(userId, activeUser?.email, activeUser?.regNo);
+    const targetUid = canonicalUid || userId;
+    const progressDocRef = doc(db, 'user_progress', targetUid);
     const snap = await getDoc(progressDocRef);
     if (snap.exists()) {
       return snap.data() as UserProgress;
@@ -639,11 +977,153 @@ export interface StudentOverview {
   dept?: string;
   year?: string;
   assignedInstructorId?: string;
+  assignedInstructors?: { uid: string; email?: string; name?: string }[];
   courseInstructorAssignments?: CourseInstructorAssignment[];
 }
 
-export const fetchAllStudentsFromFirestore = async (customCatalog?: Course[]): Promise<StudentOverview[]> => {
+const normalizeAssignedInstructors = (userData: any, instructorCatalog: InstructorAccount[] = []): { uid: string; email?: string; name?: string }[] => {
+  const entries: { uid: string; email?: string; name?: string }[] = [];
+  const seen = new Set<string>();
+  const instructorByUid = new Map<string, InstructorAccount>();
+  const instructorByEmail = new Map<string, InstructorAccount>();
+
+  instructorCatalog.forEach((inst) => {
+    if (!inst?.email) return;
+    instructorByEmail.set(inst.email.toLowerCase().trim(), inst);
+    if (inst.uid) instructorByUid.set(inst.uid, inst);
+  });
+
+  const resolveName = (uid: string, email: string, fallbackName?: string) => {
+    const cleanEmail = email.toLowerCase().trim();
+    const byUid = uid ? instructorByUid.get(uid) : undefined;
+    const byEmail = cleanEmail ? instructorByEmail.get(cleanEmail) : undefined;
+    const profile = byUid || byEmail;
+    if (profile?.name) return profile.name;
+    if (fallbackName && fallbackName.trim()) return fallbackName.trim();
+    if (cleanEmail) return cleanEmail.split('@')[0];
+    if (uid) return uid;
+    return 'Assigned Instructor';
+  };
+
+  const pushEntry = (item?: any) => {
+    if (!item) return;
+    const uid = String(item.uid || item.instructorId || '').trim();
+    const email = String(item.email || item.instructorEmail || '').trim();
+    const fallbackName = String(item.name || item.instructorName || '').trim();
+    const key = uid || email.toLowerCase();
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    const finalName = resolveName(uid, email, fallbackName);
+    const finalUid = uid || (email ? `inst_${email.replace(/[^a-zA-Z0-9]/g, '_')}` : `inst_${Date.now()}`);
+    entries.push({
+      uid: finalUid,
+      email: email || undefined,
+      name: finalName
+    });
+  };
+
+  if (Array.isArray(userData?.assignedInstructors)) {
+    userData.assignedInstructors.forEach(pushEntry);
+  }
+
+  if (Array.isArray(userData?.courseInstructorAssignments)) {
+    userData.courseInstructorAssignments.forEach((assignment: any) => {
+      pushEntry({
+        uid: assignment?.instructorId,
+        email: assignment?.instructorEmail,
+        name: assignment?.instructorName,
+        instructorId: assignment?.instructorId,
+        instructorEmail: assignment?.instructorEmail,
+        instructorName: assignment?.instructorName
+      });
+    });
+  }
+
+  if (userData?.assignedInstructorId || userData?.assignedInstructorEmail || userData?.assignedInstructorName) {
+    pushEntry({
+      uid: userData.assignedInstructorId,
+      email: userData.assignedInstructorEmail,
+      name: userData.assignedInstructorName,
+      instructorId: userData.assignedInstructorId,
+      instructorEmail: userData.assignedInstructorEmail,
+      instructorName: userData.assignedInstructorName
+    });
+  }
+
+  return entries;
+};
+
+export const fetchAllStudentsFromFirestore = async (customCatalog?: Course[], instructorUid?: string, instructorCourseIds?: string[]): Promise<StudentOverview[]> => {
   const studentsMap = new Map<string, StudentOverview>();
+  const instructorCatalog = await fetchInstructorsList().catch(() => [] as InstructorAccount[]);
+
+  const mergeProgressData = (primary: UserProgress | null | undefined, secondary: UserProgress | null | undefined): UserProgress | null => {
+    if (!primary && !secondary) return null;
+    const merged: UserProgress = {
+      completedLessonIds: Array.from(new Set([...(primary?.completedLessonIds || []), ...(secondary?.completedLessonIds || [])])),
+      unlockedLessonIds: Array.from(new Set([...(primary?.unlockedLessonIds || []), ...(secondary?.unlockedLessonIds || [])])),
+      submissions: [...(primary?.submissions || []), ...(secondary?.submissions || [])],
+      xp: Math.max(primary?.xp || 0, secondary?.xp || 0),
+      streakDays: Math.max(primary?.streakDays || 1, secondary?.streakDays || 1),
+      lastActiveDate: primary?.lastActiveDate || secondary?.lastActiveDate || new Date().toISOString().split('T')[0],
+      tabSwitchCount: Math.max(primary?.tabSwitchCount || 0, secondary?.tabSwitchCount || 0),
+      focusLossCount: Math.max(primary?.focusLossCount || 0, secondary?.focusLossCount || 0),
+      testExitAttempts: Math.max(primary?.testExitAttempts || 0, secondary?.testExitAttempts || 0),
+      proctorStatus: primary?.proctorStatus || secondary?.proctorStatus || 'CLEAN',
+      proctorNotes: primary?.proctorNotes || secondary?.proctorNotes || '',
+      proctorReviewedAt: primary?.proctorReviewedAt || secondary?.proctorReviewedAt || '',
+      proctorReviewedBy: primary?.proctorReviewedBy || secondary?.proctorReviewedBy || '',
+    };
+
+    const mergedSubmissionIds = new Set((merged.submissions || []).map(s => s.id));
+    merged.submissions = (merged.submissions || []).filter(s => mergedSubmissionIds.has(s.id));
+    return merged;
+  };
+
+  const resolveCanonicalStudentUid = async (userDocs: any[], currentUid: string, currentData: any): Promise<string> => {
+    const email = String(currentData?.email || '').trim().toLowerCase();
+    if (!email) return currentUid;
+
+    const sameEmailDocs = userDocs.filter(doc => {
+      const otherEmail = String(doc.data()?.email || '').trim().toLowerCase();
+      return otherEmail && otherEmail === email;
+    });
+
+    if (sameEmailDocs.length <= 1) return currentUid;
+
+    const canonicalDoc = [...sameEmailDocs].sort((a, b) => {
+      const aIsSeed = a.id.startsWith('seed_');
+      const bIsSeed = b.id.startsWith('seed_');
+      if (aIsSeed !== bIsSeed) return aIsSeed ? -1 : 1;
+      const aCreated = new Date(a.data()?.createdAt || 0).getTime();
+      const bCreated = new Date(b.data()?.createdAt || 0).getTime();
+      return bCreated - aCreated;
+    })[0];
+
+    const canonicalUid = canonicalDoc?.id || currentUid;
+    if (canonicalUid === currentUid) return currentUid;
+
+    const primaryProgress = await getDoc(doc(db, 'user_progress', canonicalUid)).catch(() => null);
+    const duplicateProgressDocs = await Promise.all(sameEmailDocs
+      .filter(doc => doc.id !== canonicalUid)
+      .map(async doc => getDoc(doc(db, 'user_progress', doc.id)).catch(() => null)));
+
+    let mergedProgress: UserProgress | null = primaryProgress?.exists ? (primaryProgress.data() as UserProgress) : null;
+    for (const altSnap of duplicateProgressDocs) {
+      if (!altSnap || !altSnap.exists()) continue;
+      const altProgress = altSnap.data() as UserProgress;
+      mergedProgress = mergeProgressData(mergedProgress, altProgress);
+    }
+
+    if (mergedProgress) {
+      await setDoc(doc(db, 'user_progress', canonicalUid), sanitizeForFirestore({
+        ...mergedProgress,
+        updatedAt: new Date().toISOString()
+      }), { merge: true }).catch(() => {});
+    }
+
+    return canonicalUid;
+  };
 
   // 0. Load catalog of courses for progress calculation
   let catalogCourses: Course[] = customCatalog && customCatalog.length > 0 ? customCatalog : [];
@@ -699,8 +1179,54 @@ export const fetchAllStudentsFromFirestore = async (customCatalog?: Course[]): P
     for (const uDoc of userDocs) {
       const uData = uDoc.data();
       const uid = uDoc.id;
+      const canonicalStudentUid = await resolveCanonicalStudentUid(userDocs, uid, uData);
+      if (canonicalStudentUid !== uid) continue;
 
-      // 2. Fetch progress for each
+      // 2. Filter students if instructor filter provided — only show students explicitly assigned to this instructor
+      if (instructorUid) {
+        const studentInstructorIds = new Set<string>([
+          uData.assignedInstructorId,
+          ...(uData.assignedInstructors || []).map((i: any) => i.uid).filter(Boolean),
+          ...(uData.courseInstructorAssignments || []).map((a: any) => a.instructorId).filter(Boolean)
+        ]);
+
+        const hasDirectAssignment = studentInstructorIds.has(instructorUid);
+        const hasExplicitCourseMatch = (uData.courseInstructorAssignments || []).some((a: any) => {
+          if (a.instructorId !== instructorUid) return false;
+          if (!Array.isArray(instructorCourseIds) || instructorCourseIds.length === 0) return true;
+          return Array.isArray(a.courseId) ? a.courseId.includes(a.courseId) : instructorCourseIds.includes(a.courseId);
+        });
+
+        const hasCourseOnlyFallback =
+          studentInstructorIds.size === 0 &&
+          Array.isArray(instructorCourseIds) &&
+          instructorCourseIds.length > 0 &&
+          (uData.assignedCourseIds || []).some((cid: string) => instructorCourseIds.includes(cid));
+
+        if (!hasDirectAssignment && !hasExplicitCourseMatch && !hasCourseOnlyFallback) {
+          continue;
+        }
+      }
+      if (instructorCourseIds && instructorCourseIds.length > 0) {
+        const studentAssignedCourseIds = new Set<string>((uData.assignedCourseIds || []).filter(Boolean));
+        const explicitInstructorCourses = new Set<string>((uData.courseInstructorAssignments || [])
+          .filter((a: any) => a.instructorId === instructorUid)
+          .map((a: any) => a.courseId)
+          .filter(Boolean));
+
+        const okayForInstructor =
+          [...studentAssignedCourseIds].some((cid: string) => instructorCourseIds.includes(cid)) &&
+          (
+            explicitInstructorCourses.size === 0 ||
+            [...explicitInstructorCourses].some((cid: string) => instructorCourseIds.includes(cid))
+          );
+
+        if (!okayForInstructor && !((!instructorUid) && [...studentAssignedCourseIds].some((cid: string) => instructorCourseIds.includes(cid)))) {
+          continue;
+        }
+      }
+
+      // 3. Fetch progress for each
       let xp = 0;
       let streak = 1;
       let completedCount = 0;
@@ -717,8 +1243,41 @@ export const fetchAllStudentsFromFirestore = async (customCatalog?: Course[]): P
 
       try {
         const progSnap = await getDoc(doc(db, 'user_progress', uid));
-        if (progSnap.exists()) {
-          const p = progSnap.data() as UserProgress;
+        let p = progSnap.exists() ? (progSnap.data() as UserProgress) : null;
+
+        // Duplicate student handling: merge progress records from same email so proctor data and course progress stay together
+        try {
+          const otherUserQuery = query(collection(db, 'users'), where('email', '==', uData.email || ''), where('uid', '!=', uid));
+          const otherSnap = await getDocs(otherUserQuery);
+          for (const otherDoc of otherSnap.docs) {
+            const otherProgSnap = await getDoc(doc(db, 'user_progress', otherDoc.id));
+            if (otherProgSnap.exists()) {
+              const otherP = otherProgSnap.data() as UserProgress;
+              const mergedProgress = {
+                ...(p || {}),
+                ...(otherP || {}),
+                completedLessonIds: Array.from(new Set([...(p?.completedLessonIds || []), ...(otherP?.completedLessonIds || [])])),
+                unlockedLessonIds: Array.from(new Set([...(p?.unlockedLessonIds || []), ...(otherP?.unlockedLessonIds || [])])),
+                submissions: Array.from(new Map([...(p?.submissions || []), ...(otherP?.submissions || [])].map(s => [s.id || JSON.stringify(s), s])).values()),
+                xp: Math.max(p?.xp || 0, otherP?.xp || 0),
+                streakDays: Math.max(p?.streakDays || 1, otherP?.streakDays || 1),
+                lastActiveDate: p?.lastActiveDate || otherP?.lastActiveDate || 'Today',
+                tabSwitchCount: Math.max(p?.tabSwitchCount || 0, otherP?.tabSwitchCount || 0),
+                focusLossCount: Math.max(p?.focusLossCount || 0, otherP?.focusLossCount || 0),
+                testExitAttempts: Math.max(p?.testExitAttempts || 0, otherP?.testExitAttempts || 0),
+                proctorStatus: p?.proctorStatus === 'CLEAN' && otherP?.proctorStatus && otherP.proctorStatus !== 'CLEAN'
+                  ? otherP.proctorStatus
+                  : (p?.proctorStatus || otherP?.proctorStatus || 'CLEAN'),
+                proctorNotes: p?.proctorNotes || otherP?.proctorNotes || '',
+                proctorReviewedAt: p?.proctorReviewedAt || otherP?.proctorReviewedAt || '',
+                proctorReviewedBy: p?.proctorReviewedBy || otherP?.proctorReviewedBy || ''
+              } as UserProgress;
+              p = mergedProgress;
+            }
+          }
+        } catch (eMerge) { /* ignore merge lookup error */ }
+
+        if (p) {
           xp = p.xp || 0;
           streak = p.streakDays || 1;
           completedLessonIds = p.completedLessonIds || [];
@@ -771,6 +1330,8 @@ export const fetchAllStudentsFromFirestore = async (customCatalog?: Course[]): P
       const assignedIds = uData.assignedCourseIds || [];
       const enrolledCourses = computeCourseDetails(completedLessonIds, assignedIds);
 
+      const assignedInstructors = normalizeAssignedInstructors(uData, instructorCatalog);
+
       studentsMap.set(uid, {
         uid,
         displayName: uData.displayName || uData.email?.split('@')[0] || 'Student',
@@ -781,7 +1342,8 @@ export const fetchAllStudentsFromFirestore = async (customCatalog?: Course[]): P
         section: uData.section || '',
         dept: uData.dept || '',
         year: uData.year || '',
-        assignedInstructorId: uData.assignedInstructorId || undefined,
+        assignedInstructorId: uData.assignedInstructorId || assignedInstructors[0]?.uid || undefined,
+        assignedInstructors,
         courseInstructorAssignments: uData.courseInstructorAssignments || [],
         xp,
         streakDays: streak,
@@ -874,8 +1436,8 @@ export const fetchAllStudentsFromFirestore = async (customCatalog?: Course[]): P
               }
             } catch (e) {}
 
-            const assignedIds = uData.assignedCourseIds || [];
-      const enrolledCourses = computeCourseDetails(completedLessonIds, assignedIds);
+            const assignedIds = lu.assignedCourseIds || [];
+            const enrolledCourses = computeCourseDetails(completedLessonIds, assignedIds);
 
             studentsMap.set(uKey, {
               uid: uKey,
@@ -911,7 +1473,7 @@ export const fetchAllStudentsFromFirestore = async (customCatalog?: Course[]): P
  * Update and persist proctoring review marks, notes, and tab switches
  */
 export { exportFirestoreToJSON } from './exportFirestoreToJSON';
-export { sanitizeStudentAssignments } from './migration';
+export { sanitizeStudentAssignments, mergeDuplicateStudentProgressRecords } from './migration';
 
 export const seedStudentsToFirestore = async (
   students: { name: string; regNo: string; email: string; dob?: string; section?: string; dept?: string; year?: string }[]
@@ -921,11 +1483,17 @@ export const seedStudentsToFirestore = async (
   const errors: string[] = [];
   for (const s of students) {
     try {
-      const uid = 'seed_' + (s.regNo || s.email || Math.random().toString(36).slice(2));
+      const emailKey = (s.email || '').trim().toLowerCase();
+      const regKey = (s.regNo || '').trim();
+      const existingLocal = findStoredStudentByIdentity(emailKey, regKey);
+      const existingFirestore = await findFirestoreStudentByIdentity(emailKey, regKey);
+      const existingUid = existingFirestore?.id || existingLocal?.uid || null;
+
+      const uid = existingUid || 'seed_' + (s.regNo || s.email || Math.random().toString(36).slice(2));
       const userDoc = doc(db, 'users', uid);
       await setDoc(userDoc, sanitizeForFirestore({
         uid,
-        email: s.email || `${s.name.toLowerCase().replace(/\s+/g, '.')}@college.edu`,
+        email: emailKey || `${s.name.toLowerCase().replace(/\s+/g, '.')}@college.edu`,
         displayName: s.name,
         role: 'student',
         regNo: s.regNo,
@@ -933,11 +1501,32 @@ export const seedStudentsToFirestore = async (
         section: s.section || '',
         dept: s.dept || '',
         year: s.year || '',
-        createdAt: new Date().toISOString(),
+        createdAt: existingFirestore?.data()?.createdAt || existingLocal?.createdAt || new Date().toISOString(),
         lastLogin: new Date().toISOString(),
-        assignedCourseIds: [],
-        assignedInstructorId: undefined
+        assignedCourseIds: Array.isArray(existingFirestore?.data()?.assignedCourseIds) ? existingFirestore.data().assignedCourseIds : [],
+        assignedInstructorId: existingFirestore?.data()?.assignedInstructorId || undefined
       }), { merge: true });
+
+      const progressDocRef = doc(db, 'user_progress', uid);
+      try {
+        await setDoc(progressDocRef, sanitizeForFirestore({
+          completedLessonIds: [],
+          unlockedLessonIds: [],
+          submissions: [],
+          xp: 0,
+          streakDays: 1,
+          lastActiveDate: new Date().toISOString().split('T')[0],
+          tabSwitchCount: 0,
+          focusLossCount: 0,
+          testExitAttempts: 0,
+          proctorStatus: 'CLEAN',
+          proctorNotes: '',
+          updatedAt: new Date().toISOString()
+        }), { merge: true });
+      } catch (e) {
+        // non-fatal: user doc is the critical write
+      }
+
       success++;
     } catch (e: any) {
       failed++;
@@ -1193,6 +1782,49 @@ export const deleteStudentFromFirestore = async (uid: string): Promise<void> => 
   }
 };
 
+export const resetUserProgressAndSubmissionsInFirestore = async (): Promise<{ success: boolean; message: string }> => {
+  try {
+    // 1. Delete all submission docs
+    const subSnap = await getDocs(collection(db, 'submissions'));
+    for (const d of subSnap.docs) {
+      await deleteDoc(d.ref).catch(() => {});
+    }
+
+    // 2. Delete all user_progress docs
+    const snap = await getDocs(collection(db, 'user_progress'));
+    for (const d of snap.docs) {
+      await deleteDoc(d.ref).catch(() => {});
+    }
+    // Clear local progress storage keys
+    Object.keys(localStorage).forEach(key => {
+      if (key.startsWith('bitwise_progress_')) {
+        try { localStorage.removeItem(key); } catch (e) {}
+      }
+    });
+    return { success: true, message: 'All user_progress docs, submissions, and local progress cleared.' };
+  } catch (err: any) {
+    return { success: false, message: err.message || 'Failed to reset progress and submissions.' };
+  }
+};
+
+export const resetAllUserProgressInFirestore = async (): Promise<{ success: boolean; message: string }> => {
+  try {
+    const snap = await getDocs(collection(db, 'user_progress'));
+    for (const d of snap.docs) {
+      await deleteDoc(d.ref).catch(() => {});
+    }
+    // Clear local progress storage keys
+    Object.keys(localStorage).forEach(key => {
+      if (key.startsWith('bitwise_progress_')) {
+        try { localStorage.removeItem(key); } catch (e) {}
+      }
+    });
+    return { success: true, message: 'All user_progress docs and local progress cleared.' };
+  } catch (err: any) {
+    return { success: false, message: err.message || 'Failed to reset user progress.' };
+  }
+};
+
 export const resetAllFirebaseData = async (): Promise<{ success: boolean; message: string }> => {
   try {
     // 1. Delete all submission docs
@@ -1230,8 +1862,58 @@ export const resetAllFirebaseData = async (): Promise<{ success: boolean; messag
 };
 
 /**
- * Get assigned course IDs for an instructor from local cache or courses list
+ * Admin: Dedup instructor docs in Firestore
  */
+export const deduplicateInstructorUsers = async (): Promise<{ success: boolean; messages: string[] }> => {
+  const messages: string[] = [];
+  try {
+    const instructorsSnap = await getDocs(collection(db, 'instructors'));
+    const instructorUids = new Set(instructorsSnap.docs.map(d => d.id));
+
+    const emailsToDedup = ['balaji@gmail.com', 'vaheetha@gmail.com'];
+
+    for (const email of emailsToDedup) {
+      const usersSnap = await getDocs(query(collection(db, 'users'), where('email', '==', email)));
+      if (usersSnap.size > 1) {
+        messages.push(`Found ${usersSnap.size} docs for ${email}`);
+
+        // Determine canonical ID: prefer one starting with 'inst-'
+        let canonicalDoc = usersSnap.docs.find(d => d.id.startsWith('inst-'));
+
+        // Fallback: if no 'inst-' ID, just pick the one created earliest
+        if (!canonicalDoc) {
+          canonicalDoc = usersSnap.docs.sort((a, b) => {
+            const aData = a.data() as any;
+            const bData = b.data() as any;
+            return (aData.createdAt || '').localeCompare(bData.createdAt || '');
+          })[0];
+        }
+
+        messages.push(`Canonical doc set to: ${canonicalDoc.id}`);
+
+        for (const docSnap of usersSnap.docs) {
+          if (docSnap.id !== canonicalDoc.id) {
+            await deleteDoc(docSnap.ref);
+            messages.push(`Deleted duplicate: ${docSnap.id}`);
+
+            // Also attempt to remove from instructors collection if present there
+            const instructorDocRef = doc(db, 'instructors', docSnap.id);
+            try {
+              await deleteDoc(instructorDocRef);
+              messages.push(`Also removed from instructors collection: ${docSnap.id}`);
+            } catch (e) {
+              // Ignore if not in instructors collection
+            }
+          }
+        }
+      }
+    }
+    return { success: true, messages };
+  } catch (err: any) {
+    return { success: false, messages: [err.message] };
+  }
+};
+
 export const getInstructorAssignedCourses = (email: string, uid?: string): string[] => {
   const cleanEmail = email?.toLowerCase().trim();
   const assigned = new Set<string>();
@@ -1242,7 +1924,13 @@ export const getInstructorAssignedCourses = (email: string, uid?: string): strin
     if (rawCourses) {
       const courses: Course[] = JSON.parse(rawCourses);
       courses.forEach(c => {
-        if (
+        if (c.assignedInstructors) {
+          const match = c.assignedInstructors.find(i =>
+            (cleanEmail && i.email?.toLowerCase() === cleanEmail) ||
+            (uid && i.uid === uid)
+          );
+          if (match) assigned.add(c.id);
+        } else if (
           (cleanEmail && c.assignedInstructorEmail?.toLowerCase() === cleanEmail) ||
           (uid && c.assignedInstructorId === uid)
         ) {
@@ -1584,13 +2272,25 @@ export const deleteInstructorAccount = async (email: string, uid?: string): Prom
   }
 
   const updatedCourses = currentCourses.map(c => {
-    const matchesEmail = c.assignedInstructorEmail?.toLowerCase().trim() === cleanEmail;
-    const matchesUid = uid && c.assignedInstructorId === uid;
+    const matchesEmail = (c.assignedInstructors || []).some(i => i.email?.toLowerCase().trim() === cleanEmail);
+    const matchesUid = uid && (c.assignedInstructors || []).some(i => i.uid === uid);
     if (matchesEmail || matchesUid) {
       const copy = { ...c };
-      delete copy.assignedInstructorEmail;
-      delete copy.assignedInstructorName;
-      delete copy.assignedInstructorId;
+      copy.assignedInstructors = (c.assignedInstructors || []).filter(i => {
+        const keep = !(i.email?.toLowerCase().trim() === cleanEmail) && !(uid && i.uid === uid);
+        return keep;
+      });
+      // Clean up empty array if all removed, but keep array field present
+      return copy;
+    }
+    // Also handle legacy scalar fields for backward compatibility
+    const legacyEmail = c.assignedInstructorEmail?.toLowerCase().trim() === cleanEmail;
+    const legacyUid = uid && c.assignedInstructorId === uid;
+    if (legacyEmail || legacyUid) {
+      const copy = { ...c };
+      delete (copy as any).assignedInstructorEmail;
+      delete (copy as any).assignedInstructorName;
+      delete (copy as any).assignedInstructorId;
       return copy;
     }
     return c;
@@ -1698,11 +2398,16 @@ export const assignCourseToInstructor = async (
   // 2. Update the target course
   const updatedCourses = currentCourses.map(c => {
     if (c.id === targetCourseId) {
+      const currentInstructors = c.assignedInstructors || [];
+      const isAlreadyAssigned = currentInstructors.some(i => i.uid === finalUid);
+
+      const newInstructors = isAlreadyAssigned
+        ? currentInstructors
+        : [...currentInstructors, { uid: finalUid, email: cleanEmail, name: finalName }];
+
       return {
         ...c,
-        assignedInstructorEmail: cleanEmail,
-        assignedInstructorName: finalName,
-        assignedInstructorId: finalUid
+        assignedInstructors: newInstructors
       };
     }
     return c;
@@ -1737,7 +2442,7 @@ export const assignCourseToInstructor = async (
 /**
  * Unassign instructor from a course
  */
-export const unassignCourseFromInstructor = async (courseId: string): Promise<Course[]> => {
+export const unassignInstructorFromCourse = async (courseId: string, instructorUid: string): Promise<Course[]> => {
   let currentCourses: Course[] = [];
   try {
     const raw = localStorage.getItem('bitwise_courses');
@@ -1746,16 +2451,12 @@ export const unassignCourseFromInstructor = async (courseId: string): Promise<Co
     currentCourses = [...MOCK_COURSES];
   }
 
-  const courseToUnassign = currentCourses.find(c => c.id === courseId);
-  const prevEmail = courseToUnassign?.assignedInstructorEmail?.toLowerCase();
-
   const updatedCourses = currentCourses.map(c => {
-    if (c.id === courseId) {
-      const copy = { ...c };
-      delete copy.assignedInstructorEmail;
-      delete copy.assignedInstructorName;
-      delete copy.assignedInstructorId;
-      return copy;
+    if (c.id === courseId && c.assignedInstructors) {
+      return {
+        ...c,
+        assignedInstructors: c.assignedInstructors.filter(i => i.uid !== instructorUid)
+      };
     }
     return c;
   });
@@ -1763,18 +2464,16 @@ export const unassignCourseFromInstructor = async (courseId: string): Promise<Co
   localStorage.setItem('bitwise_courses', JSON.stringify(updatedCourses));
   await saveCoursesToFirestore(updatedCourses);
 
-  if (prevEmail) {
-    const currentInstructors = await fetchInstructorsList();
-    const inst = currentInstructors.find(i => i.email.toLowerCase() === prevEmail);
-    if (inst) {
-      await saveInstructorAccount({
-        ...inst,
-        assignedCourseIds: inst.assignedCourseIds.filter(id => id !== courseId)
-      });
-    }
+  // Sync instructor registry
+  const currentInstructors = await fetchInstructorsList();
+  const inst = currentInstructors.find(i => i.uid === instructorUid);
+  if (inst) {
+    await saveInstructorAccount({
+      ...inst,
+      assignedCourseIds: inst.assignedCourseIds.filter(id => id !== courseId)
+    });
   }
 
-  // Broadcast course update
   try {
     window.dispatchEvent(new CustomEvent('bitwise_courses_updated', {
       detail: { courses: updatedCourses }

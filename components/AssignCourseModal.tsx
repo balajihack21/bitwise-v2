@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Course, InstructorAccount } from '../types';
-import { fetchInstructorsList, assignCourseToInstructor, unassignCourseFromInstructor } from '../services/firebase';
+import { fetchInstructorsList, assignCourseToInstructor, unassignInstructorFromCourse } from '../services/firebase';
 
 interface AssignCourseModalProps {
   isOpen: boolean;
@@ -42,9 +42,13 @@ export const AssignCourseModal: React.FC<AssignCourseModalProps> = ({
     setFeedback(null);
     try {
       if (!selectedEmail) {
-        // Unassign
-        const updated = await unassignCourseFromInstructor(course.id);
-        if (onUpdatedCourses) onUpdatedCourses(updated);
+        // Remove all assigned instructors
+        const current = course.assignedInstructors || [];
+        let updatedCourses: Course[] = [];
+        for (const inst of current) {
+          updatedCourses = await unassignInstructorFromCourse(course.id, inst.uid);
+        }
+        if (onUpdatedCourses) onUpdatedCourses(updatedCourses);
         if (onAssign) onAssign(course.id, '', '');
         onClose();
       } else {
@@ -87,9 +91,28 @@ export const AssignCourseModal: React.FC<AssignCourseModalProps> = ({
             </div>
           )}
 
+          {/* Current multi-instructor badges */}
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
+              Assigned Instructors
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {(course.assignedInstructors || []).length === 0 ? (
+                <span className="text-xs text-slate-400 italic">No instructors assigned yet</span>
+              ) : (
+                (course.assignedInstructors || []).map((inst) => (
+                  <span key={inst.uid} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-bitwise-50 text-bitwise-700 text-xs font-bold rounded-full border border-bitwise-200">
+                    <i className="fa-solid fa-user-tie text-[10px]"></i>
+                    {inst.name || inst.email}
+                  </span>
+                ))
+              )}
+            </div>
+          </div>
+
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-              Select Instructor
+              Add Instructor (by email)
             </label>
             {isLoading ? (
               <div className="py-4 text-center text-xs text-slate-400">Loading instructors...</div>
@@ -115,15 +138,9 @@ export const AssignCourseModal: React.FC<AssignCourseModalProps> = ({
           <div className="bg-blue-50/70 p-3 rounded-xl border border-blue-200/80 text-[11px] text-blue-900 space-y-1">
             <div className="font-bold flex items-center gap-1.5">
               <i className="fa-solid fa-circle-info text-blue-600"></i>
-              Current Assignment:
+              Manage Assignments
             </div>
-            <div>
-              {course.assignedInstructorName ? (
-                <span>Assigned to <strong>{course.assignedInstructorName}</strong> ({course.assignedInstructorEmail})</span>
-              ) : (
-                <span className="text-slate-500 italic">Course is currently unassigned</span>
-              )}
-            </div>
+            <p>Select an instructor from the dropdown to add them to this course.</p>
           </div>
 
           <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">

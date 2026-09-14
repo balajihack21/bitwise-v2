@@ -7,7 +7,7 @@ import {
   saveInstructorAccount,
   deleteInstructorAccount,
   assignCourseToInstructor,
-  unassignCourseFromInstructor,
+  unassignInstructorFromCourse,
   fetchAllStudentsFromFirestore,
   bulkAssignStudentsToCourse
 } from '../services/firebase';
@@ -105,13 +105,13 @@ export const AdminInstructorManager: React.FC<AdminInstructorManagerProps> = ({
     }
   };
 
-  const handleUnassign = async (courseId: string, courseTitle: string, instructorName: string) => {
+  const handleUnassign = async (courseId: string, courseTitle: string, instructorName: string, instructorUid: string) => {
     if (!window.confirm(`Are you sure you want to unassign "${courseTitle}" from instructor ${instructorName}?`)) {
       return;
     }
 
     try {
-      const updated = await unassignCourseFromInstructor(courseId);
+      const updated = await unassignInstructorFromCourse(courseId, instructorUid);
       onUpdateCourses(updated);
       await loadInstructors();
       showToast(`Unassigned "${courseTitle}" successfully.`);
@@ -387,30 +387,56 @@ export const AdminInstructorManager: React.FC<AdminInstructorManagerProps> = ({
                 </div>
               ))}
 
-              {/* Assignment Form */}
-              <div className="flex gap-2 mt-4">
-                <select onChange={(e) => setSelectedCourseId(e.target.value)} className="border p-2 rounded text-xs">
-                  <option value="">Select Course</option>
-                  {courses.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
-                </select>
-                <button
-                  onClick={async () => {
-                    if (selectedStudentUids.size === 0 || !selectedCourseId) {
-                      showToast('Select students and a course', 'error');
-                      return;
-                    }
-                    const courseObj = courses.find(c => c.id === selectedCourseId);
-                    const res = await bulkAssignStudentsToCourse(
-                      Array.from(selectedStudentUids),
-                      selectedCourseId,
-                      courseObj?.assignedInstructorId || courseObj?.assignedInstructorEmail || undefined
-                    );
-                    showToast(`Assigned ${res.success} students, failed ${res.failed}`);
-                  }}
-                  className="bg-blue-600 text-white px-4 py-2 rounded text-xs font-bold cursor-pointer"
-                >
-                  Assign Selected
-                </button>
+              {/* Batch Assignment Form */}
+              <div className="border-t pt-4 mt-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <select
+                    value={selectedCourseId}
+                    onChange={e => setSelectedCourseId(e.target.value)}
+                    className="border px-2 py-2 rounded text-xs bg-slate-50"
+                  >
+                    <option value="">Select Course</option>
+                    {courses.map(c => (
+                      <option key={c.id} value={c.id}>{c.title}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={selectedInstructorEmail}
+                    onChange={e => setSelectedInstructorEmail(e.target.value)}
+                    className="border px-2 py-2 rounded text-xs bg-slate-50"
+                  >
+                    <option value="">Select Instructor</option>
+                    {instructors.map(i => (
+                      <option key={i.email} value={i.email}>{i.name}</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={async () => {
+                      if (selectedStudentUids.size === 0) {
+                        showToast('Select at least one student.', 'error');
+                        return;
+                      }
+                      if (!selectedCourseId) {
+                        showToast('Select a course.', 'error');
+                        return;
+                      }
+                      if (!selectedInstructorEmail) {
+                        showToast('Select an instructor.', 'error');
+                        return;
+                      }
+                      const inst = instructors.find(i => i.email.toLowerCase() === selectedInstructorEmail.toLowerCase());
+                      const res = await bulkAssignStudentsToCourse(
+                        Array.from(selectedStudentUids),
+                        selectedCourseId,
+                        inst?.uid
+                      );
+                      showToast(`Assigned ${res.success} students, failed ${res.failed}`);
+                    }}
+                    className="bg-blue-600 text-white px-3 py-2 rounded text-xs font-bold cursor-pointer hover:bg-blue-700"
+                  >
+                    Assign Selected
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -516,7 +542,7 @@ export const AdminInstructorManager: React.FC<AdminInstructorManagerProps> = ({
                                   {c.title}
                                 </span>
                                 <button
-                                  onClick={() => handleUnassign(c.id, c.title, inst.name)}
+                                  onClick={() => handleUnassign(c.id, c.title, inst.name, inst.uid)}
                                   className="w-4 h-4 rounded hover:bg-blue-200 text-blue-600 hover:text-red-700 flex items-center justify-center text-[10px] cursor-pointer transition-colors ml-1"
                                   title={`Unassign ${c.title}`}
                                 >

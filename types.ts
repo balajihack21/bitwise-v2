@@ -90,9 +90,10 @@ export interface Course {
   tags: string[];
   isLive?: boolean; // Flag for Live courses
   isPro?: boolean; // Flag for Paid/Pro courses
-  assignedInstructorId?: string;
-  assignedInstructorName?: string;
+  assignedInstructors?: { uid: string; email: string; name: string }[];
   assignedInstructorEmail?: string;
+  assignedInstructorName?: string;
+  assignedInstructorId?: string;
 }
 
 export interface ChatMessage {

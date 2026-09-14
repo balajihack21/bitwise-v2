@@ -9,6 +9,8 @@ import {
   fetchAllSubmissionsFromFirestore,
   saveCoursesToFirestore,
   resetAllFirebaseData,
+  resetAllUserProgressInFirestore,
+  resetUserProgressAndSubmissionsInFirestore,
   resetStudentCourseProgressInFirestore,
   StudentOverview,
   updateStudentProctoringReview,
@@ -16,7 +18,9 @@ import {
   seedStudentsToFirestore,
   deleteStudentFromFirestore,
   exportFirestoreToJSON,
-  sanitizeStudentAssignments
+  sanitizeStudentAssignments,
+  deduplicateInstructorUsers,
+  mergeDuplicateStudentProgressRecords
 } from '../services/firebase';
 import { parseSeedFile, SeedStudentRow } from '../services/seedParser';
 import { MOCK_COURSES } from '../constants';
@@ -59,8 +63,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const fromUser = currentUser?.assignedCourseIds || [];
     const fromCourses = courses
       .filter(c =>
-        (currentInstructorEmail && c.assignedInstructorEmail?.toLowerCase().trim() === currentInstructorEmail) ||
-        (currentUser?.uid && c.assignedInstructorId === currentUser.uid)
+        (currentInstructorEmail && c.assignedInstructors?.some(i => i.email.toLowerCase().trim() === currentInstructorEmail)) ||
+        (currentUser?.uid && c.assignedInstructors?.some(i => i.uid === currentUser.uid))
       )
       .map(c => c.id);
     const merged = Array.from(new Set([...fromUser, ...fromCourses]));
@@ -246,6 +250,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // Load students & submissions when switching tabs
   useEffect(() => {
+    console.log('DEBUG LOAD: activeTab=', activeTab, 'isInstructor=', isInstructor, 'currentUser.uid=', currentUser?.uid, 'assignedCourseIds=', assignedCourseIds);
     if (activeTab === 'students') {
       loadStudents();
     } else if (activeTab === 'submissions') {
@@ -441,7 +446,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         }
       } catch (e) { /* non-fatal initialization */ }
 
-      const data = await fetchAllStudentsFromFirestore(courses);
+      const data = await fetchAllStudentsFromFirestore(
+        courses,
+        isInstructor ? currentUser?.uid : undefined,
+        isInstructor ? assignedCourseIds : undefined
+      );
       // If no Firestore records yet, provide mock preview
       if (data.length === 0) {
         setStudents([
@@ -632,19 +641,19 @@ public class Main {
   const handleAssignInstructorToCourse = async (
     courseId: string,
     instructorEmail: string,
-    instructorName?: string
+    instructorName?: string,
+    instructorUid?: string
   ) => {
+    const course = courses.find(c => c.id === courseId);
+    const existing = course?.assignedInstructors || [];
+    const newInst = { uid: instructorUid || `inst_${Date.now()}`, email: instructorEmail, name: instructorName || (instructorEmail ? instructorEmail.split('@')[0] : '') };
+    if (existing.some(i => i.email.toLowerCase() === instructorEmail.toLowerCase())) return;
     const updatedCourses = courses.map(c => {
       if (c.id === courseId) {
-        return {
-          ...c,
-          assignedInstructorEmail: instructorEmail || undefined,
-          assignedInstructorName: instructorName || (instructorEmail ? instructorEmail.split('@')[0] : undefined)
-        };
+        return { ...c, assignedInstructors: [...existing, newInst] };
       }
       return c;
     });
-
     onUpdateCourses(updatedCourses);
     await saveCoursesToFirestore(updatedCourses).catch(() => {});
     setAssignModalCourse(null);
@@ -678,6 +687,61 @@ public class Main {
     }
   };
 
+  const [isDeduping, setIsDeduping] = useState(false);
+  const [dedupStatus, setDedupStatus] = useState<{success:boolean;message:string}|null>(null);
+  const [isMergingStudentProgress, setIsMergingStudentProgress] = useState(false);
+
+  const handleDeduplicateInstructors = async () => {
+    const confirmed = window.confirm(
+      '⚠️ Deduplicate Instructor Users?\n\nThis will compare users collection docs against the instructors collection for balaji@gmail.com / vaheetha@gmail.com and delete unexpected duplicates. Proceed?'
+    );
+    if (!confirmed) return;
+    setIsDeduping(true);
+    setDedupStatus(null);
+    try {
+      const res = await deduplicateInstructorUsers();
+      setDedupStatus({ success: res.success, message: (res.messages || []).join('; ') || 'Done' });
+    } catch (err: any) {
+      setDedupStatus({ success: false, message: err.message || 'Failed' });
+    } finally {
+      setIsDeduping(false);
+    }
+  };
+
+  const handleMergeDuplicateStudentProgress = async () => {
+    const confirmed = window.confirm(
+      '⚠️ Merge duplicate student progress records by email?\n\nThis will keep the canonical seeded student UID and merge all generated duplicate progress data into it. Proceed?'
+    );
+    if (!confirmed) return;
+
+    setIsMergingStudentProgress(true);
+    setDedupStatus(null);
+    try {
+      const res = await mergeDuplicateStudentProgressRecords();
+      setDedupStatus({
+        success: res.errors.length === 0,
+        message: res.errors.length === 0
+          ? `Merged ${res.merged} duplicate student progress records.`
+          : `Merged with warnings: ${res.errors.join('; ')}`
+      });
+      await loadStudents();
+    } catch (err: any) {
+      setDedupStatus({ success: false, message: err.message || 'Failed to merge student progress.' });
+    } finally {
+      setIsMergingStudentProgress(false);
+    }
+  };
+
+  // Show dedup status near reset area if set
+  const DedupStatusBanner = () => {
+    if (!dedupStatus) return null;
+    return (
+      <div className={`text-xs font-bold px-3 py-2 rounded-lg mb-3 ${dedupStatus.success ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
+        Dedup: {dedupStatus.message}
+      </div>
+    );
+  };
+
   // Lock student progress edits (admin protection)
   const [isProgressLocked, setIsProgressLocked] = useState<boolean>(false);
 
@@ -702,7 +766,7 @@ public class Main {
     if (!isInstructor && selectedInstructorFilter !== 'ALL') {
       const hasCourseWithInstructor = s.enrolledCourses?.some(cp => {
           const course = courses.find(c => c.id === cp.courseId);
-          return course?.assignedInstructorId === selectedInstructorFilter;
+          return (course?.assignedInstructors || []).some(i => i.uid === selectedInstructorFilter || i.email === selectedInstructorFilter);
       });
       if (!hasCourseWithInstructor) return false;
     }
@@ -710,10 +774,21 @@ public class Main {
     // Instructor scoping: only show students explicitly assigned to this instructor
     if (isInstructor) {
       const currentInstId = currentUser?.uid || currentInstructorEmail || '';
-      const isAssignedToMe = s.assignedInstructorId === currentInstId ||
-                             s.courseInstructorAssignments?.some(a => a.instructorId === currentInstId);
+      const explicitStudentInstructorIds = new Set<string>([
+        s.assignedInstructorId,
+        ...(s.assignedInstructors || []).map((i: any) => i.uid).filter(Boolean),
+        ...(s.courseInstructorAssignments || []).map((a: any) => a.instructorId).filter(Boolean)
+      ]);
 
-      if (!isAssignedToMe) {
+      const hasExplicitAssignment = explicitStudentInstructorIds.has(currentInstId) ||
+        (s.courseInstructorAssignments || []).some((a: any) => a.instructorId === currentInstId && (!assignedCourseIds.length || assignedCourseIds.includes(a.courseId))) ||
+        (s.assignedInstructors || []).some((i: any) => i.uid === currentInstId && (!assignedCourseIds.length || s.enrolledCourses?.some((cp: any) => assignedCourseIds.includes(cp.courseId))));
+
+      const hasCourseOnlyFallback =
+        explicitStudentInstructorIds.size === 0 &&
+        s.enrolledCourses?.some((cp: any) => assignedCourseIds.includes(cp.courseId));
+
+      if (!hasExplicitAssignment && !hasCourseOnlyFallback) {
         return false;
       }
     }
@@ -999,27 +1074,45 @@ public class Main {
                         Assigned Instructor
                       </label>
                       {isInstructor ? (
-                        <div className="p-2.5 bg-blue-50/50 border border-blue-200 rounded-lg text-xs font-bold text-blue-900 flex items-center gap-2">
+                        <div className="p-2.5 bg-blue-50/50 border border-blue-200 rounded-lg text-xs font-bold text-blue-900 flex items-center gap-2 flex-wrap">
                           <i className="fa-solid fa-chalkboard-user text-blue-600"></i>
-                          <span>{editingCourse.assignedInstructorName || 'Assigned Instructor'} ({editingCourse.assignedInstructorEmail || currentUser?.email || 'instructor@bitwise.com'})</span>
+                          <span>
+                            {(editingCourse.assignedInstructors?.length ? editingCourse.assignedInstructors.map(i => i.name || i.email).join(', ') : 'Assigned Instructors')}
+                            {editingCourse.assignedInstructors?.[0] ? ` (${editingCourse.assignedInstructors.map(i => i.email).join(', ')})` : ''}
+                          </span>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap gap-2 items-center">
+                          {(editingCourse.assignedInstructors || []).map((inst, idx) => (
+                            <span key={idx} className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-800 border border-blue-200 rounded text-[11px] font-bold">
+                              {inst.name || inst.email.split('@')[0]}
+                              <button type="button" onClick={() => setEditingCourse({ ...editingCourse, assignedInstructors: (editingCourse.assignedInstructors || []).filter((_, i) => i !== idx) })} className="text-blue-600 hover:text-red-600 ml-0.5" title="Remove"><i className="fa-solid fa-xmark text-[10px]"></i></button>
+                            </span>
+                          ))}
                           <input
                             type="text"
-                            placeholder="e.g. instructor@bitwise.com"
-                            value={editingCourse.assignedInstructorEmail || ''}
+                            placeholder="instructor@bitwise.com"
+                            value=""
                             onChange={e => {
-                              const val = e.target.value;
-                              setEditingCourse({
-                                ...editingCourse,
-                                assignedInstructorEmail: val,
-                                assignedInstructorName: val ? val.split('@')[0] : undefined
-                              });
+                              const val = e.target.value.trim();
+                              if (!val) return;
+                              if (val.includes('@')) {
+                                const existing = (editingCourse.assignedInstructors || []);
+                                if (existing.some(i => i.email.toLowerCase() === val.toLowerCase())) return;
+                                const newUid = `inst_${Date.now()}_${Math.floor(Math.random()*10000)}`;
+                                setEditingCourse({
+                                  ...editingCourse,
+                                  assignedInstructors: [...existing, { uid: newUid, email: val, name: val.split('@')[0] }]
+                                });
+                                e.target.value = '';
+                              }
                             }}
-                            className="flex-1 p-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-bitwise-500 outline-none"
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') { e.preventDefault(); const val = (e.target as HTMLInputElement).value.trim(); if (val && val.includes('@')) { const existing = (editingCourse.assignedInstructors || []); if (!existing.some(i => i.email.toLowerCase() === val.toLowerCase())) { setEditingCourse({ ...editingCourse, assignedInstructors: [...existing, { uid: `inst_${Date.now()}`, email: val, name: val.split('@')[0] }] }); } (e.target as HTMLInputElement).value = ''; } }
+                            }}
+                            className="flex-1 min-w-[140px] p-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-bitwise-500 outline-none"
                           />
-                          <span className="text-xs text-slate-500 whitespace-nowrap">Instructor Email</span>
+                          <span className="text-xs text-slate-500 whitespace-nowrap">Add Email</span>
                         </div>
                       )}
                     </div>
@@ -1418,21 +1511,21 @@ solve()`
                               )}
                             </td>
                             <td className="p-4">
-                              {course.assignedInstructorName || course.assignedInstructorEmail ? (
-                                <div className="flex items-center gap-1.5">
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-800 border border-blue-200 rounded-lg text-xs font-semibold">
-                                    <i className="fa-solid fa-chalkboard-user text-blue-600 text-[10px]"></i>
-                                    <span className="max-w-[120px] truncate" title={course.assignedInstructorEmail || course.assignedInstructorName}>
-                                      {course.assignedInstructorName || course.assignedInstructorEmail?.split('@')[0]}
+                              {(course.assignedInstructors?.length ? course.assignedInstructors.map(i => i.name || i.email.split('@')[0]).join(', ') : '') ? (
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  {course.assignedInstructors?.map((inst, idx) => (
+                                    <span key={idx} className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-800 border border-blue-200 rounded-lg text-xs font-semibold">
+                                      <i className="fa-solid fa-chalkboard-user text-blue-600 text-[10px]"></i>
+                                      <span className="max-w-[120px] truncate" title={inst.email}>{inst.name || inst.email.split('@')[0]}</span>
                                     </span>
-                                  </span>
+                                  ))}
                                   {!isInstructor && (
                                     <button
                                       onClick={() => setAssignModalCourse(course)}
                                       className="p-1 text-slate-400 hover:text-blue-600 rounded transition-colors cursor-pointer"
-                                      title="Reassign or change instructor"
+                                      title="Add another instructor"
                                     >
-                                      <i className="fa-solid fa-pencil text-[10px]"></i>
+                                      <i className="fa-solid fa-plus text-[10px]"></i>
                                     </button>
                                   )}
                                 </div>
@@ -1913,7 +2006,7 @@ solve()`
                       <span>•</span>
                       <span>All Students: <b className="text-slate-800">{students.length}</b></span>
                       <span>•</span>
-                      <span>Assigned Students: <b className="text-slate-800">{students.filter(s => s.assignedInstructorId || (s.courseInstructorAssignments && s.courseInstructorAssignments.length > 0)).length}</b></span>
+                      <span>Assigned Students: <b className="text-slate-800">{students.filter(s => (s.assignedInstructors && s.assignedInstructors.length > 0) || (s.courseInstructorAssignments && s.courseInstructorAssignments.length > 0)).length}</b></span>
                       {isInstructor && (
                         <>
                           <span>•</span>
@@ -1932,6 +2025,7 @@ solve()`
                           <thead className="bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-600 uppercase">
                             <tr>
                               <th className="p-3.5">Student Details</th>
+                              <th className="p-3.5">Assigned Instructor</th>
                               <th className="p-3.5">Reg No / Section</th>
                               <th className="p-3.5">Enrolled Courses & Progress</th>
                               <th className="p-3.5">Completed Lessons</th>
@@ -1959,8 +2053,30 @@ solve()`
                                         </span>
                                       </div>
                                       <div className="text-xs text-slate-500 font-mono">{student.email}</div>
+                                      <div className="text-[10px] text-slate-500 mt-0.5">
+                                        Instructor: <span className="font-semibold text-slate-700">
+                                          {(student.assignedInstructors && student.assignedInstructors.length > 0)
+                                            ? student.assignedInstructors.map((inst: any) => inst.name || inst.email || 'Assigned Instructor').join(', ')
+                                            : 'Unassigned'}
+                                        </span>
+                                      </div>
                                       <div className="text-[10px] text-slate-400 mt-0.5">Active: {student.lastActive}</div>
                                     </div>
+                                  </div>
+                                </td>
+
+                                <td className="p-3.5 align-top">
+                                  <div className="space-y-1">
+                                    {(student.assignedInstructors && student.assignedInstructors.length > 0)
+                                      ? student.assignedInstructors.map((inst: any, idx: number) => (
+                                          <div key={`${student.uid}-inst-${idx}`} className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-violet-50 text-violet-700 border border-violet-200 text-[10px] font-bold">
+                                            <i className="fa-solid fa-user-tie text-[9px]"></i>
+                                            {inst.name || inst.email || 'Assigned Instructor'}
+                                          </div>
+                                        ))
+                                      : (
+                                          <span className="text-[11px] text-slate-400 italic">Unassigned</span>
+                                        )}
                                   </div>
                                 </td>
 
@@ -2303,6 +2419,7 @@ solve()`
                   {resetStatus.message}
                 </div>
               )}
+              <DedupStatusBanner />
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Card 1: Project Credentials Info */}
@@ -2341,11 +2458,29 @@ solve()`
                     </p>
                   </div>
 
-                  <div className="mt-4 pt-3 border-t border-red-200/60">
+                  <div className="mt-4 pt-3 border-t border-red-200/60 flex gap-3">
+                    <button
+                      onClick={handleDeduplicateInstructors}
+                      disabled={isDeduping || isInstructor}
+                      className="flex-1 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-bold text-xs py-2.5 px-4 rounded-lg shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+                      title={isInstructor ? 'Admin only' : ''}
+                    >
+                      {isDeduping ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-user-check"></i>}
+                      Deduplicate Instructor Docs
+                    </button>
+                    <button
+                      onClick={handleMergeDuplicateStudentProgress}
+                      disabled={isMergingStudentProgress || isInstructor}
+                      className="flex-1 bg-cyan-600 hover:bg-cyan-700 disabled:opacity-50 text-white font-bold text-xs py-2.5 px-4 rounded-lg shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+                      title={isInstructor ? 'Admin only' : ''}
+                    >
+                      {isMergingStudentProgress ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-users-gear"></i>}
+                      Merge Student Progress
+                    </button>
                     <button
                       onClick={handleResetFirebaseData}
                       disabled={isResetting}
-                      className="w-full bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-bold text-xs py-2.5 px-4 rounded-lg shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+                      className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-bold text-xs py-2.5 px-4 rounded-lg shadow-sm flex items-center justify-center gap-2 cursor-pointer"
                     >
                       {isResetting ? (
                         <i className="fa-solid fa-spinner fa-spin"></i>
@@ -2353,6 +2488,17 @@ solve()`
                         <i className="fa-solid fa-rotate-left"></i>
                       )}
                       Delete Existing Data & Start Fresh
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (!window.confirm('Clear user_progress, submissions, and local progress keys?')) return;
+                        const res = await resetUserProgressAndSubmissionsInFirestore();
+                        setResetStatus({ success: res.success, message: res.message });
+                      }}
+                      className="flex-1 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs py-2.5 px-4 rounded-lg shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <i className="fa-solid fa-eraser"></i>
+                      Reset Progress + Submissions
                     </button>
                   </div>
                 </div>

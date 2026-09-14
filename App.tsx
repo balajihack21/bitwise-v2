@@ -143,12 +143,24 @@ const App: React.FC = () => {
           }
         }
 
+        const courseInstructorAssignments = (assignedCourses || []).flatMap((courseId) => {
+          const course = courses.find(c => c.id === courseId);
+          return (course?.assignedInstructors || []).map((inst) => ({
+            courseId,
+            instructorId: inst.uid,
+            instructorEmail: inst.email,
+            instructorName: inst.name,
+            assignedAt: new Date().toISOString()
+          }));
+        });
+
         const activeUser: User = {
           username: fbUser.displayName || cleanEmail.split('@')[0] || (role === 'admin' ? 'Admin' : (role === 'instructor' ? 'Instructor' : 'Student')),
           role,
           email: fbUser.email || undefined,
           uid: fbUser.uid,
-          assignedCourseIds: assignedCourses
+          assignedCourseIds: assignedCourses,
+          courseInstructorAssignments
         };
         setUser(activeUser);
         localStorage.setItem('bitwise_active_user', JSON.stringify(activeUser));
@@ -399,6 +411,7 @@ const App: React.FC = () => {
             courses={courses}
             progress={progress}
             onSelectCourse={handleSelectCourseFromAnywhere}
+            onNavigateToCertificates={() => setCurrentView(ViewState.HOME)}
           />
         );
 
