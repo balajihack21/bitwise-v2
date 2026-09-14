@@ -14,6 +14,7 @@ import {
   resetStudentCourseProgressInFirestore,
   StudentOverview,
   updateStudentProctoringReview,
+  setStudentModuleDeadlineOverride,
   DEFAULT_ADMIN_CREDENTIALS,
   seedStudentsToFirestore,
   deleteStudentFromFirestore,
@@ -330,6 +331,30 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       console.error('Failed to delete student:', e);
       alert('Failed to delete student. Please try again.');
     }
+  };
+
+  const handleModuleDeadlineOverride = async (student: StudentOverview, courseId: string, moduleId: string, dateValue: string) => {
+    const nextOverrides = { ...(student.moduleDeadlineOverrides || {}) };
+    const nextCourseMap = { ...(nextOverrides[courseId] || {}) };
+
+    if (dateValue) {
+      nextCourseMap[moduleId] = dateValue;
+      nextOverrides[courseId] = nextCourseMap;
+    } else {
+      delete nextCourseMap[moduleId];
+      if (Object.keys(nextCourseMap).length === 0) {
+        delete nextOverrides[courseId];
+      } else {
+        nextOverrides[courseId] = nextCourseMap;
+      }
+    }
+
+    setStudents(prev => prev.map(s => s.uid === student.uid ? { ...s, moduleDeadlineOverrides: nextOverrides } : s));
+    if (selectedStudentForDetails && selectedStudentForDetails.uid === student.uid) {
+      setSelectedStudentForDetails({ ...selectedStudentForDetails, moduleDeadlineOverrides: nextOverrides });
+    }
+
+    await setStudentModuleDeadlineOverride(student.uid, courseId, moduleId, dateValue || null);
   };
 
   const handleSaveModalProctorReview = async () => {
@@ -2885,28 +2910,51 @@ solve()`
                             {/* Expandable Syllabus Checklist */}
                             {isExpanded && fullCourse && fullCourse.modules && (
                               <div className="mt-2 space-y-2 max-h-48 overflow-y-auto pr-1">
-                                {fullCourse.modules.map(mod => (
-                                  <div key={mod.id} className="bg-slate-50 p-2 rounded-lg text-xs">
-                                    <div className="font-bold text-slate-700 mb-1 text-[11px]">{mod.title}</div>
-                                    <div className="space-y-1 pl-2">
-                                      {mod.lessons.map(les => {
-                                        const isCompleted = selectedStudentForDetails.completedLessonIds?.includes(les.id);
-                                        return (
-                                          <div key={les.id} className="flex items-center justify-between text-[11px]">
-                                            <span className={`truncate max-w-[200px] ${isCompleted ? 'text-slate-900 font-semibold' : 'text-slate-500'}`}>
-                                              {les.title}
-                                            </span>
-                                            <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${
-                                              isCompleted ? 'bg-green-100 text-green-800' : 'bg-slate-200 text-slate-500'
-                                            }`}>
-                                              {isCompleted ? '✓ Completed' : 'Pending'}
-                                            </span>
-                                          </div>
-                                        );
-                                      })}
+                                {fullCourse.modules.map(mod => {
+                                  const effectiveDeadline = selectedStudentForDetails.moduleDeadlineOverrides?.[cp.courseId]?.[mod.id] || mod.endDate;
+                                  return (
+                                    <div key={mod.id} className="bg-slate-50 p-2 rounded-lg text-xs">
+                                      <div className="font-bold text-slate-700 mb-1 text-[11px] flex items-center justify-between gap-2">
+                                        <span>{mod.title}</span>
+                                        {(isInstructor || !isInstructor) && (
+                                          <label className="flex items-center gap-1 bg-white border border-slate-200 rounded px-1.5 py-0.5 text-[10px] text-slate-600">
+                                            <span>Extend</span>
+                                            <input
+                                              type="date"
+                                              value={selectedStudentForDetails.moduleDeadlineOverrides?.[cp.courseId]?.[mod.id] || mod.endDate || ''}
+                                              onChange={async (e) => {
+                                                await handleModuleDeadlineOverride(selectedStudentForDetails, cp.courseId, mod.id, e.target.value);
+                                              }}
+                                              className="bg-transparent outline-none"
+                                            />
+                                          </label>
+                                        )}
+                                      </div>
+                                      <div className="space-y-1 pl-2">
+                                        {mod.lessons.map(les => {
+                                          const isCompleted = selectedStudentForDetails.completedLessonIds?.includes(les.id);
+                                          return (
+                                            <div key={les.id} className="flex items-center justify-between text-[11px]">
+                                              <span className={`truncate max-w-[200px] ${isCompleted ? 'text-slate-900 font-semibold' : 'text-slate-500'}`}>
+                                                {les.title}
+                                              </span>
+                                              <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${
+                                                isCompleted ? 'bg-green-100 text-green-800' : 'bg-slate-200 text-slate-500'
+                                              }`}>
+                                                {isCompleted ? '✓ Completed' : 'Pending'}
+                                              </span>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                      {effectiveDeadline && (
+                                        <div className="mt-2 text-[10px] text-amber-700 font-semibold bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                                          Effective deadline: {new Date(effectiveDeadline).toLocaleDateString()}
+                                        </div>
+                                      )}
                                     </div>
-                                  </div>
-                                ))}
+                                  );
+                                })}
                               </div>
                             )}
                           </div>

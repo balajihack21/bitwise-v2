@@ -9,7 +9,8 @@ import {
   getNextLesson,
   isInstructorForCourse,
   completeAllCourseLessons,
-  resetCourseProgress
+  resetCourseProgress,
+  getEffectiveModuleDeadline
 } from '../services/progressService';
 
 interface CoursesProps {
@@ -49,6 +50,27 @@ const Courses: React.FC<CoursesProps> = ({
     return isInstructorForCourse(user, selectedCourse);
   }, [user, selectedCourse]);
 
+  const findFirstAvailableLessonForCourse = (course: Course): Lesson | null => {
+    const isAssignedInstructor = isInstructorForCourse(user, course);
+
+    for (const module of course.modules) {
+      if (isModuleExpiredForStudent(course, module.id) && !isAssignedInstructor) {
+        continue;
+      }
+
+      for (const lesson of module.lessons) {
+        if (isAssignedInstructor || isLessonUnlocked(lesson.id, course, progress, user)) {
+          return lesson;
+        }
+      }
+    }
+
+    if (course.modules.length > 0 && course.modules[0].lessons.length > 0) {
+      return course.modules[0].lessons[0];
+    }
+    return null;
+  };
+
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(() => {
     if (initialCourseId) {
       const foundCourse = courses.find(c => c.id === initialCourseId);
@@ -59,9 +81,7 @@ const Courses: React.FC<CoursesProps> = ({
             if (foundL) return foundL;
           }
         }
-        if (foundCourse.modules.length > 0 && foundCourse.modules[0].lessons.length > 0) {
-          return foundCourse.modules[0].lessons[0];
-        }
+        return findFirstAvailableLessonForCourse(foundCourse);
       }
     }
     return null;
@@ -71,6 +91,24 @@ const Courses: React.FC<CoursesProps> = ({
   const [translatedContent, setTranslatedContent] = useState<string>('');
   const [isTranslating, setIsTranslating] = useState(false);
   const [lockedNotice, setLockedNotice] = useState<string | null>(null);
+
+  const isModuleExtended = (course: Course, moduleId: string) => {
+    const override = user?.moduleDeadlineOverrides?.[course.id]?.[moduleId];
+    const originalEndDate = course.modules.find(m => m.id === moduleId)?.endDate;
+    if (!override) return false;
+    if (!originalEndDate) return true;
+    return new Date(override) > new Date(originalEndDate);
+  };
+
+  const getExtendedModule = (course: Course) => {
+    return course.modules.find(module => isModuleExtended(course, module.id));
+  };
+
+  const isModuleExpiredForStudent = (course: Course, moduleId: string) => {
+    const effectiveDeadline = getEffectiveModuleDeadline(user, course, moduleId);
+    const hasStudentOverride = !!user?.moduleDeadlineOverrides?.[course.id]?.[moduleId];
+    return !!effectiveDeadline && new Date(effectiveDeadline) < new Date() && !hasStudentOverride;
+  };
 
   // Instructor test mode for bypassing deadlines and locks
   const [isTestMode, setIsTestMode] = useState(false);
@@ -83,38 +121,66 @@ const Courses: React.FC<CoursesProps> = ({
         if (initialLessonId) {
           for (const m of foundCourse.modules) {
             const l = m.lessons.find(less => less.id === initialLessonId);
-            if (l) setSelectedLesson(l);
+            if (l) {
+              setSelectedLesson(l);
+              return;
+            }
           }
         }
+        setSelectedLesson(findFirstAvailableLessonForCourse(foundCourse));
       }
     }
   }, [initialCourseId, initialLessonId, courses]);
 
   const handleCourseClick = (course: Course) => {
     setSelectedCourse(course);
-    // Find first unlocked, uncompleted lesson
     const isInstructor = isInstructorForCourse(user, course);
+
     let targetLesson: Lesson | null = null;
-    for (const m of course.modules) {
-      const isDeadlinePassed = m.endDate && new Date(m.endDate) < new Date();
-      if (!isInstructor && isDeadlinePassed) continue;
-      for (const l of m.lessons) {
-        if (isLessonUnlocked(l.id, course, progress, user) && !progress.completedLessonIds.includes(l.id)) {
-          targetLesson = l;
-          break;
-        }
+    const extendedModule = course.modules.find(m => isModuleExtended(course, m.id));
+
+    if (extendedModule) {
+      const firstPendingLesson = extendedModule.lessons.find(l => !progress.completedLessonIds.includes(l.id));
+      if (firstPendingLesson) {
+        targetLesson = firstPendingLesson;
       }
-      if (targetLesson) break;
     }
-    // Fall back to first lesson if all completed or none found
-    if (!targetLesson && course.modules.length > 0 && course.modules[0].lessons.length > 0) {
-      targetLesson = course.modules[0].lessons[0];
+
+    if (!targetLesson) {
+      for (const m of course.modules) {
+        if (!isInstructor && isModuleExpiredForStudent(course, m.id)) {
+          continue;
+        }
+
+        for (const l of m.lessons) {
+          if (isLessonUnlocked(l.id, course, progress, user) && !progress.completedLessonIds.includes(l.id)) {
+            targetLesson = l;
+            break;
+          }
+        }
+
+        if (targetLesson) break;
+      }
+    }
+
+    if (!targetLesson) {
+      targetLesson = findFirstAvailableLessonForCourse(course);
     }
     setSelectedLesson(targetLesson);
   };
 
   const handleSelectLesson = (lesson: Lesson) => {
     if (!selectedCourse) return;
+
+    const currentModule = selectedCourse.modules.find(module => module.lessons.some(l => l.id === lesson.id));
+    const effectiveDeadline = currentModule ? getEffectiveModuleDeadline(user, selectedCourse, currentModule.id) : undefined;
+    const isDeadlinePassed = effectiveDeadline && new Date(effectiveDeadline) < new Date();
+
+    if (isDeadlinePassed && !progress.completedLessonIds.includes(lesson.id)) {
+      setLockedNotice(`🔒 "${lesson.title}" is locked because the module deadline has passed and no further progression is allowed.`);
+      setTimeout(() => setLockedNotice(null), 4000);
+      return;
+    }
 
     // Check unlock status (instructors bypass on assigned course)
     const unlocked = isInstructorAssigned || isLessonUnlocked(lesson.id, selectedCourse, progress, user);
@@ -278,30 +344,71 @@ const Courses: React.FC<CoursesProps> = ({
                 </span>
               </div>
               <h2 className="font-bold text-slate-900 text-sm">{selectedCourse.title}</h2>
+              {(() => {
+                const extendedModule = getExtendedModule(selectedCourse);
+                const isCurrentModuleExtended = !!extendedModule && !!selectedLesson && extendedModule.lessons.some(l => l.id === selectedLesson.id);
+                if (!isCurrentModuleExtended) return null;
+                return (
+                  <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-700">
+                    <i className="fa-solid fa-rotate-right"></i>
+                    Resume from here
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
               {selectedCourse.modules.filter((module) => {
-                const isDeadlinePassed = module.endDate && new Date(module.endDate) < new Date();
-                if (!isDeadlinePassed) return true;
-                // Only show module if at least one lesson is completed
-                return module.lessons.some((l) => progress.completedLessonIds.includes(l.id));
+                const effectiveDeadline = getEffectiveModuleDeadline(user, selectedCourse, module.id);
+                const hasStudentOverride = !!user?.moduleDeadlineOverrides?.[selectedCourse.id]?.[module.id];
+                const isDeadlinePassed = !!effectiveDeadline && new Date(effectiveDeadline) < new Date();
+
+                if (isDeadlinePassed && !hasStudentOverride) {
+                  return true;
+                }
+
+                return true;
               }).map((module) => (
                 <div key={module.id} className="py-2">
-                  <div className="px-4 py-2 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                    {module.title}
+                  <div className="px-4 py-2 text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between gap-2">
+                    <span>{module.title}</span>
+                    {(() => {
+                      const effectiveDeadline = getEffectiveModuleDeadline(user, selectedCourse, module.id);
+                      const hasStudentOverride = !!user?.moduleDeadlineOverrides?.[selectedCourse.id]?.[module.id];
+                      const isDeadlinePassed = !!effectiveDeadline && new Date(effectiveDeadline) < new Date() && !hasStudentOverride;
+
+                      if (isModuleExtended(selectedCourse, module.id)) {
+                        return (
+                          <span className="px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200 text-[9px] font-bold uppercase tracking-wide">
+                            {selectedLesson && module.lessons.some(l => l.id === selectedLesson.id) ? 'Resume' : 'Extended'}
+                          </span>
+                        );
+                      }
+
+                      if (isDeadlinePassed) {
+                        return (
+                          <span className="px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-700 border border-rose-200 text-[9px] font-bold uppercase tracking-wide">
+                            Review Only
+                          </span>
+                        );
+                      }
+
+                      return null;
+                    })()}
                   </div>
                   <div className="space-y-0.5">
                     {module.lessons.filter((lesson) => {
-                        const isDeadlinePassed = module.endDate && new Date(module.endDate) < new Date();
-                        if (!isDeadlinePassed) return true;
-                        // For passed modules, only show completed lessons
-                        return progress.completedLessonIds.includes(lesson.id);
+                        const effectiveDeadline = getEffectiveModuleDeadline(user, selectedCourse, module.id);
+                        const isDeadlinePassed = effectiveDeadline && new Date(effectiveDeadline) < new Date();
+                        if (isDeadlinePassed) return true; // keep all lessons visible in a passed module, but lock incomplete ones
+                        return true;
                     }).map((lesson) => {
                       const isCompleted = progress.completedLessonIds.includes(lesson.id);
                       const isUnlocked = isLessonUnlocked(lesson.id, selectedCourse, progress, user);
                       const isSelected = selectedLesson?.id === lesson.id;
-                      const isPastDeadline = module.endDate && new Date(module.endDate) < new Date();
+                      const effectiveDeadline = getEffectiveModuleDeadline(user, selectedCourse, module.id);
+                      const hasStudentOverride = !!user?.moduleDeadlineOverrides?.[selectedCourse.id]?.[module.id];
+                      const isPastDeadline = !!effectiveDeadline && new Date(effectiveDeadline) < new Date() && !hasStudentOverride;
                       const isDisabled = isPastDeadline && !isCompleted;
 
                       return (
@@ -346,12 +453,31 @@ const Courses: React.FC<CoursesProps> = ({
                         </button>
                       );
                     })}
-                    {module.endDate && (
-                      <div className="px-4 py-2 text-[10px] text-amber-600 font-semibold flex items-center gap-1">
-                        <i className="fa-regular fa-calendar-times"></i>
-                        Deadline: {new Date(module.endDate).toLocaleDateString()}
-                      </div>
-                    )}
+                    {(() => {
+                      const effectiveDeadline = getEffectiveModuleDeadline(user, selectedCourse, module.id);
+                      const hasStudentOverride = !!user?.moduleDeadlineOverrides?.[selectedCourse.id]?.[module.id];
+                      const isDeadlinePassed = !!effectiveDeadline && new Date(effectiveDeadline) < new Date() && !hasStudentOverride;
+                      if (!effectiveDeadline) return null;
+                      const isExtended = isModuleExtended(selectedCourse, module.id);
+                      return (
+                        <div className="px-4 py-2 text-[10px] font-semibold flex items-center justify-between gap-2">
+                          <span className={`flex items-center gap-1 ${isDeadlinePassed ? 'text-rose-600' : 'text-amber-600'}`}>
+                            <i className="fa-regular fa-calendar-times"></i>
+                            Deadline: {new Date(effectiveDeadline).toLocaleDateString()}
+                          </span>
+                          {isExtended && (
+                            <span className="px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200 text-[8px] font-bold uppercase tracking-wide">
+                              Extended
+                            </span>
+                          )}
+                          {!isExtended && isDeadlinePassed && (
+                            <span className="px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-700 border border-rose-200 text-[8px] font-bold uppercase tracking-wide">
+                              Expired
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               ))}
@@ -463,7 +589,8 @@ const Courses: React.FC<CoursesProps> = ({
                         <button
                           onClick={() => {
                             const mod = selectedCourse.modules.find(m => m.lessons.some(l => l.id === selectedLesson.id));
-                            const passed = mod && mod.endDate && new Date(mod.endDate) < new Date();
+                            const effectiveDeadline = mod ? getEffectiveModuleDeadline(user, selectedCourse, mod.id) : undefined;
+                            const passed = effectiveDeadline && new Date(effectiveDeadline) < new Date();
                             if (passed) return; // block completion on passed module too
                             handleCompleteArticle(selectedLesson.id);
                           }}
@@ -475,11 +602,12 @@ const Courses: React.FC<CoursesProps> = ({
                     </div>
 
                     {(() => {
-                      const nextL = getNextLesson(selectedCourse, selectedLesson.id);
+                      const nextL = getNextLesson(selectedCourse, selectedLesson.id, user);
                       if (!nextL) return null;
                       const currentMod = selectedCourse.modules.find(m => m.lessons.some(l => l.id === selectedLesson.id));
                       const nextMod = selectedCourse.modules.find(m => m.lessons.some(l => l.id === nextL.id));
-                      const passed = currentMod && currentMod.endDate && new Date(currentMod.endDate) < new Date();
+                      const currentDeadline = currentMod ? getEffectiveModuleDeadline(user, selectedCourse, currentMod.id) : undefined;
+                      const passed = currentDeadline && new Date(currentDeadline) < new Date();
                       const samePassedModule = passed && currentMod?.id === nextMod?.id;
                       if (samePassedModule) return null;
                       return (

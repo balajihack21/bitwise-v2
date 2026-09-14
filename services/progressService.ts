@@ -136,6 +136,16 @@ export const isInstructorForCourse = (user?: User | null, course?: Course | null
  * 3. Any subsequent lesson is unlocked if the immediate PREVIOUS lesson in the module/course is completed.
  * 4. Or if explicitly in unlockedLessonIds.
  */
+export const getEffectiveModuleDeadline = (
+  user: User | null | undefined,
+  course: Course,
+  moduleId: string
+): string | undefined => {
+  const targetModule = course.modules?.find(m => m.id === moduleId);
+  const override = user?.moduleDeadlineOverrides?.[course.id]?.[moduleId];
+  return override || targetModule?.endDate;
+};
+
 export const isLessonUnlocked = (
   lessonId: string,
   course: Course,
@@ -164,9 +174,11 @@ export const isLessonUnlocked = (
   const prevLesson = allLessons[lessonIndex - 1];
   const prevModule = course.modules?.find(m => m.lessons?.some(l => l.id === prevLesson.id));
   const currentModule = course.modules?.find(m => m.lessons?.some(l => l.id === lessonId));
+  const previousModuleDeadline = prevModule ? getEffectiveModuleDeadline(user, course, prevModule.id) : undefined;
+  const currentModuleDeadline = currentModule ? getEffectiveModuleDeadline(user, course, currentModule.id) : undefined;
 
   // If previous module deadline crossed, unlock first lesson of next module
-  if (prevModule && prevModule.endDate && new Date(prevModule.endDate) < new Date()) {
+  if (prevModule && previousModuleDeadline && new Date(previousModuleDeadline) < new Date()) {
     if (currentModule && currentModule.id !== prevModule.id) {
       // First lesson of next active module after passed module should be unlocked
       const isFirstInModule = currentModule.lessons[0]?.id === lessonId;
@@ -197,7 +209,8 @@ export const getNextLesson = (course: Course, currentLessonId: string, user?: Us
     }
     // If current module is deadline-passed, do not allow moving to next lesson in that module
     const currentModule = course.modules?.find(m => m.lessons?.some(l => l.id === currentLessonId));
-    if (currentModule && currentModule.endDate && new Date(currentModule.endDate) < new Date()) {
+    const currentModuleDeadline = currentModule ? getEffectiveModuleDeadline(user, course, currentModule.id) : undefined;
+    if (currentModule && currentModuleDeadline && new Date(currentModuleDeadline) < new Date()) {
       const nextModule = course.modules?.find(m => m.lessons?.some(l => l.id === nextL.id));
       if (nextModule && nextModule.id === currentModule.id) {
         return null; // Block next lesson within same passed module

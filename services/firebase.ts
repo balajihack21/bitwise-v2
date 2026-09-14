@@ -84,6 +84,31 @@ export function sanitizeForFirestore<T>(obj: T): T {
   return clean as T;
 }
 
+export const loadUserModuleDeadlineOverrides = async (userUid?: string): Promise<Record<string, Record<string, string>>> => {
+  if (!userUid) return {};
+
+  try {
+    const localRaw = localStorage.getItem('bitwise_student_module_deadlines');
+    if (localRaw) {
+      const localMap = JSON.parse(localRaw);
+      const localOverrides = localMap?.[userUid] || {};
+      if (Object.keys(localOverrides).length > 0) {
+        return localOverrides;
+      }
+    }
+  } catch (e) {
+    // Fall through to Firestore lookup
+  }
+
+  try {
+    const snap = await getDoc(doc(db, 'users', userUid));
+    const data = snap.exists() ? (snap.data() || {}) : {};
+    return data.moduleDeadlineOverrides || {};
+  } catch (e) {
+    return {};
+  }
+};
+
 /**
  * Local accounts registry for offline / unconfigured Firebase Auth fallback
  */
@@ -275,7 +300,8 @@ export const registerUser = async (
       role: existingAccount.role,
       email: existingAccount.email,
       uid: existingAccount.uid,
-      assignedCourseIds: existingAccount.assignedCourseIds
+      assignedCourseIds: existingAccount.assignedCourseIds,
+      moduleDeadlineOverrides: {}
     };
   }
 
@@ -287,7 +313,8 @@ export const registerUser = async (
       role: data.role || 'student',
       email: data.email || cleanEmail,
       uid: existingFirestoreUser.id,
-      assignedCourseIds: Array.isArray(data.assignedCourseIds) ? data.assignedCourseIds : undefined
+      assignedCourseIds: Array.isArray(data.assignedCourseIds) ? data.assignedCourseIds : undefined,
+      moduleDeadlineOverrides: data.moduleDeadlineOverrides || {}
     };
   }
 
@@ -770,7 +797,8 @@ export const loginUser = async (email: string, password: string): Promise<User> 
       role,
       email: fbUser.email || undefined,
       uid: finalUid,
-      assignedCourseIds
+      assignedCourseIds,
+      moduleDeadlineOverrides: {}
     };
   } catch (authError: any) {
     const errorCode = authError.code || authError.message || '';
@@ -787,7 +815,8 @@ export const loginUser = async (email: string, password: string): Promise<User> 
         role: matched.role,
         email: matched.email,
         uid: matched.uid,
-        assignedCourseIds: assigned
+        assignedCourseIds: assigned,
+        moduleDeadlineOverrides: {}
       };
     }
 
@@ -1013,6 +1042,7 @@ export interface StudentOverview {
   assignedInstructorId?: string;
   assignedInstructors?: { uid: string; email?: string; name?: string }[];
   courseInstructorAssignments?: CourseInstructorAssignment[];
+  moduleDeadlineOverrides?: Record<string, Record<string, string>>;
 }
 
 const normalizeAssignedInstructors = (userData: any, instructorCatalog: InstructorAccount[] = []): { uid: string; email?: string; name?: string }[] => {
@@ -1085,6 +1115,70 @@ const normalizeAssignedInstructors = (userData: any, instructorCatalog: Instruct
   }
 
   return entries;
+};
+
+export const getStudentModuleDeadlineOverride = (studentUid: string, courseId: string, moduleId: string): string | undefined => {
+  try {
+    const raw = localStorage.getItem('bitwise_student_module_deadlines');
+    if (!raw) return undefined;
+    const map = JSON.parse(raw);
+    const match = map?.[studentUid]?.[courseId]?.[moduleId];
+    if (match) return match;
+  } catch (e) {
+    // ignore invalid cache
+  }
+  return undefined;
+};
+
+export const setStudentModuleDeadlineOverride = async (
+  studentUid: string,
+  courseId: string,
+  moduleId: string,
+  newDeadline: string | null
+): Promise<void> => {
+  try {
+    const raw = localStorage.getItem('bitwise_student_module_deadlines');
+    const map = raw ? JSON.parse(raw) : {};
+    if (!map[studentUid]) map[studentUid] = {};
+    if (!map[studentUid][courseId]) map[studentUid][courseId] = {};
+    if (newDeadline) {
+      map[studentUid][courseId][moduleId] = newDeadline;
+    } else {
+      delete map[studentUid][courseId][moduleId];
+      if (Object.keys(map[studentUid][courseId]).length === 0) {
+        delete map[studentUid][courseId];
+      }
+    }
+    localStorage.setItem('bitwise_student_module_deadlines', JSON.stringify(map));
+  } catch (e) {
+    console.warn('Failed to save student module deadline override:', e);
+  }
+
+  if (!studentUid || !courseId || !moduleId) return;
+
+  try {
+    const studentDocRef = doc(db, 'users', studentUid);
+    const snap = await getDoc(studentDocRef);
+    const data = snap.exists() ? snap.data() || {} : {};
+    const existingMap = data.moduleDeadlineOverrides || {};
+    const nextMap = { ...existingMap };
+    if (!nextMap[courseId]) nextMap[courseId] = {};
+    if (newDeadline) {
+      nextMap[courseId][moduleId] = newDeadline;
+    } else {
+      delete nextMap[courseId][moduleId];
+      if (Object.keys(nextMap[courseId]).length === 0) {
+        delete nextMap[courseId];
+      }
+    }
+    await setDoc(studentDocRef, sanitizeForFirestore({
+      ...data,
+      moduleDeadlineOverrides: nextMap,
+      updatedAt: new Date().toISOString()
+    }), { merge: true });
+  } catch (e) {
+    console.warn('Failed to sync student module deadline override to Firestore:', e);
+  }
 };
 
 export const fetchAllStudentsFromFirestore = async (customCatalog?: Course[], instructorUid?: string, instructorCourseIds?: string[]): Promise<StudentOverview[]> => {
@@ -1379,6 +1473,7 @@ export const fetchAllStudentsFromFirestore = async (customCatalog?: Course[], in
         assignedInstructorId: uData.assignedInstructorId || assignedInstructors[0]?.uid || undefined,
         assignedInstructors,
         courseInstructorAssignments: uData.courseInstructorAssignments || [],
+        moduleDeadlineOverrides: uData.moduleDeadlineOverrides || {},
         xp,
         streakDays: streak,
         completedLessonsCount: completedCount,

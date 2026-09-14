@@ -30,6 +30,7 @@ export interface User {
   section?: string;
   dept?: string;
   year?: string;
+  moduleDeadlineOverrides?: Record<string, Record<string, string>>;
 }
 
 export interface InstructorAccount {

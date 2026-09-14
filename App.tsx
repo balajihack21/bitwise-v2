@@ -25,7 +25,8 @@ import {
   loadCoursesFromFirestore,
   saveCoursesToFirestore,
   getInstructorAssignedCourses,
-  fetchInstructorsList
+  fetchInstructorsList,
+  loadUserModuleDeadlineOverrides
 } from './services/firebase';
 
 const App: React.FC = () => {
@@ -160,13 +161,15 @@ const App: React.FC = () => {
           }));
         });
 
+        const loadedOverrides = await loadUserModuleDeadlineOverrides(fbUser.uid);
         const activeUser: User = {
           username: fbUser.displayName || cleanEmail.split('@')[0] || (role === 'admin' ? 'Admin' : (role === 'instructor' ? 'Instructor' : 'Student')),
           role,
           email: fbUser.email || undefined,
           uid: fbUser.uid,
           assignedCourseIds: assignedCourses,
-          courseInstructorAssignments
+          courseInstructorAssignments,
+          moduleDeadlineOverrides: loadedOverrides
         };
         setUser(activeUser);
         localStorage.setItem('bitwise_active_user', JSON.stringify(activeUser));
@@ -293,11 +296,17 @@ const App: React.FC = () => {
   // Track whether ProblemWorkspace (course problem editor) is active
   const [isProblemWorkspaceActive, setIsProblemWorkspaceActive] = useState(false);
 
-  const handleLogin = (loggedInUser: User) => {
-    setUser(loggedInUser);
+  const handleLogin = async (loggedInUser: User) => {
+    const hydratedUser: User = {
+      ...loggedInUser,
+      moduleDeadlineOverrides: loggedInUser.moduleDeadlineOverrides && Object.keys(loggedInUser.moduleDeadlineOverrides).length > 0
+        ? loggedInUser.moduleDeadlineOverrides
+        : await loadUserModuleDeadlineOverrides(loggedInUser.uid)
+    };
+    setUser(hydratedUser);
     setAuthBanner(null);
-    localStorage.setItem('bitwise_active_user', JSON.stringify(loggedInUser));
-    syncProgressWithFirestore(loggedInUser).then(p => setProgress(p));
+    localStorage.setItem('bitwise_active_user', JSON.stringify(hydratedUser));
+    syncProgressWithFirestore(hydratedUser).then(p => setProgress(p));
 
     if (pendingTargetView) {
       const target = pendingTargetView;
