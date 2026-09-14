@@ -56,6 +56,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [assignModalCourse, setAssignModalCourse] = useState<Course | null>(null);
   const [selectedCourseFilter, setSelectedCourseFilter] = useState<string>('ALL');
   const [selectedInstructorFilter, setSelectedInstructorFilter] = useState<string>('ALL');
+  const [progressFilter, setProgressFilter] = useState<'ALL' | 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED'>('ALL');
+  const [studentSort, setStudentSort] = useState<'NAME' | 'PROGRESS_DESC' | 'LAST_ACTIVE' | 'ALERTS_DESC'>('NAME');
   const [bulkSelectMode, setBulkSelectMode] = useState<'none' | 'all-matched'>('none');
   const [bulkSelectedUids, setBulkSelectedUids] = useState<Set<string>>(new Set());
 
@@ -114,6 +116,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // Student progress details & Code Inspector Modal
   const [selectedStudentForDetails, setSelectedStudentForDetails] = useState<StudentOverview | null>(null);
+  const [assessmentBreakdown, setAssessmentBreakdown] = useState<{ student: StudentOverview; courseId: string } | null>(null);
   const [inspectedSubmission, setInspectedSubmission] = useState<any | null>(null);
   const [expandedCourseId, setExpandedCourseId] = useState<string | null>(null);
 
@@ -436,7 +439,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     return Math.min(10, penaltyModules.length * 10);
   };
 
-  const getAutoCalculatedCodingTestMarks = (student: StudentOverview, courseId: string, course?: Course): { codingTest1Marks: number; codingTest2Marks: number; totalCodingTestMarks: number } => {
+  const getAutoCalculatedCodingTestMarks = (student: StudentOverview, courseId: string, course?: Course): {
+    codingTest1Marks: number;
+    codingTest2Marks: number;
+    totalCodingTestMarks: number;
+    problemDetails: { problemId: string; test: 'Coding Test 1' | 'Coding Test 2'; accepted: boolean; attempts: number; elapsedMinutes: number | null; marks: number }[];
+  } => {
     const schedule: any = course?.codingTestSchedule || student?.scheduledCodingTests?.[courseId] || {};
     const normalizeProblemIds = (values: Array<string | undefined | null>) => Array.from(new Set(values.filter((value): value is string => !!value)));
     const parseSubmissionDate = (value?: string) => {
@@ -506,7 +514,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       return [];
     };
 
-    const getTimeBasedProblemScore = (problemIds: string[]) => {
+    const problemDetails: { problemId: string; test: 'Coding Test 1' | 'Coding Test 2'; accepted: boolean; attempts: number; elapsedMinutes: number | null; marks: number }[] = [];
+
+    const getTimeBasedProblemScore = (problemIds: string[], test: 'Coding Test 1' | 'Coding Test 2') => {
       if (problemIds.length === 0) return 0;
       const problemScores = problemIds.map(problemId => {
         const submissions = (student.submissions || [])
@@ -516,19 +526,30 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
             const second = parseSubmissionDate((b as any).timestamp || (b as any).createdAt);
             return first - second;
           });
-        if (submissions.length === 0) return 0;
+        if (submissions.length === 0) {
+          problemDetails.push({ problemId, test, accepted: false, attempts: 0, elapsedMinutes: null, marks: 0 });
+          return 0;
+        }
 
         const accepted = submissions.filter(sub => sub.status === 'ACCEPTED');
-        if (accepted.length === 0) return 0;
+        if (accepted.length === 0) {
+          problemDetails.push({ problemId, test, accepted: false, attempts: submissions.length, elapsedMinutes: null, marks: 0 });
+          return 0;
+        }
 
         const acceptedAt = parseSubmissionDate(accepted[0].timestamp || (accepted[0] as any).createdAt);
         const firstAttemptAt = parseSubmissionDate(submissions[0].timestamp || (submissions[0] as any).createdAt);
 
-        if (!acceptedAt || !firstAttemptAt) return 0;
+        if (!acceptedAt || !firstAttemptAt) {
+          problemDetails.push({ problemId, test, accepted: true, attempts: submissions.length, elapsedMinutes: null, marks: 0 });
+          return 0;
+        }
 
         const elapsedMinutes = Math.max(0, (acceptedAt - firstAttemptAt) / 60000);
         const timeScore = 25 * Math.max(0, 1 - (elapsedMinutes / 45));
-        return Math.min(25, Math.round(Math.max(5, timeScore)));
+        const marks = Math.min(25, Math.round(Math.max(5, timeScore)));
+        problemDetails.push({ problemId, test, accepted: true, attempts: submissions.length, elapsedMinutes, marks });
+        return marks;
       });
 
       return Math.min(25, problemScores.reduce((sum, score) => sum + score, 0));
@@ -536,11 +557,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
     const ct1ProblemIds = getProblemIdsForSlot('codingTest1Date', 'codingTest1ProblemId');
     const ct2ProblemIds = getProblemIdsForSlot('codingTest2Date', 'codingTest2ProblemId');
-    const codingTest1Marks = getTimeBasedProblemScore(ct1ProblemIds);
-    const codingTest2Marks = getTimeBasedProblemScore(ct2ProblemIds);
+    const codingTest1Marks = getTimeBasedProblemScore(ct1ProblemIds, 'Coding Test 1');
+    const codingTest2Marks = getTimeBasedProblemScore(ct2ProblemIds, 'Coding Test 2');
     const totalCodingTestMarks = Math.min(50, codingTest1Marks + codingTest2Marks);
 
-    return { codingTest1Marks, codingTest2Marks, totalCodingTestMarks };
+    return { codingTest1Marks, codingTest2Marks, totalCodingTestMarks, problemDetails };
   };
 
   const computeInternalAssessment = (student: StudentOverview, courseId: string, course?: Course): CourseInternalAssessment => {
@@ -1049,7 +1070,8 @@ public class Main {
   };
 
   // Filtered lists
-  const filteredStudents = useMemo(() => students.filter(s => {
+  const filteredStudents = useMemo(() => {
+    const filtered = students.filter(s => {
     const matchesSearch = s.displayName.toLowerCase().includes(studentSearch.toLowerCase()) ||
       s.email.toLowerCase().includes(studentSearch.toLowerCase()) ||
       (s.regNo || '').toLowerCase().includes(studentSearch.toLowerCase());
@@ -1060,6 +1082,16 @@ public class Main {
       const hasCourse = s.enrolledCourses?.some(c => c.courseId === selectedCourseFilter);
       if (!hasCourse) return false;
     }
+
+    const selectedCourses = selectedCourseFilter === 'ALL'
+      ? (s.enrolledCourses || [])
+      : (s.enrolledCourses || []).filter(c => c.courseId === selectedCourseFilter);
+    const progress = selectedCourses.length > 0
+      ? Math.max(...selectedCourses.map(c => c.progressPercentage || 0))
+      : 0;
+    if (progressFilter === 'NOT_STARTED' && progress !== 0) return false;
+    if (progressFilter === 'IN_PROGRESS' && (progress <= 0 || progress >= 100)) return false;
+    if (progressFilter === 'COMPLETED' && progress < 100) return false;
 
     // Instructor Filter (Admin Only)
     if (!isInstructor && selectedInstructorFilter !== 'ALL') {
@@ -1099,7 +1131,25 @@ public class Main {
     if (proctorFilter === 'EXCUSED') return s.proctorStatus === 'EXCUSED';
     if (proctorFilter === 'CLEAN') return s.proctorStatus === 'CLEAN' && (s.tabSwitchCount || 0) === 0;
     return true;
-  }), [students, studentSearch, selectedCourseFilter, selectedInstructorFilter, proctorFilter, isInstructor, courses]);
+    });
+
+    return filtered.sort((a, b) => {
+      if (studentSort === 'NAME') return a.displayName.localeCompare(b.displayName);
+      if (studentSort === 'LAST_ACTIVE') return new Date(b.lastActive || 0).getTime() - new Date(a.lastActive || 0).getTime();
+      if (studentSort === 'ALERTS_DESC') {
+        const aAlerts = (a.tabSwitchCount || 0) + (a.focusLossCount || 0) + (a.testExitAttempts || 0);
+        const bAlerts = (b.tabSwitchCount || 0) + (b.focusLossCount || 0) + (b.testExitAttempts || 0);
+        return bAlerts - aAlerts;
+      }
+      const getProgress = (student: StudentOverview) => {
+        const selected = selectedCourseFilter === 'ALL'
+          ? student.enrolledCourses || []
+          : (student.enrolledCourses || []).filter(c => c.courseId === selectedCourseFilter);
+        return selected.length > 0 ? Math.max(...selected.map(c => c.progressPercentage || 0)) : 0;
+      };
+      return getProgress(b) - getProgress(a);
+    });
+  }, [students, studentSearch, selectedCourseFilter, selectedInstructorFilter, progressFilter, studentSort, proctorFilter, isInstructor, courses, currentUser, currentInstructorEmail, assignedCourseIds]);
 
   const filteredSubmissions = useMemo(() => submissions.filter(sub => {
     // If instructor, only show submissions for assigned courses
@@ -2173,7 +2223,7 @@ solve()`
                         Tracking Student Progress for Your Assigned Course(s)
                       </h3>
                       <p className="text-xs text-slate-600 mt-0.5">
-                        Curriculum tracks: <strong className="text-blue-900 font-semibold">{visibleCourses.map(c => c.title).join(', ') || 'Assigned Tracks'}</strong>
+                        Showing only students assigned to you. Course ownership: <strong className="text-blue-900 font-semibold">{visibleCourses.map(c => c.title).join(', ') || 'No assigned tracks'}</strong>
                       </p>
                     </div>
                   </div>
@@ -2469,6 +2519,30 @@ solve()`
                       <option value="CLEAN">✓ Clean (0 switches)</option>
                     </select>
 
+                    <select
+                      value={progressFilter}
+                      onChange={e => setProgressFilter(e.target.value as typeof progressFilter)}
+                      className="px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 bg-white outline-none focus:border-bitwise-500 cursor-pointer"
+                      title="Filter students by course progress"
+                    >
+                      <option value="ALL">All Progress</option>
+                      <option value="NOT_STARTED">Not Started</option>
+                      <option value="IN_PROGRESS">In Progress</option>
+                      <option value="COMPLETED">Completed</option>
+                    </select>
+
+                    <select
+                      value={studentSort}
+                      onChange={e => setStudentSort(e.target.value as typeof studentSort)}
+                      className="px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 bg-white outline-none focus:border-bitwise-500 cursor-pointer"
+                      title="Sort student list"
+                    >
+                      <option value="NAME">Sort: Name</option>
+                      <option value="PROGRESS_DESC">Sort: Progress</option>
+                      <option value="LAST_ACTIVE">Sort: Recent Activity</option>
+                      <option value="ALERTS_DESC">Sort: Proctor Alerts</option>
+                    </select>
+
                     {/* Export to Excel (.xls) Button */}
                     <button
                       onClick={() => {
@@ -2540,7 +2614,7 @@ solve()`
                       <span>•</span>
                       <span>All Students: <b className="text-slate-800">{students.length}</b></span>
                       <span>•</span>
-                      <span>Assigned Students: <b className="text-slate-800">{students.filter(s => (s.assignedInstructors && s.assignedInstructors.length > 0) || (s.courseInstructorAssignments && s.courseInstructorAssignments.length > 0)).length}</b></span>
+                      <span>{isInstructor ? 'Assigned to me' : 'Assigned Students'}: <b className={isInstructor ? 'text-blue-700' : 'text-slate-800'}>{isInstructor ? filteredStudents.length : students.filter(s => (s.assignedInstructors && s.assignedInstructors.length > 0) || (s.courseInstructorAssignments && s.courseInstructorAssignments.length > 0)).length}</b></span>
                       {isInstructor && (
                         <>
                           <span>•</span>
@@ -2701,7 +2775,20 @@ solve()`
                                           return (
                                             <div key={`${student.uid}-${cp.courseId}-marks`} className="flex items-center justify-between gap-2 rounded-md bg-slate-50 border border-slate-200 px-2 py-1 text-[10px] text-slate-700">
                                               <span className="truncate max-w-[120px]" title={cp.courseTitle}>{cp.courseTitle}</span>
-                                              <span className="font-bold text-bitwise-700">{assessment.totalInternalMarks}/100</span>
+                                              <div className="flex items-center gap-1.5 shrink-0">
+                                                <span className="font-bold text-bitwise-700">{assessment.totalInternalMarks}/100</span>
+                                                <button
+                                                  type="button"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setAssessmentBreakdown({ student, courseId: cp.courseId });
+                                                  }}
+                                                  className="w-5 h-5 rounded text-slate-400 hover:text-bitwise-700 hover:bg-bitwise-50 flex items-center justify-center cursor-pointer"
+                                                  title="View marks breakdown and coding-test timing"
+                                                >
+                                                  <i className="fa-solid fa-circle-info"></i>
+                                                </button>
+                                              </div>
                                             </div>
                                           );
                                         })}
@@ -3055,6 +3142,107 @@ solve()`
               </div>
             </div>
           )}
+
+          {/* ============================================================== */}
+          {/* MODAL: INTERNAL ASSESSMENT BREAKDOWN                           */}
+          {/* ============================================================== */}
+          {assessmentBreakdown && (() => {
+            const breakdownStudent = assessmentBreakdown.student;
+            const breakdownCourse = courses.find(c => c.id === assessmentBreakdown.courseId);
+            const assessment = computeInternalAssessment(breakdownStudent, assessmentBreakdown.courseId, breakdownCourse);
+            const autoMarks = getAutoCalculatedCodingTestMarks(breakdownStudent, assessmentBreakdown.courseId, breakdownCourse);
+            const courseProgress = breakdownStudent.enrolledCourses?.find(c => c.courseId === assessmentBreakdown.courseId);
+            const completedLessons = courseProgress?.completedLessons || 0;
+            const totalLessons = courseProgress?.totalLessons || 0;
+            const acceptedProblems = (breakdownStudent.submissions || []).filter(sub => sub.courseId === assessmentBreakdown.courseId && sub.status === 'ACCEPTED');
+
+            return (
+              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4 overflow-y-auto">
+                <div className="bg-white rounded-2xl max-w-3xl w-full shadow-2xl border border-slate-200 overflow-hidden my-8 max-h-[90vh] flex flex-col">
+                  <div className="p-5 bg-slate-900 text-white flex items-center justify-between shrink-0">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <i className="fa-solid fa-calculator text-cyan-300"></i>
+                        <h2 className="text-lg font-bold">Internal Marks Breakdown</h2>
+                      </div>
+                      <p className="text-xs text-slate-300 mt-1">
+                        {breakdownStudent.displayName} · {breakdownCourse?.title || assessmentBreakdown.courseId}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setAssessmentBreakdown(null)}
+                      className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center cursor-pointer"
+                      title="Close breakdown"
+                    >
+                      <i className="fa-solid fa-xmark"></i>
+                    </button>
+                  </div>
+
+                  <div className="p-5 overflow-y-auto space-y-4 bg-slate-50">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                      <div className="bg-white border border-slate-200 rounded-xl p-3">
+                        <div className="text-[10px] uppercase font-bold text-slate-500">Learning</div>
+                        <div className="text-xl font-black text-slate-900 mt-1">{assessment.learningScore}<span className="text-xs text-slate-400">/25</span></div>
+                        <div className="text-[10px] text-slate-500">{completedLessons}/{totalLessons} lessons</div>
+                      </div>
+                      <div className="bg-white border border-slate-200 rounded-xl p-3">
+                        <div className="text-[10px] uppercase font-bold text-slate-500">Coding Tests</div>
+                        <div className="text-xl font-black text-cyan-700 mt-1">{assessment.codingTest1Marks + assessment.codingTest2Marks}<span className="text-xs text-slate-400">/50</span></div>
+                        <div className="text-[10px] text-slate-500">CT1 {assessment.codingTest1Marks}/25 · CT2 {assessment.codingTest2Marks}/25</div>
+                      </div>
+                      <div className="bg-white border border-slate-200 rounded-xl p-3">
+                        <div className="text-[10px] uppercase font-bold text-slate-500">Efficiency</div>
+                        <div className="text-xl font-black text-emerald-700 mt-1">{assessment.efficiencyScore}<span className="text-xs text-slate-400">/25</span></div>
+                        <div className="text-[10px] text-slate-500">{acceptedProblems.length} accepted submissions</div>
+                      </div>
+                      <div className="bg-white border border-slate-200 rounded-xl p-3">
+                        <div className="text-[10px] uppercase font-bold text-slate-500">Final Internal</div>
+                        <div className="text-xl font-black text-bitwise-700 mt-1">{assessment.totalInternalMarks}<span className="text-xs text-slate-400">/100</span></div>
+                        <div className="text-[10px] text-rose-600">Deadline penalty: {assessment.deadlinePenaltyPercent}%</div>
+                      </div>
+                    </div>
+
+                    <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+                      <div className="p-3 border-b border-slate-200 flex items-center justify-between">
+                        <div>
+                          <h3 className="text-sm font-bold text-slate-900">Coding-test solving evidence</h3>
+                          <p className="text-[11px] text-slate-500">Time is measured from the first attempt to the first accepted solution.</p>
+                        </div>
+                        <span className="text-xs font-bold text-cyan-700">{autoMarks.totalCodingTestMarks}/50 auto marks</span>
+                      </div>
+                      {autoMarks.problemDetails.length === 0 ? (
+                        <div className="p-5 text-center text-xs text-slate-400">No coding-test problems are scheduled for this course.</div>
+                      ) : (
+                        <div className="divide-y divide-slate-100">
+                          {autoMarks.problemDetails.map(detail => (
+                            <div key={`${detail.test}-${detail.problemId}`} className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                              <div>
+                                <div className="text-xs font-bold text-slate-800">{detail.problemId}</div>
+                                <div className="text-[10px] text-slate-500">{detail.test} · {detail.attempts} attempt{detail.attempts === 1 ? '' : 's'}</div>
+                              </div>
+                              <div className="flex items-center gap-3 text-[11px]">
+                                <span className={detail.accepted ? 'text-emerald-700 font-bold' : 'text-slate-400 font-semibold'}>
+                                  {detail.accepted ? 'Accepted' : 'Not accepted'}
+                                </span>
+                                <span className="text-slate-600">{detail.elapsedMinutes === null ? 'Time unavailable' : `${detail.elapsedMinutes.toFixed(1)} min`}</span>
+                                <span className="font-bold text-cyan-700">{detail.marks}/25</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="bg-cyan-50 border border-cyan-200 rounded-xl p-3 text-[11px] text-cyan-900">
+                      <i className="fa-solid fa-circle-info mr-1.5"></i>
+                      Final score = Learning ({assessment.learningScore}) + Coding Tests ({assessment.codingTest1Marks + assessment.codingTest2Marks}) + Efficiency ({assessment.efficiencyScore}), then the {assessment.deadlinePenaltyPercent}% deadline penalty is applied.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* ============================================================== */}
           {/* MODAL 1: DETAILED STUDENT PROGRESS DRILLDOWN                   */}
