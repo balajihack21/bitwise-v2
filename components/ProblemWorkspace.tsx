@@ -154,6 +154,61 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
     return () => window.removeEventListener('resize', updateSplitScreenState);
   }, []);
 
+  useEffect(() => {
+    const blockClipboardAndCapture = (event: Event, reason: string) => {
+      event.preventDefault();
+      handleSecurityViolation(reason);
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      const activeTag = (event.target as HTMLElement | null)?.tagName?.toLowerCase();
+      const isEditorTarget = activeTag === 'textarea' || activeTag === 'input';
+      const modifier = event.ctrlKey || event.metaKey;
+      const comboKey = event.key.toLowerCase();
+
+      const blockedShortcut =
+        (modifier && (comboKey === 'c' || comboKey === 'v' || comboKey === 'x' || comboKey === 's' || comboKey === 'p')) ||
+        comboKey === 'printscreen' ||
+        event.code === 'PrintScreen' ||
+        (event.shiftKey && modifier && comboKey === 's') ||
+        (event.altKey && comboKey === 'printscreen');
+
+      if (blockedShortcut && isEditorTarget) {
+        blockClipboardAndCapture(event, 'Clipboard or screenshot action blocked');
+        return;
+      }
+
+      if ((event.key === 'PrintScreen' || event.code === 'PrintScreen') && isEditorTarget) {
+        blockClipboardAndCapture(event, 'Screenshot attempt blocked');
+      }
+    };
+
+    const onCopy = (event: ClipboardEvent) => blockClipboardAndCapture(event, 'Copy attempt blocked');
+    const onCut = (event: ClipboardEvent) => blockClipboardAndCapture(event, 'Cut attempt blocked');
+    const onPaste = (event: ClipboardEvent) => blockClipboardAndCapture(event, 'Paste attempt blocked');
+    const onContextMenu = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT')) {
+        event.preventDefault();
+        handleSecurityViolation('Context menu blocked');
+      }
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('copy', onCopy);
+    document.addEventListener('cut', onCut);
+    document.addEventListener('paste', onPaste);
+    document.addEventListener('contextmenu', onContextMenu);
+
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('copy', onCopy);
+      document.removeEventListener('cut', onCut);
+      document.removeEventListener('paste', onPaste);
+      document.removeEventListener('contextmenu', onContextMenu);
+    };
+  }, [user]);
+
   // Proctoring & Anti-Cheat: Tab Switch & Focus Loss Detection
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -239,18 +294,18 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
       return;
     }
 
-    // Block system screenshot keys
-    // PrintScreen, Ctrl+PrintScreen, Meta+Shift+S (Snipping Tool), Meta+PrintScreen, Windows+S
-    // Note: Windows keys mapping can be tricky in browser
-    if (
-        e.key === 'PrintScreen' ||
-        (e.ctrlKey && e.key === 'PrintScreen') ||
-        (e.shiftKey && e.metaKey && e.key === 'S') ||
-        (e.metaKey && e.key === 'PrintScreen') ||
-        (e.metaKey && (e.key === 's' || e.key === 'S'))
-    ) {
+    const modifier = e.ctrlKey || e.metaKey;
+    const comboKey = e.key.toLowerCase();
+    const blockedShortcut =
+      (modifier && (comboKey === 'c' || comboKey === 'v' || comboKey === 'x' || comboKey === 's' || comboKey === 'p')) ||
+      e.key === 'PrintScreen' ||
+      e.code === 'PrintScreen' ||
+      (e.shiftKey && modifier && comboKey === 's') ||
+      (e.altKey && comboKey === 'printscreen');
+
+    if (blockedShortcut) {
       e.preventDefault();
-      handleSecurityViolation('Screenshot attempt blocked');
+      handleSecurityViolation('Clipboard or screenshot action blocked');
       return;
     }
 
@@ -797,14 +852,22 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
               }}
               onKeyDown={handleKeyDown}
               onCopy={(e) => {
-                if (isSplitScreenMode) e.preventDefault();
+                e.preventDefault();
+                handleSecurityViolation('Copy attempt blocked');
               }}
               onPaste={(e) => {
-                if (isSplitScreenMode) e.preventDefault();
+                e.preventDefault();
+                handleSecurityViolation('Paste attempt blocked');
               }}
               onCut={(e) => {
-                if (isSplitScreenMode) e.preventDefault();
+                e.preventDefault();
+                handleSecurityViolation('Cut attempt blocked');
               }}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                handleSecurityViolation('Context menu blocked');
+              }}
+              onDragStart={(e) => e.preventDefault()}
               readOnly={isSplitScreenMode}
               spellCheck={false}
               className={`w-full h-full p-4 font-mono text-sm leading-relaxed resize-none focus:outline-none focus:ring-0 border-none select-text ${
