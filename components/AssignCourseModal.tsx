@@ -28,7 +28,7 @@ export const AssignCourseModal: React.FC<AssignCourseModalProps> = ({
       setIsLoading(true);
       fetchInstructorsList().then(list => {
         setInstructors(list);
-        setSelectedEmail(course.assignedInstructorEmail || '');
+        setSelectedEmail(course.assignedInstructorEmail || course.assignedInstructors?.[0]?.email || '');
       }).finally(() => {
         setIsLoading(false);
       });
@@ -54,9 +54,12 @@ export const AssignCourseModal: React.FC<AssignCourseModalProps> = ({
       } else {
         const inst = instructors.find(i => i.email.toLowerCase() === selectedEmail.toLowerCase());
         const instName = inst ? inst.name : selectedEmail.split('@')[0];
-        const updated = await assignCourseToInstructor(course.id, selectedEmail, instName, inst?.uid);
+        let updated = course.assignedInstructors ? [...(course.assignedInstructors as any)] : [];
+        for (const current of updated) {
+          updated = await unassignInstructorFromCourse(course.id, current.uid);
+        }
+        updated = await assignCourseToInstructor(course.id, selectedEmail, instName, inst?.uid);
         if (onUpdatedCourses) onUpdatedCourses(updated);
-        if (onAssign) onAssign(course.id, selectedEmail, instName);
         onClose();
       }
     } catch (err: any) {
@@ -75,7 +78,7 @@ export const AssignCourseModal: React.FC<AssignCourseModalProps> = ({
               <i className="fa-solid fa-chalkboard-user"></i>
             </div>
             <div>
-              <h3 className="font-bold text-sm">Assign Course Instructor</h3>
+              <h3 className="font-bold text-sm">Assign / Reassign Course Instructor</h3>
               <p className="text-[10px] text-slate-300 truncate max-w-xs">{course.title}</p>
             </div>
           </div>
@@ -94,7 +97,7 @@ export const AssignCourseModal: React.FC<AssignCourseModalProps> = ({
           {/* Current multi-instructor badges */}
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
-              Assigned Instructors
+              Current Instructor Assignment
             </label>
             <div className="flex flex-wrap gap-2">
               {(course.assignedInstructors || []).length === 0 ? (
@@ -112,7 +115,7 @@ export const AssignCourseModal: React.FC<AssignCourseModalProps> = ({
 
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-              Add Instructor (by email)
+              Assign Instructor (by email)
             </label>
             {isLoading ? (
               <div className="py-4 text-center text-xs text-slate-400">Loading instructors...</div>
@@ -131,7 +134,7 @@ export const AssignCourseModal: React.FC<AssignCourseModalProps> = ({
               </select>
             )}
             <p className="text-[11px] text-slate-400 mt-1">
-              The assigned instructor will have access to track student progress and view live submissions for this course.
+              Reassigning replaces the current instructor for this course. The assigned instructor will have access to track student progress and view live submissions.
             </p>
           </div>
 
@@ -140,7 +143,7 @@ export const AssignCourseModal: React.FC<AssignCourseModalProps> = ({
               <i className="fa-solid fa-circle-info text-blue-600"></i>
               Manage Assignments
             </div>
-            <p>Select an instructor from the dropdown to add them to this course.</p>
+            <p>Select an instructor from the dropdown to assign or reassign this course.</p>
           </div>
 
           <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">

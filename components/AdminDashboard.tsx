@@ -1069,9 +1069,31 @@ public class Main {
     setIsProgressLocked(prev => !prev);
   };
 
+  const getCurrentStudentInstructors = (student: StudentOverview) => {
+    if (student.role !== 'student') return [];
+
+    const latestStudentAssignment = [...(student.courseInstructorAssignments || [])]
+      .filter(assignment => assignment.courseId && (!selectedCourseFilter || selectedCourseFilter === 'ALL' || assignment.courseId === selectedCourseFilter))
+      .sort((first, second) => new Date(second.assignedAt || 0).getTime() - new Date(first.assignedAt || 0).getTime())[0];
+
+    if (latestStudentAssignment) {
+      const instructor = (student.assignedInstructors || []).find(item => item.uid === latestStudentAssignment.instructorId) ||
+        instructors.find(item => item.uid === latestStudentAssignment.instructorId);
+      return [{
+        uid: latestStudentAssignment.instructorId,
+        email: latestStudentAssignment.instructorEmail || instructor?.email,
+        name: instructor?.name || latestStudentAssignment.instructorEmail || latestStudentAssignment.instructorId
+      }];
+    }
+
+    const legacyAssignments = student.assignedInstructors || [];
+    return legacyAssignments.length > 0 ? [legacyAssignments[legacyAssignments.length - 1]] : [];
+  };
+
   // Filtered lists
   const filteredStudents = useMemo(() => {
     const filtered = students.filter(s => {
+    if (s.role !== 'student') return false;
     const matchesSearch = s.displayName.toLowerCase().includes(studentSearch.toLowerCase()) ||
       s.email.toLowerCase().includes(studentSearch.toLowerCase()) ||
       (s.regNo || '').toLowerCase().includes(studentSearch.toLowerCase());
@@ -1104,22 +1126,39 @@ public class Main {
 
     // Instructor scoping: only show students explicitly assigned to this instructor
     if (isInstructor) {
+      if (s.uid === 'student_demo_uid' || s.email.toLowerCase() === 'student@bitwise.com' || s.displayName.toLowerCase() === 'demo student') {
+        return false;
+      }
+
       const currentInstId = currentUser?.uid || currentInstructorEmail || '';
-      const explicitStudentInstructorIds = new Set<string>([
-        s.assignedInstructorId,
-        ...(s.assignedInstructors || []).map((i: any) => i.uid).filter(Boolean),
-        ...(s.courseInstructorAssignments || []).map((a: any) => a.instructorId).filter(Boolean)
-      ]);
+      const relevantAssignments = (s.courseInstructorAssignments || []).filter((assignment: any) =>
+        assignedCourseIds.includes(assignment.courseId) &&
+        (selectedCourseFilter === 'ALL' || assignment.courseId === selectedCourseFilter)
+      );
+      const latestAssignmentsByCourse = Array.from(
+        relevantAssignments.reduce((latest: Map<string, any>, assignment: any) => {
+          const previous = latest.get(assignment.courseId);
+          if (!previous || new Date(assignment.assignedAt || 0).getTime() > new Date(previous.assignedAt || 0).getTime()) {
+            latest.set(assignment.courseId, assignment);
+          }
+          return latest;
+        }, new Map<string, any>()).values()
+      );
 
-      const hasExplicitAssignment = explicitStudentInstructorIds.has(currentInstId) ||
-        (s.courseInstructorAssignments || []).some((a: any) => a.instructorId === currentInstId && (!assignedCourseIds.length || assignedCourseIds.includes(a.courseId))) ||
-        (s.assignedInstructors || []).some((i: any) => i.uid === currentInstId && (!assignedCourseIds.length || s.enrolledCourses?.some((cp: any) => assignedCourseIds.includes(cp.courseId))));
+      const hasLatestStudentAssignment = latestAssignmentsByCourse.some((assignment: any) =>
+        assignment.instructorId === currentInstId || assignment.instructorEmail?.toLowerCase() === currentInstructorEmail
+      );
 
-      const hasCourseOnlyFallback =
-        explicitStudentInstructorIds.size === 0 &&
-        s.enrolledCourses?.some((cp: any) => assignedCourseIds.includes(cp.courseId));
+      const hasCourseOnlyFallback = latestAssignmentsByCourse.length === 0 &&
+        (s.enrolledCourses || []).some((cp: any) => {
+          if (!assignedCourseIds.includes(cp.courseId)) return false;
+          const course = courses.find(item => item.id === cp.courseId);
+          return (course?.assignedInstructors || []).some(instructor =>
+            instructor.uid === currentInstId || instructor.email.toLowerCase() === currentInstructorEmail
+          );
+        });
 
-      if (!hasExplicitAssignment && !hasCourseOnlyFallback) {
+      if (!hasLatestStudentAssignment && !hasCourseOnlyFallback) {
         return false;
       }
     }
@@ -2663,8 +2702,8 @@ solve()`
                                       <div className="text-xs text-slate-500 font-mono">{student.email}</div>
                                       <div className="text-[10px] text-slate-500 mt-0.5">
                                         Instructor: <span className="font-semibold text-slate-700">
-                                          {(student.assignedInstructors && student.assignedInstructors.length > 0)
-                                            ? student.assignedInstructors.map((inst: any) => inst.name || inst.email || 'Assigned Instructor').join(', ')
+                                          {getCurrentStudentInstructors(student).length > 0
+                                            ? getCurrentStudentInstructors(student).map((inst: any) => inst.name || inst.email || 'Assigned Instructor').join(', ')
                                             : 'Unassigned'}
                                         </span>
                                       </div>
@@ -2675,8 +2714,8 @@ solve()`
 
                                 <td className="p-3.5 align-top">
                                   <div className="space-y-1">
-                                    {(student.assignedInstructors && student.assignedInstructors.length > 0)
-                                      ? student.assignedInstructors.map((inst: any, idx: number) => (
+                                    {getCurrentStudentInstructors(student).length > 0
+                                      ? getCurrentStudentInstructors(student).map((inst: any, idx: number) => (
                                           <div key={`${student.uid}-inst-${idx}`} className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-violet-50 text-violet-700 border border-violet-200 text-[10px] font-bold">
                                             <i className="fa-solid fa-user-tie text-[9px]"></i>
                                             {inst.name || inst.email || 'Assigned Instructor'}
