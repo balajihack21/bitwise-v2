@@ -374,24 +374,6 @@ const App: React.FC = () => {
             }} />
             <Founder />
             <Testimonials />
-            <div className="bg-slate-50 py-12">
-              <Courses 
-                courses={courses}
-                isPro={isPro}
-                user={user}
-                progress={progress}
-                onProgressUpdate={handleProgressUpdate}
-                onUpgrade={handleUpgrade} 
-                onSelectCourse={(courseId) => {
-                  if (!user) {
-                    requireAuthForView(ViewState.COURSES, '🔒 Please log in or create an account to access course modules and challenges.');
-                  } else {
-                    setActiveCourseId(courseId);
-                    setCurrentView(ViewState.COURSES);
-                  }
-                }} 
-              />
-            </div>
           </>
         );
 
