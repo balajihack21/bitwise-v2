@@ -641,30 +641,17 @@ const Courses: React.FC<CoursesProps> = ({
 
             {selectedLesson ? (
               selectedLesson.type === 'problem' ? (
-                (() => {
-                  const contest = getActiveCodingTestForLesson(selectedCourse, selectedLesson.id);
-                  const contestProblemLessons = contest?.problemIds
-                    ?.map(problemId => selectedCourse.modules.flatMap(module => module.lessons).find(lesson => lesson.id === problemId))
-                    .filter((lesson): lesson is Lesson => !!lesson) || [];
-
-                  return (
-                    <ProblemWorkspace
-                      lesson={selectedLesson}
-                      course={selectedCourse}
-                      user={user}
-                      progress={progress}
-                      contestTitle={contest?.label}
-                      contestProblems={contestProblemLessons}
-                      contestDurationMinutes={45}
-                      contestEndsAt={contest?.date ? new Date(new Date(contest.date).getTime() + 45 * 60 * 1000).toISOString() : undefined}
-                      onProgressUpdate={onProgressUpdate}
-                      onNavigateToLesson={(nextL) => setSelectedLesson(nextL)}
-                      onClose={() => setSelectedLesson(null)}
-                      onOpenPlayground={onOpenPlayground}
-                      onActivateWorkspace={() => { /* handled by parent via view state if needed */ }}
-                    />
-                  );
-                })()
+                <ProblemWorkspace
+                  lesson={selectedLesson}
+                  course={selectedCourse}
+                  user={user}
+                  progress={progress}
+                  onProgressUpdate={onProgressUpdate}
+                  onNavigateToLesson={(nextL) => setSelectedLesson(nextL)}
+                  onClose={() => setSelectedLesson(null)}
+                  onOpenPlayground={onOpenPlayground}
+                  onActivateWorkspace={() => { /* handled by parent via view state if needed */ }}
+                />
               ) : (
                 /* Article / Conceptual Lesson Layout */
                 <div className="flex-1 overflow-y-auto p-8 flex flex-col justify-between">

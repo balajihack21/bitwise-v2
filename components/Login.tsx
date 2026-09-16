@@ -29,7 +29,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onCancel, bannerNotice }) => {
       console.error('Authentication Error:', err);
       let msg = err.message || 'Authentication failed. Please try again.';
       if (msg.includes('auth/invalid-credential') || msg.includes('auth/wrong-password') || msg.includes('auth/user-not-found')) {
-        msg = 'Invalid credentials. Please check your email and password or use the Quick Access buttons below.';
+        msg = 'Invalid credentials. Please check your email and password and try again.';
       } else if (msg.includes('auth/configuration-not-found')) {
         msg = 'Firebase Auth Email/Password provider is not yet enabled in the Firebase Console. Automatic local synced mode has been activated for your account.';
       }
@@ -162,58 +162,9 @@ const Login: React.FC<LoginProps> = ({ onLogin, onCancel, bannerNotice }) => {
               className="w-full bg-bitwise-600 hover:bg-bitwise-700 disabled:opacity-60 text-white font-bold py-3 rounded-lg shadow-md shadow-bitwise-600/20 transition-all transform hover:-translate-y-0.5 flex items-center justify-center gap-2 mt-2"
             >
               {isLoading && <i className="fa-solid fa-spinner fa-spin"></i>}
-              Sign In with Firebase
+              Sign In
             </button>
           </form>
-        </div>
-
-        <div className="mt-4 bg-white rounded-xl p-4 border border-slate-200 shadow-sm">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-              <i className="fa-solid fa-key text-amber-500 mr-1.5"></i> Instant Credentials Access
-            </span>
-            <span className="text-[10px] bg-green-100 text-green-800 font-bold px-2 py-0.5 rounded-full">
-              Firebase Connected
-            </span>
-          </div>
-          <div className="grid grid-cols-3 gap-2 mt-3">
-            <button
-              onClick={handleQuickAdminLogin}
-              disabled={isLoading}
-              className="p-2.5 text-left border border-slate-200 hover:border-bitwise-500 hover:bg-bitwise-50/40 rounded-lg transition-all group"
-            >
-              <div className="flex items-center justify-between text-xs font-bold text-slate-800 group-hover:text-bitwise-700">
-                <span>Admin</span>
-                <i className="fa-solid fa-shield text-slate-400 group-hover:text-bitwise-600 text-[11px]"></i>
-              </div>
-              <div className="text-[10px] text-slate-500 mt-1 truncate font-mono">admin@bitwise.com</div>
-              <div className="text-[10px] text-slate-400">admin123</div>
-            </button>
-            <button
-              onClick={handleQuickInstructorLogin}
-              disabled={isLoading}
-              className="p-2.5 text-left border border-blue-200 hover:border-blue-500 hover:bg-blue-50/40 rounded-lg transition-all group bg-blue-50/20"
-            >
-              <div className="flex items-center justify-between text-xs font-bold text-blue-900 group-hover:text-blue-700">
-                <span>Instructor</span>
-                <i className="fa-solid fa-chalkboard-user text-blue-500 group-hover:text-blue-600 text-[11px]"></i>
-              </div>
-              <div className="text-[10px] text-blue-700 mt-1 truncate font-mono">instructor@bitwise.com</div>
-              <div className="text-[10px] text-blue-500">instructor123</div>
-            </button>
-            <button
-              onClick={handleQuickStudentLogin}
-              disabled={isLoading}
-              className="p-2.5 text-left border border-slate-200 hover:border-bitwise-500 hover:bg-bitwise-50/40 rounded-lg transition-all group"
-            >
-              <div className="flex items-center justify-between text-xs font-bold text-slate-800 group-hover:text-bitwise-700">
-                <span>Student</span>
-                <i className="fa-solid fa-user text-slate-400 group-hover:text-bitwise-600 text-[11px]"></i>
-              </div>
-              <div className="text-[10px] text-slate-500 mt-1 truncate font-mono">student@bitwise.com</div>
-              <div className="text-[10px] text-slate-400">Student@123</div>
-            </button>
-          </div>
         </div>
       </div>
     </div>
