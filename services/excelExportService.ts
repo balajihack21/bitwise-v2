@@ -9,7 +9,7 @@ const getCalculatedInternalAssessment = (student: StudentOverview, courseId: str
     return sum + module.lessons.filter(lesson => student.completedLessonIds.includes(lesson.id)).length;
   }, 0);
   const totalProblems = courseModules.reduce((sum, module) => sum + module.lessons.filter(lesson => lesson.type === 'problem').length, 0);
-  const acceptedSubmissions = (student.submissions || []).filter(sub => sub.courseId === courseId && sub.status === 'ACCEPTED').length;
+  const acceptedSubmissions = (student.submissions || []).filter(sub => sub.courseId === courseId && sub.status === 'ACCEPTED' && !sub.isPractice).length;
 
   const penaltyModules = courseModules.filter(module => {
     const originalDeadline = module.endDate;

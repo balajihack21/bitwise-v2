@@ -431,11 +431,12 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
         timestamp: new Date().toLocaleTimeString() + ', ' + new Date().toLocaleDateString(),
         testResults: results,
         tabSwitchesDuringTest: sessionTabSwitches
+        ,isPractice: lesson.isPractice
       };
 
       const updatedWithSub = addSubmission(user || username, newSubmission);
 
-      if (allPassed) {
+      if (allPassed && !lesson.isPractice) {
         // Trigger celebratory confetti
         confetti({
           particleCount: 100,
@@ -458,6 +459,15 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
         setSubmissionFeedback({
           status: 'ACCEPTED',
           message: `Congratulations! All ${totalCount}/${totalCount} Test Cases Passed! (+${earnedXp} XP)`,
+          executionTime,
+          passedTests: passedCount,
+          totalTests: totalCount
+        });
+      } else if (allPassed && lesson.isPractice) {
+        onProgressUpdate(updatedWithSub);
+        setSubmissionFeedback({
+          status: 'ACCEPTED',
+          message: `Practice complete! All ${totalCount}/${totalCount} test cases passed. Practice problems do not affect course progress or internal marks.`,
           executionTime,
           passedTests: passedCount,
           totalTests: totalCount

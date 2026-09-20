@@ -584,8 +584,10 @@ const Courses: React.FC<CoursesProps> = ({
 
                           <div className="flex items-center gap-1 shrink-0 ml-2">
                             {lesson.type === 'problem' && (
-                              <span className="px-1.5 py-0.5 bg-purple-50 text-purple-700 font-mono text-[9px] font-bold rounded">
-                                Challenge
+                              <span className={`px-1.5 py-0.5 font-mono text-[9px] font-bold rounded ${
+                                lesson.isPractice ? 'bg-sky-50 text-sky-700' : 'bg-purple-50 text-purple-700'
+                              }`}>
+                                {lesson.isPractice ? 'Practice' : 'Challenge'}
                               </span>
                             )}
                             {(lesson.type === 'algorithm' || lesson.type === 'pseudocode' || lesson.type === 'flowchart') && (

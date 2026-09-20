@@ -29,6 +29,7 @@ const Header: React.FC<HeaderProps> = ({
     { label: 'Courses & Problems', view: ViewState.COURSES, icon: 'fa-book-open' },
     { label: 'Playground', view: ViewState.PLAYGROUND, icon: 'fa-code' },
     { label: 'My Progress', view: ViewState.PROGRESS, icon: 'fa-chart-pie' },
+    { label: 'Practice Problems', view: ViewState.PRACTICE, icon: 'fa-dumbbell' },
   ];
 
   if (user?.role === 'admin') {

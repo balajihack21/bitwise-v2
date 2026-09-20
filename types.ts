@@ -3,6 +3,7 @@ export enum ViewState {
   COURSES = 'COURSES',
   PLAYGROUND = 'PLAYGROUND',
   PROGRESS = 'PROGRESS',
+  PRACTICE = 'PRACTICE',
   ABOUT = 'ABOUT',
   AUTH = 'AUTH',
   ADMIN = 'ADMIN',
@@ -32,6 +33,15 @@ export interface User {
   year?: string;
   moduleDeadlineOverrides?: Record<string, Record<string, string>>;
   scheduledCodingTests?: Record<string, CourseCodingTestSchedule>;
+}
+
+export interface StudentProfile {
+  uid: string;
+  displayName: string;
+  dept?: string;
+  section?: string;
+  regNo?: string;
+  role: 'student';
 }
 
 export interface InstructorAccount {
@@ -75,6 +85,7 @@ export interface Lesson {
   title: string;
   duration: string;
   type: 'video' | 'article' | 'problem' | 'algorithm' | 'pseudocode' | 'flowchart';
+  isPractice?: boolean;
   isPro?: boolean;
   content?: string;
   codeSnippet?: string;
@@ -123,6 +134,13 @@ export interface Course {
   assignedInstructorName?: string;
   assignedInstructorId?: string;
   codingTestSchedule?: CourseCodingTestSchedule;
+  practiceProblems?: PracticeProblem[];
+}
+
+export interface PracticeProblem extends Lesson {
+  type: 'problem';
+  isPractice: true;
+  topic: string;
 }
 
 export interface ChatMessage {
@@ -198,6 +216,7 @@ export interface SubmissionRecord {
   tabSwitchesDuringTest?: number;
   proctorFlag?: ProctorStatus;
   proctorNote?: string;
+  isPractice?: boolean;
 }
 
 export interface UserProgress {

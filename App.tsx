@@ -6,6 +6,7 @@ import Courses from './components/Courses';
 import ProgressDashboard from './components/ProgressDashboard';
 import AITutor from './components/AITutor';
 import CodeEditor from './components/CodeEditor';
+import PracticeProblems from './components/PracticeProblems';
 import Login from './components/Login';
 import AdminDashboard from './components/AdminDashboard';
 import Testimonials from './components/Testimonials';
@@ -29,6 +30,17 @@ import {
   loadUserModuleDeadlineOverrides,
   loadUserScheduledCodingTests
 } from './services/firebase';
+
+const mergeDefaultPracticeProblems = (courses: Course[]): Course[] => {
+  const defaultProblems = MOCK_COURSES.find(course => course.id === 'python-programming')?.practiceProblems;
+  if (!defaultProblems?.length) return courses;
+
+  return courses.map(course => (
+    course.id === 'python-programming' && !course.practiceProblems?.length
+      ? { ...course, practiceProblems: defaultProblems }
+      : course
+  ));
+};
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<ViewState>(ViewState.HOME);
@@ -184,8 +196,9 @@ const App: React.FC = () => {
     // Try loading custom courses from Firestore catalog
     loadCoursesFromFirestore().then((cloudCourses) => {
       if (cloudCourses && cloudCourses.length > 0) {
-        setCourses(cloudCourses);
-        localStorage.setItem('bitwise_courses', JSON.stringify(cloudCourses));
+        const mergedCourses = mergeDefaultPracticeProblems(cloudCourses);
+        setCourses(mergedCourses);
+        localStorage.setItem('bitwise_courses', JSON.stringify(mergedCourses));
       }
     }).catch(() => {});
 
@@ -258,8 +271,9 @@ const App: React.FC = () => {
     try {
       const cloudCourses = await loadCoursesFromFirestore();
       if (cloudCourses && cloudCourses.length > 0) {
-        setCourses(cloudCourses);
-        localStorage.setItem('bitwise_courses', JSON.stringify(cloudCourses));
+        const mergedCourses = mergeDefaultPracticeProblems(cloudCourses);
+        setCourses(mergedCourses);
+        localStorage.setItem('bitwise_courses', JSON.stringify(mergedCourses));
       } else {
         const raw = localStorage.getItem('bitwise_courses');
         if (raw) setCourses(JSON.parse(raw));
@@ -346,7 +360,7 @@ const App: React.FC = () => {
 
   const renderContent = () => {
     // Strict Access Control Guard for Protected Views
-    if (!user && (currentView === ViewState.COURSES || currentView === ViewState.PLAYGROUND || currentView === ViewState.PROGRESS || currentView === ViewState.ADMIN || currentView === ViewState.INSTRUCTOR)) {
+    if (!user && (currentView === ViewState.COURSES || currentView === ViewState.PRACTICE || currentView === ViewState.PLAYGROUND || currentView === ViewState.PROGRESS || currentView === ViewState.ADMIN || currentView === ViewState.INSTRUCTOR)) {
       return (
         <Login 
           onLogin={handleLogin} 
@@ -414,6 +428,16 @@ const App: React.FC = () => {
             onNavigateToCertificates={() => setCurrentView(ViewState.HOME)}
           />
         );
+
+      case ViewState.PRACTICE:
+        return user ? (
+          <PracticeProblems
+            courses={courses}
+            user={user}
+            progress={progress}
+            onProgressUpdate={handleProgressUpdate}
+          />
+        ) : null;
 
       case ViewState.PLAYGROUND:
         return (
@@ -521,7 +545,7 @@ const App: React.FC = () => {
         {renderContent()}
       </main>
 
-      {currentView !== ViewState.PLAYGROUND && currentView !== ViewState.AUTH && currentView !== ViewState.ADMIN && currentView !== ViewState.COURSES && <Footer />}
+      {currentView !== ViewState.PLAYGROUND && currentView !== ViewState.PRACTICE && currentView !== ViewState.AUTH && currentView !== ViewState.ADMIN && currentView !== ViewState.COURSES && <Footer />}
       {currentView !== ViewState.COURSES && (
         <AITutor
           user={user}

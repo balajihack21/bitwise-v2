@@ -25,7 +25,7 @@ import {
   addDoc,
   serverTimestamp
 } from 'firebase/firestore';
-import { User, UserProgress, Course, SubmissionRecord, CourseProgressDetail, ProctorStatus, InstructorAccount, CourseInstructorAssignment, CourseInternalAssessment } from '../types';
+import { User, UserProgress, Course, SubmissionRecord, CourseProgressDetail, ProctorStatus, InstructorAccount, CourseInstructorAssignment, CourseInternalAssessment, StudentProfile } from '../types';
 import { MOCK_COURSES } from '../constants';
 
 // The Firebase configuration provided by the user
@@ -2327,6 +2327,29 @@ export const fetchInstructorsList = async (): Promise<InstructorAccount[]> => {
   } catch (e) {}
 
   return Array.from(map.values());
+};
+
+export const fetchStudentProfiles = async (): Promise<StudentProfile[]> => {
+  try {
+    const snap = await getDocs(collection(db, 'users'));
+    return snap.docs
+      .map(docSnapshot => {
+        const data = docSnapshot.data();
+        if (data.role !== 'student') return null;
+        return {
+          uid: data.uid || docSnapshot.id,
+          displayName: data.displayName || data.email?.split('@')[0] || 'Student',
+          dept: data.dept,
+          section: data.section,
+          regNo: data.regNo,
+          role: 'student' as const
+        };
+      })
+      .filter((profile): profile is StudentProfile => profile !== null);
+  } catch (error) {
+    console.warn('Failed to load student profiles for practice leaderboard:', error);
+    return [];
+  }
 };
 
 /**

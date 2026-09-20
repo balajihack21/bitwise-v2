@@ -3699,6 +3699,1435 @@ int main() {
         }
       ]
     }
+  ],
+  practiceProblems: [
+    {
+      id: 'py-practice-hello-input',
+      title: 'Echo a Greeting',
+      duration: '15 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Input and Output',
+      language: 'python',
+      content: '<p>Read a name and print <code>Hello, name!</code>.</p>',
+      problem: {
+        difficulty: 'Easy',
+        points: 10,
+        testCases: [
+          { id: 'tc-hello-1', input: 'Anita', expectedOutput: 'Hello, Anita!' },
+          { id: 'tc-hello-2', input: 'Rahul', expectedOutput: 'Hello, Rahul!' }
+        ],
+        starterTemplates: { python: 'name = input().strip()\n# Print the greeting' },
+        solutionCode: { python: 'name = input().strip()\nprint(f"Hello, {name}!")' }
+      }
+    },
+    {
+      id: 'py-practice-temperature',
+      title: 'Temperature Classifier',
+      duration: '20 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Conditionals',
+      language: 'python',
+      content: '<p>Read a temperature in Celsius. Print <code>Cold</code> below 20, <code>Warm</code> from 20 through 30, and <code>Hot</code> above 30.</p>',
+      problem: {
+        difficulty: 'Easy',
+        points: 15,
+        testCases: [
+          { id: 'tc-temp-1', input: '15', expectedOutput: 'Cold' },
+          { id: 'tc-temp-2', input: '25', expectedOutput: 'Warm' },
+          { id: 'tc-temp-3', input: '35', expectedOutput: 'Hot', isHidden: true }
+        ],
+        starterTemplates: { python: 'temperature = int(input())\n# Classify the temperature' },
+        solutionCode: { python: 'temperature = int(input())\nif temperature < 20:\n    print("Cold")\nelif temperature <= 30:\n    print("Warm")\nelse:\n    print("Hot")' }
+      }
+    },
+    {
+      id: 'py-practice-factorial',
+      title: 'Factorial with Iteration',
+      duration: '20 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Loops and Iteration',
+      language: 'python',
+      content: '<p>Read a non-negative integer <code>n</code> and print its factorial using a loop.</p>',
+      problem: {
+        difficulty: 'Easy',
+        points: 15,
+        testCases: [
+          { id: 'tc-factorial-1', input: '0', expectedOutput: '1' },
+          { id: 'tc-factorial-2', input: '5', expectedOutput: '120' },
+          { id: 'tc-factorial-3', input: '7', expectedOutput: '5040', isHidden: true }
+        ],
+        starterTemplates: { python: 'n = int(input())\n# Calculate n! using iteration' },
+        solutionCode: { python: 'n = int(input())\nresult = 1\nfor value in range(2, n + 1):\n    result *= value\nprint(result)' }
+      }
+    },
+    {
+      id: 'py-practice-fibonacci',
+      title: 'Fibonacci Sequence',
+      duration: '25 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Loops and Iteration',
+      language: 'python',
+      content: '<p>Read <code>n</code> and print the first <code>n</code> Fibonacci numbers, starting with 0, separated by spaces.</p>',
+      problem: {
+        difficulty: 'Medium',
+        points: 20,
+        testCases: [
+          { id: 'tc-fib-1', input: '1', expectedOutput: '0' },
+          { id: 'tc-fib-2', input: '6', expectedOutput: '0 1 1 2 3 5' },
+          { id: 'tc-fib-3', input: '8', expectedOutput: '0 1 1 2 3 5 8 13', isHidden: true }
+        ],
+        starterTemplates: { python: 'n = int(input())\n# Generate and print the first n Fibonacci numbers' },
+        solutionCode: { python: 'n = int(input())\na, b = 0, 1\nsequence = []\nfor _ in range(n):\n    sequence.append(str(a))\n    a, b = b, a + b\nprint(" ".join(sequence))' }
+      }
+    },
+    {
+      id: 'py-practice-palindrome',
+      title: 'Palindrome Checker',
+      duration: '20 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Strings',
+      language: 'python',
+      content: '<p>Print <code>YES</code> if the input word reads the same forwards and backwards, ignoring letter case; otherwise print <code>NO</code>.</p>',
+      problem: {
+        difficulty: 'Easy',
+        points: 15,
+        testCases: [
+          { id: 'tc-palindrome-1', input: 'Level', expectedOutput: 'YES' },
+          { id: 'tc-palindrome-2', input: 'Python', expectedOutput: 'NO' },
+          { id: 'tc-palindrome-3', input: 'Madam', expectedOutput: 'YES', isHidden: true }
+        ],
+        starterTemplates: { python: 'word = input().strip()\n# Check whether word is a palindrome' },
+        solutionCode: { python: 'word = input().strip().lower()\nprint("YES" if word == word[::-1] else "NO")' }
+      }
+    },
+    {
+      id: 'py-practice-vowel-count',
+      title: 'Count Vowels',
+      duration: '20 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Strings',
+      language: 'python',
+      content: '<p>Read a line of text and print the number of vowels in it. Count both uppercase and lowercase vowels.</p>',
+      problem: {
+        difficulty: 'Easy',
+        points: 15,
+        testCases: [
+          { id: 'tc-vowels-1', input: 'Hello World', expectedOutput: '3' },
+          { id: 'tc-vowels-2', input: 'PYTHON', expectedOutput: '1' },
+          { id: 'tc-vowels-3', input: 'rhythm', expectedOutput: '0', isHidden: true }
+        ],
+        starterTemplates: { python: 'text = input()\n# Count vowels in text' },
+        solutionCode: { python: 'text = input()\nprint(sum(1 for character in text.lower() if character in "aeiou"))' }
+      }
+    },
+    {
+      id: 'py-practice-list-stats',
+      title: 'List Statistics',
+      duration: '20 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Lists',
+      language: 'python',
+      content: '<p>Read a space-separated list of integers and print the minimum, maximum, and sum on one line.</p>',
+      problem: {
+        difficulty: 'Easy',
+        points: 15,
+        testCases: [
+          { id: 'tc-list-stats-1', input: '4 8 1 6', expectedOutput: '1 8 19' },
+          { id: 'tc-list-stats-2', input: '-3 0 7 -1', expectedOutput: '-3 7 3' },
+          { id: 'tc-list-stats-3', input: '5', expectedOutput: '5 5 5', isHidden: true }
+        ],
+        starterTemplates: { python: 'numbers = list(map(int, input().split()))\n# Print minimum, maximum, and sum' },
+        solutionCode: { python: 'numbers = list(map(int, input().split()))\nprint(min(numbers), max(numbers), sum(numbers))' }
+      }
+    },
+    {
+      id: 'py-practice-frequency',
+      title: 'Most Frequent Number',
+      duration: '25 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Dictionaries',
+      language: 'python',
+      content: '<p>Read integers and print the number that occurs most often. If there is a tie, print the smaller number.</p>',
+      problem: {
+        difficulty: 'Medium',
+        points: 25,
+        testCases: [
+          { id: 'tc-frequency-1', input: '4 2 4 3 2 4', expectedOutput: '4' },
+          { id: 'tc-frequency-2', input: '5 1 2 1 2', expectedOutput: '1' },
+          { id: 'tc-frequency-3', input: '7 7 8 8 9', expectedOutput: '7', isHidden: true }
+        ],
+        starterTemplates: { python: 'numbers = list(map(int, input().split()))\n# Count values and print the most frequent one' },
+        solutionCode: { python: 'numbers = list(map(int, input().split()))\ncounts = {}\nfor number in numbers:\n    counts[number] = counts.get(number, 0) + 1\nprint(min(counts, key=lambda number: (-counts[number], number)))' }
+      }
+    },
+    {
+      id: 'py-practice-function-gcd',
+      title: 'Greatest Common Divisor',
+      duration: '25 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Functions',
+      language: 'python',
+      content: '<p>Write a function that returns the greatest common divisor of two positive integers and print the result.</p>',
+      problem: {
+        difficulty: 'Medium',
+        points: 20,
+        testCases: [
+          { id: 'tc-gcd-1', input: '48 18', expectedOutput: '6' },
+          { id: 'tc-gcd-2', input: '17 5', expectedOutput: '1' },
+          { id: 'tc-gcd-3', input: '100 40', expectedOutput: '20', isHidden: true }
+        ],
+        starterTemplates: { python: 'a, b = map(int, input().split())\n\ndef gcd(first, second):\n    # Return the greatest common divisor\n    pass\n\nprint(gcd(a, b))' },
+        solutionCode: { python: 'a, b = map(int, input().split())\n\ndef gcd(first, second):\n    while second:\n        first, second = second, first % second\n    return first\n\nprint(gcd(a, b))' }
+      }
+    },
+    {
+      id: 'py-practice-linear-search',
+      title: 'First Matching Position',
+      duration: '20 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Searching',
+      language: 'python',
+      content: '<p>Read a list and a target on the next line. Print the first zero-based index of the target, or <code>-1</code> if it is absent.</p>',
+      problem: {
+        difficulty: 'Easy',
+        points: 15,
+        testCases: [
+          { id: 'tc-search-1', input: '10 20 30 20\n20', expectedOutput: '1' },
+          { id: 'tc-search-2', input: '5 8 2 9\n7', expectedOutput: '-1' },
+          { id: 'tc-search-3', input: '4 4 4\n4', expectedOutput: '0', isHidden: true }
+        ],
+        starterTemplates: { python: 'numbers = list(map(int, input().split()))\ntarget = int(input())\n# Find the first matching index' },
+        solutionCode: { python: 'numbers = list(map(int, input().split()))\ntarget = int(input())\nprint(next((index for index, value in enumerate(numbers) if value == target), -1))' }
+      }
+    },
+    {
+      id: 'py-practice-binary-search',
+      title: 'Binary Search Index',
+      duration: '25 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Searching',
+      language: 'python',
+      content: '<p>Given a sorted list and a target, use binary search to print the target index or <code>-1</code> when it is absent.</p>',
+      problem: {
+        difficulty: 'Medium',
+        points: 25,
+        testCases: [
+          { id: 'tc-binary-1', input: '1 3 5 7 9\n7', expectedOutput: '3' },
+          { id: 'tc-binary-2', input: '2 4 6 8 10\n1', expectedOutput: '-1' },
+          { id: 'tc-binary-3', input: '-5 -2 0 4 9\n-5', expectedOutput: '0', isHidden: true }
+        ],
+        starterTemplates: { python: 'numbers = list(map(int, input().split()))\ntarget = int(input())\n# Implement binary search' },
+        solutionCode: { python: 'numbers = list(map(int, input().split()))\ntarget = int(input())\nleft, right = 0, len(numbers) - 1\nanswer = -1\nwhile left <= right:\n    middle = (left + right) // 2\n    if numbers[middle] == target:\n        answer = middle\n        break\n    if numbers[middle] < target:\n        left = middle + 1\n    else:\n        right = middle - 1\nprint(answer)' }
+      }
+    },
+    {
+      id: 'py-practice-insertion-sort',
+      title: 'Insertion Sort',
+      duration: '25 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Sorting',
+      language: 'python',
+      content: '<p>Sort the input list in ascending order using insertion sort and print the result.</p>',
+      problem: {
+        difficulty: 'Medium',
+        points: 25,
+        testCases: [
+          { id: 'tc-insertion-1', input: '5 2 4 1', expectedOutput: '1 2 4 5' },
+          { id: 'tc-insertion-2', input: '3 -1 3 0', expectedOutput: '-1 0 3 3' },
+          { id: 'tc-insertion-3', input: '9 7 8 6', expectedOutput: '6 7 8 9', isHidden: true }
+        ],
+        starterTemplates: { python: 'numbers = list(map(int, input().split()))\n# Implement insertion sort\nprint(*numbers)' },
+        solutionCode: { python: 'numbers = list(map(int, input().split()))\nfor index in range(1, len(numbers)):\n    current = numbers[index]\n    position = index - 1\n    while position >= 0 and numbers[position] > current:\n        numbers[position + 1] = numbers[position]\n        position -= 1\n    numbers[position + 1] = current\nprint(*numbers)' }
+      }
+    },
+    {
+      id: 'py-practice-recursive-sum',
+      title: 'Recursive Sum of Digits',
+      duration: '25 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Recursion',
+      language: 'python',
+      content: '<p>Use a recursive function to return the sum of the digits of a non-negative integer.</p>',
+      problem: {
+        difficulty: 'Medium',
+        points: 20,
+        testCases: [
+          { id: 'tc-recursive-sum-1', input: '12345', expectedOutput: '15' },
+          { id: 'tc-recursive-sum-2', input: '0', expectedOutput: '0' },
+          { id: 'tc-recursive-sum-3', input: '908', expectedOutput: '17', isHidden: true }
+        ],
+        starterTemplates: { python: 'number = int(input())\n\ndef digit_sum(value):\n    # Return the sum of all digits recursively\n    pass\n\nprint(digit_sum(number))' },
+        solutionCode: { python: 'number = int(input())\n\ndef digit_sum(value):\n    if value < 10:\n        return value\n    return value % 10 + digit_sum(value // 10)\n\nprint(digit_sum(number))' }
+      }
+    },
+    {
+      id: 'py-practice-safe-division',
+      title: 'Safe Division',
+      duration: '20 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Exception Handling',
+      language: 'python',
+      content: '<p>Read two integers. Print the quotient to two decimal places, or print <code>Cannot divide</code> when the divisor is zero.</p>',
+      problem: {
+        difficulty: 'Easy',
+        points: 15,
+        testCases: [
+          { id: 'tc-division-1', input: '10 4', expectedOutput: '2.50' },
+          { id: 'tc-division-2', input: '7 0', expectedOutput: 'Cannot divide' },
+          { id: 'tc-division-3', input: '-9 2', expectedOutput: '-4.50', isHidden: true }
+        ],
+        starterTemplates: { python: 'numerator, denominator = map(int, input().split())\n# Handle division by zero and format the quotient' },
+        solutionCode: { python: 'numerator, denominator = map(int, input().split())\ntry:\n    print(f"{numerator / denominator:.2f}")\nexcept ZeroDivisionError:\n    print("Cannot divide")' }
+      }
+    },
+    {
+      id: 'py-practice-stack',
+      title: 'Stack Operations',
+      duration: '25 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Stacks and Queues',
+      language: 'python',
+      content: '<p>Process space-separated commands on a stack. Each command is <code>push X</code> or <code>pop</code>. Print every popped value; print <code>EMPTY</code> for an empty pop.</p>',
+      problem: {
+        difficulty: 'Medium',
+        points: 25,
+        testCases: [
+          { id: 'tc-stack-1', input: 'push 4\npush 7\npop\npop', expectedOutput: '7\n4' },
+          { id: 'tc-stack-2', input: 'pop\npush 9\npop', expectedOutput: 'EMPTY\n9' },
+          { id: 'tc-stack-3', input: 'push 1\npush 2\npop\npush 3\npop', expectedOutput: '2\n3', isHidden: true }
+        ],
+        starterTemplates: { python: 'import sys\ncommands = sys.stdin.read().splitlines()\nstack = []\n# Process each command and print pop results' },
+        solutionCode: { python: 'import sys\nstack = []\nresults = []\nfor command in sys.stdin.read().splitlines():\n    parts = command.split()\n    if parts[0] == "push":\n        stack.append(int(parts[1]))\n    elif stack:\n        results.append(str(stack.pop()))\n    else:\n        results.append("EMPTY")\nprint("\\n".join(results))' }
+      }
+    },
+    {
+      id: 'py-practice-graph-neighbors',
+      title: 'List Graph Neighbors',
+      duration: '25 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Graphs',
+      language: 'python',
+      content: '<p>Read undirected graph edges followed by a vertex. Print the sorted list of vertices directly connected to the requested vertex.</p>',
+      problem: {
+        difficulty: 'Medium',
+        points: 25,
+        testCases: [
+          { id: 'tc-graph-1', input: '1-2\n2-3\n1-4\n?\n1', expectedOutput: '2 4' },
+          { id: 'tc-graph-2', input: 'A-B\nB-C\nC-D\n?\nC', expectedOutput: 'B D' },
+          { id: 'tc-graph-3', input: '1-2\n3-4\n?\n1', expectedOutput: '2', isHidden: true }
+        ],
+        starterTemplates: { python: 'import sys\nlines = sys.stdin.read().splitlines()\n# Build an adjacency map from edge lines and print the requested neighbors' },
+        solutionCode: { python: 'import sys\nlines = sys.stdin.read().splitlines()\nadjacency = {}\nquery = lines[-1]\nfor line in lines[:-1]:\n    if line == "?":\n        continue\n    first, second = line.split("-")\n    adjacency.setdefault(first, set()).add(second)\n    adjacency.setdefault(second, set()).add(first)\nprint(" ".join(sorted(adjacency.get(query, set()))))' }
+      }
+    },
+    {
+      id: 'py-practice-more-sum-two',
+      title: 'Add Two Numbers',
+      duration: '15 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Input and Output',
+      language: 'python',
+      content: '<p>Read two integers and print their sum.</p>',
+      problem: {
+        difficulty: 'Easy',
+        points: 10,
+        testCases: [
+          { id: 'tc-more-sum-two-1', input: '3 8', expectedOutput: '11' },
+          { id: 'tc-more-sum-two-2', input: '-2 5', expectedOutput: '3' },
+          { id: 'tc-more-sum-two-3', input: '10 20', expectedOutput: '30', isHidden: true }
+        ],
+        starterTemplates: { python: 'a, b = map(int, input().split())\n# Print the sum' },
+        solutionCode: { python: 'a, b = map(int, input().split())\nprint(a + b)' }
+      }
+    },
+    {
+      id: 'py-practice-more-rectangle-area',
+      title: 'Rectangle Area',
+      duration: '15 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Input and Output',
+      language: 'python',
+      content: '<p>Read the length and width of a rectangle and print its area.</p>',
+      problem: {
+        difficulty: 'Easy',
+        points: 10,
+        testCases: [
+          { id: 'tc-more-rectangle-area-1', input: '4 6', expectedOutput: '24' },
+          { id: 'tc-more-rectangle-area-2', input: '3 5', expectedOutput: '15' },
+          { id: 'tc-more-rectangle-area-3', input: '10 2', expectedOutput: '20', isHidden: true }
+        ],
+        starterTemplates: { python: 'length, width = map(int, input().split())\n# Print the rectangle area' },
+        solutionCode: { python: 'length, width = map(int, input().split())\nprint(length * width)' }
+      }
+    },
+    {
+      id: 'py-practice-more-celsius',
+      title: 'Celsius to Fahrenheit',
+      duration: '15 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Input and Output',
+      language: 'python',
+      content: '<p>Convert a Celsius temperature to Fahrenheit and print two decimal places.</p>',
+      problem: {
+        difficulty: 'Easy',
+        points: 10,
+        testCases: [
+          { id: 'tc-more-celsius-1', input: '0', expectedOutput: '32.00' },
+          { id: 'tc-more-celsius-2', input: '100', expectedOutput: '212.00' },
+          { id: 'tc-more-celsius-3', input: '-40', expectedOutput: '-40.00', isHidden: true }
+        ],
+        starterTemplates: { python: 'celsius = float(input())\n# Convert and format Fahrenheit' },
+        solutionCode: { python: 'celsius = float(input())\nprint(f"{celsius * 9 / 5 + 32:.2f}")' }
+      }
+    },
+    {
+      id: 'py-practice-more-average',
+      title: 'Average of Three',
+      duration: '15 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Input and Output',
+      language: 'python',
+      content: '<p>Read three numbers and print their average to two decimal places.</p>',
+      problem: {
+        difficulty: 'Easy',
+        points: 10,
+        testCases: [
+          { id: 'tc-more-average-1', input: '3 6 9', expectedOutput: '6.00' },
+          { id: 'tc-more-average-2', input: '1 2 4', expectedOutput: '2.33' },
+          { id: 'tc-more-average-3', input: '10 10 11', expectedOutput: '10.33', isHidden: true }
+        ],
+        starterTemplates: { python: 'values = list(map(float, input().split()))\n# Print the average' },
+        solutionCode: { python: 'values = list(map(float, input().split()))\nprint(f"{sum(values) / 3:.2f}")' }
+      }
+    },
+    {
+      id: 'py-practice-more-even-odd',
+      title: 'Even or Odd',
+      duration: '15 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Conditionals',
+      language: 'python',
+      content: '<p>Print <code>Even</code> or <code>Odd</code> for the given integer.</p>',
+      problem: {
+        difficulty: 'Easy',
+        points: 10,
+        testCases: [
+          { id: 'tc-more-even-odd-1', input: '8', expectedOutput: 'Even' },
+          { id: 'tc-more-even-odd-2', input: '-3', expectedOutput: 'Odd' },
+          { id: 'tc-more-even-odd-3', input: '0', expectedOutput: 'Even', isHidden: true }
+        ],
+        starterTemplates: { python: 'number = int(input())\n# Decide whether number is even or odd' },
+        solutionCode: { python: 'number = int(input())\nprint("Even" if number % 2 == 0 else "Odd")' }
+      }
+    },
+    {
+      id: 'py-practice-more-largest',
+      title: 'Largest of Three',
+      duration: '15 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Conditionals',
+      language: 'python',
+      content: '<p>Read three integers and print the largest value.</p>',
+      problem: {
+        difficulty: 'Easy',
+        points: 10,
+        testCases: [
+          { id: 'tc-more-largest-1', input: '3 9 5', expectedOutput: '9' },
+          { id: 'tc-more-largest-2', input: '-1 -4 -2', expectedOutput: '-1' },
+          { id: 'tc-more-largest-3', input: '7 7 2', expectedOutput: '7', isHidden: true }
+        ],
+        starterTemplates: { python: 'numbers = list(map(int, input().split()))\n# Print the largest number' },
+        solutionCode: { python: 'numbers = list(map(int, input().split()))\nprint(max(numbers))' }
+      }
+    },
+    {
+      id: 'py-practice-more-leap-year',
+      title: 'Leap Year Check',
+      duration: '20 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Conditionals',
+      language: 'python',
+      content: '<p>Print <code>Leap</code> when a year is a leap year; otherwise print <code>Not Leap</code>.</p>',
+      problem: {
+        difficulty: 'Medium',
+        points: 15,
+        testCases: [
+          { id: 'tc-more-leap-year-1', input: '2024', expectedOutput: 'Leap' },
+          { id: 'tc-more-leap-year-2', input: '1900', expectedOutput: 'Not Leap' },
+          { id: 'tc-more-leap-year-3', input: '2000', expectedOutput: 'Leap', isHidden: true }
+        ],
+        starterTemplates: { python: 'year = int(input())\n# Check the leap-year rules' },
+        solutionCode: { python: 'year = int(input())\nleap = year % 400 == 0 or (year % 4 == 0 and year % 100 != 0)\nprint("Leap" if leap else "Not Leap")' }
+      }
+    },
+    {
+      id: 'py-practice-more-sign',
+      title: 'Number Sign',
+      duration: '15 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Conditionals',
+      language: 'python',
+      content: '<p>Print whether an integer is <code>Positive</code>, <code>Negative</code>, or <code>Zero</code>.</p>',
+      problem: {
+        difficulty: 'Easy',
+        points: 10,
+        testCases: [
+          { id: 'tc-more-sign-1', input: '-5', expectedOutput: 'Negative' },
+          { id: 'tc-more-sign-2', input: '0', expectedOutput: 'Zero' },
+          { id: 'tc-more-sign-3', input: '12', expectedOutput: 'Positive', isHidden: true }
+        ],
+        starterTemplates: { python: 'number = int(input())\n# Classify the sign' },
+        solutionCode: { python: 'number = int(input())\nif number > 0:\n    print("Positive")\nelif number < 0:\n    print("Negative")\nelse:\n    print("Zero")' }
+      }
+    },
+    {
+      id: 'py-practice-more-sum-range',
+      title: 'Sum from One to N',
+      duration: '20 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Loops and Iteration',
+      language: 'python',
+      content: '<p>Use a loop to print the sum of all integers from 1 through <code>n</code>.</p>',
+      problem: {
+        difficulty: 'Easy',
+        points: 15,
+        testCases: [
+          { id: 'tc-more-sum-range-1', input: '5', expectedOutput: '15' },
+          { id: 'tc-more-sum-range-2', input: '1', expectedOutput: '1' },
+          { id: 'tc-more-sum-range-3', input: '10', expectedOutput: '55', isHidden: true }
+        ],
+        starterTemplates: { python: 'n = int(input())\ntotal = 0\n# Add each value from 1 through n' },
+        solutionCode: { python: 'n = int(input())\ntotal = 0\nfor value in range(1, n + 1):\n    total += value\nprint(total)' }
+      }
+    },
+    {
+      id: 'py-practice-more-multiples',
+      title: 'Print Multiples',
+      duration: '20 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Loops and Iteration',
+      language: 'python',
+      content: '<p>Read a number and a count, then print that many positive multiples.</p>',
+      problem: {
+        difficulty: 'Easy',
+        points: 15,
+        testCases: [
+          { id: 'tc-more-multiples-1', input: '4 3', expectedOutput: '4 8 12' },
+          { id: 'tc-more-multiples-2', input: '2 5', expectedOutput: '2 4 6 8 10' },
+          { id: 'tc-more-multiples-3', input: '7 1', expectedOutput: '7', isHidden: true }
+        ],
+        starterTemplates: { python: 'number, count = map(int, input().split())\n# Build the multiples' },
+        solutionCode: { python: 'number, count = map(int, input().split())\nprint(*[number * value for value in range(1, count + 1)])' }
+      }
+    },
+    {
+      id: 'py-practice-more-digit-count',
+      title: 'Count Digits',
+      duration: '20 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Loops and Iteration',
+      language: 'python',
+      content: '<p>Use a loop to count the digits in an integer.</p>',
+      problem: {
+        difficulty: 'Easy',
+        points: 15,
+        testCases: [
+          { id: 'tc-more-digit-count-1', input: '0', expectedOutput: '1' },
+          { id: 'tc-more-digit-count-2', input: '12345', expectedOutput: '5' },
+          { id: 'tc-more-digit-count-3', input: '-908', expectedOutput: '3', isHidden: true }
+        ],
+        starterTemplates: { python: 'number = int(input())\n# Count digits with iteration' },
+        solutionCode: { python: 'number = abs(int(input()))\ncount = 1 if number == 0 else 0\nwhile number:\n    count += 1\n    number //= 10\nprint(count)' }
+      }
+    },
+    {
+      id: 'py-practice-more-reverse-number',
+      title: 'Reverse an Integer',
+      duration: '20 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Loops and Iteration',
+      language: 'python',
+      content: '<p>Reverse the digits of the given integer and print the result.</p>',
+      problem: {
+        difficulty: 'Easy',
+        points: 15,
+        testCases: [
+          { id: 'tc-more-reverse-number-1', input: '1234', expectedOutput: '4321' },
+          { id: 'tc-more-reverse-number-2', input: '500', expectedOutput: '5' },
+          { id: 'tc-more-reverse-number-3', input: '-82', expectedOutput: '-28', isHidden: true }
+        ],
+        starterTemplates: { python: 'number = int(input())\n# Reverse the digits' },
+        solutionCode: { python: 'number = int(input())\nsign = -1 if number < 0 else 1\nprint(sign * int(str(abs(number))[::-1]))' }
+      }
+    },
+    {
+      id: 'py-practice-more-reverse-text',
+      title: 'Reverse Text',
+      duration: '15 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Strings',
+      language: 'python',
+      content: '<p>Read a word and print it backwards.</p>',
+      problem: {
+        difficulty: 'Easy',
+        points: 10,
+        testCases: [
+          { id: 'tc-more-reverse-text-1', input: 'hello', expectedOutput: 'olleh' },
+          { id: 'tc-more-reverse-text-2', input: 'Python', expectedOutput: 'nohtyP' },
+          { id: 'tc-more-reverse-text-3', input: 'a', expectedOutput: 'a', isHidden: true }
+        ],
+        starterTemplates: { python: 'text = input().strip()\n# Print the reversed text' },
+        solutionCode: { python: 'text = input().strip()\nprint(text[::-1])' }
+      }
+    },
+    {
+      id: 'py-practice-more-word-count',
+      title: 'Count Words',
+      duration: '15 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Strings',
+      language: 'python',
+      content: '<p>Read a line and print the number of whitespace-separated words.</p>',
+      problem: {
+        difficulty: 'Easy',
+        points: 10,
+        testCases: [
+          { id: 'tc-more-word-count-1', input: 'one two three', expectedOutput: '3' },
+          { id: 'tc-more-word-count-2', input: 'Python is fun', expectedOutput: '3' },
+          { id: 'tc-more-word-count-3', input: 'single', expectedOutput: '1', isHidden: true }
+        ],
+        starterTemplates: { python: 'text = input()\n# Count the words' },
+        solutionCode: { python: 'text = input()\nprint(len(text.split()))' }
+      }
+    },
+    {
+      id: 'py-practice-more-remove-spaces',
+      title: 'Remove Spaces',
+      duration: '15 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Strings',
+      language: 'python',
+      content: '<p>Print the input line with all space characters removed.</p>',
+      problem: {
+        difficulty: 'Easy',
+        points: 10,
+        testCases: [
+          { id: 'tc-more-remove-spaces-1', input: 'a b c', expectedOutput: 'abc' },
+          { id: 'tc-more-remove-spaces-2', input: 'hello world', expectedOutput: 'helloworld' },
+          { id: 'tc-more-remove-spaces-3', input: ' spaced text ', expectedOutput: 'spacedtext', isHidden: true }
+        ],
+        starterTemplates: { python: 'text = input()\n# Remove spaces and print the result' },
+        solutionCode: { python: 'text = input()\nprint(text.replace(" ", ""))' }
+      }
+    },
+    {
+      id: 'py-practice-more-first-unique',
+      title: 'First Unique Character',
+      duration: '20 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Strings',
+      language: 'python',
+      content: '<p>Print the first character that appears exactly once in the word.</p>',
+      problem: {
+        difficulty: 'Medium',
+        points: 20,
+        testCases: [
+          { id: 'tc-more-first-unique-1', input: 'swiss', expectedOutput: 'w' },
+          { id: 'tc-more-first-unique-2', input: 'aabbc', expectedOutput: 'c' },
+          { id: 'tc-more-first-unique-3', input: 'level', expectedOutput: 'v', isHidden: true }
+        ],
+        starterTemplates: { python: 'text = input().strip()\n# Find the first unique character' },
+        solutionCode: { python: 'text = input().strip()\nfor character in text:\n    if text.count(character) == 1:\n        print(character)\n        break' }
+      }
+    },
+    {
+      id: 'py-practice-more-second-largest',
+      title: 'Second Largest Distinct',
+      duration: '20 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Lists',
+      language: 'python',
+      content: '<p>Print the second largest distinct value in the list.</p>',
+      problem: {
+        difficulty: 'Medium',
+        points: 20,
+        testCases: [
+          { id: 'tc-more-second-largest-1', input: '4 1 7 3', expectedOutput: '4' },
+          { id: 'tc-more-second-largest-2', input: '5 5 2 9', expectedOutput: '5' },
+          { id: 'tc-more-second-largest-3', input: '-1 -5 -3 -2', expectedOutput: '-2', isHidden: true }
+        ],
+        starterTemplates: { python: 'numbers = list(map(int, input().split()))\n# Find the second largest distinct value' },
+        solutionCode: { python: 'numbers = list(map(int, input().split()))\nprint(sorted(set(numbers))[-2])' }
+      }
+    },
+    {
+      id: 'py-practice-more-rotate-list',
+      title: 'Rotate a List Right',
+      duration: '20 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Lists',
+      language: 'python',
+      content: '<p>Rotate the list to the right by <code>k</code> positions.</p>',
+      problem: {
+        difficulty: 'Medium',
+        points: 20,
+        testCases: [
+          { id: 'tc-more-rotate-list-1', input: '1 2 3 4\n1', expectedOutput: '4 1 2 3' },
+          { id: 'tc-more-rotate-list-2', input: '5 6 7\n2', expectedOutput: '6 7 5' },
+          { id: 'tc-more-rotate-list-3', input: '9 8\n4', expectedOutput: '9 8', isHidden: true }
+        ],
+        starterTemplates: { python: 'numbers = list(map(int, input().split()))\nk = int(input())\n# Rotate and print the list' },
+        solutionCode: { python: 'numbers = list(map(int, input().split()))\nk = int(input()) % len(numbers)\nrotated = numbers[-k:] + numbers[:-k] if k else numbers\nprint(*rotated)' }
+      }
+    },
+    {
+      id: 'py-practice-more-unique-list',
+      title: 'Keep First Occurrences',
+      duration: '20 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Lists',
+      language: 'python',
+      content: '<p>Remove duplicate values while preserving the original order.</p>',
+      problem: {
+        difficulty: 'Easy',
+        points: 15,
+        testCases: [
+          { id: 'tc-more-unique-list-1', input: '1 2 1 3 2', expectedOutput: '1 2 3' },
+          { id: 'tc-more-unique-list-2', input: '4 4 4', expectedOutput: '4' },
+          { id: 'tc-more-unique-list-3', input: '-1 0 -1 2', expectedOutput: '-1 0 2', isHidden: true }
+        ],
+        starterTemplates: { python: 'numbers = list(map(int, input().split()))\n# Keep each value only once' },
+        solutionCode: { python: 'numbers = list(map(int, input().split()))\nseen = set()\nunique = []\nfor number in numbers:\n    if number not in seen:\n        seen.add(number)\n        unique.append(number)\nprint(*unique)' }
+      }
+    },
+    {
+      id: 'py-practice-more-dot-product',
+      title: 'List Dot Product',
+      duration: '20 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Lists',
+      language: 'python',
+      content: '<p>Read two equal-length lists and print their dot product.</p>',
+      problem: {
+        difficulty: 'Easy',
+        points: 15,
+        testCases: [
+          { id: 'tc-more-dot-product-1', input: '1 2 3\n4 5 6', expectedOutput: '32' },
+          { id: 'tc-more-dot-product-2', input: '2 0 -1\n3 4 5', expectedOutput: '1' },
+          { id: 'tc-more-dot-product-3', input: '7\n6', expectedOutput: '42', isHidden: true }
+        ],
+        starterTemplates: { python: 'first = list(map(int, input().split()))\nsecond = list(map(int, input().split()))\n# Print the dot product' },
+        solutionCode: { python: 'first = list(map(int, input().split()))\nsecond = list(map(int, input().split()))\nprint(sum(a * b for a, b in zip(first, second)))' }
+      }
+    },
+    {
+      id: 'py-practice-more-word-frequency',
+      title: 'Count a Word',
+      duration: '20 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Dictionaries',
+      language: 'python',
+      content: '<p>Count how many times the target word occurs in the first input line.</p>',
+      problem: {
+        difficulty: 'Easy',
+        points: 15,
+        testCases: [
+          { id: 'tc-more-word-frequency-1', input: 'red blue red\nred', expectedOutput: '2' },
+          { id: 'tc-more-word-frequency-2', input: 'cat dog\nbird', expectedOutput: '0' },
+          { id: 'tc-more-word-frequency-3', input: 'a a b a\na', expectedOutput: '3', isHidden: true }
+        ],
+        starterTemplates: { python: 'words = input().split()\ntarget = input().strip()\n# Count target with a dictionary' },
+        solutionCode: { python: 'words = input().split()\ntarget = input().strip()\ncounts = {}\nfor word in words:\n    counts[word] = counts.get(word, 0) + 1\nprint(counts.get(target, 0))' }
+      }
+    },
+    {
+      id: 'py-practice-more-sum-key-values',
+      title: 'Sum Key Values',
+      duration: '20 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Dictionaries',
+      language: 'python',
+      content: '<p>Read space-separated <code>key:value</code> pairs and print the sum of all values.</p>',
+      problem: {
+        difficulty: 'Easy',
+        points: 15,
+        testCases: [
+          { id: 'tc-more-sum-key-values-1', input: 'a:3 b:5 c:2', expectedOutput: '10' },
+          { id: 'tc-more-sum-key-values-2', input: 'x:-2 y:7', expectedOutput: '5' },
+          { id: 'tc-more-sum-key-values-3', input: 'only:9', expectedOutput: '9', isHidden: true }
+        ],
+        starterTemplates: { python: 'pairs = input().split()\n# Parse the key:value pairs' },
+        solutionCode: { python: 'pairs = input().split()\nvalues = {}\nfor pair in pairs:\n    key, value = pair.split(":")\n    values[key] = int(value)\nprint(sum(values.values()))' }
+      }
+    },
+    {
+      id: 'py-practice-more-grade-counts',
+      title: 'Count Grades',
+      duration: '20 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Dictionaries',
+      language: 'python',
+      content: '<p>Count each grade and print counts alphabetically as <code>grade=count</code>.</p>',
+      problem: {
+        difficulty: 'Easy',
+        points: 15,
+        testCases: [
+          { id: 'tc-more-grade-counts-1', input: 'A B A C B A', expectedOutput: 'A=3 B=2 C=1' },
+          { id: 'tc-more-grade-counts-2', input: 'B B C', expectedOutput: 'B=2 C=1' },
+          { id: 'tc-more-grade-counts-3', input: 'D', expectedOutput: 'D=1', isHidden: true }
+        ],
+        starterTemplates: { python: 'grades = input().split()\n# Count grades in a dictionary' },
+        solutionCode: { python: 'grades = input().split()\ncounts = {}\nfor grade in grades:\n    counts[grade] = counts.get(grade, 0) + 1\nprint(" ".join(f"{grade}={counts[grade]}" for grade in sorted(counts)))' }
+      }
+    },
+    {
+      id: 'py-practice-more-letter-histogram',
+      title: 'Letter Histogram',
+      duration: '20 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Dictionaries',
+      language: 'python',
+      content: '<p>Count letters in a word and print the entries alphabetically as <code>letter:count</code>.</p>',
+      problem: {
+        difficulty: 'Medium',
+        points: 20,
+        testCases: [
+          { id: 'tc-more-letter-histogram-1', input: 'banana', expectedOutput: 'a:3 b:1 n:2' },
+          { id: 'tc-more-letter-histogram-2', input: 'book', expectedOutput: 'b:1 k:1 o:2' },
+          { id: 'tc-more-letter-histogram-3', input: 'z', expectedOutput: 'z:1', isHidden: true }
+        ],
+        starterTemplates: { python: 'word = input().strip()\n# Build a letter-count dictionary' },
+        solutionCode: { python: 'word = input().strip()\ncounts = {}\nfor letter in word:\n    counts[letter] = counts.get(letter, 0) + 1\nprint(" ".join(f"{letter}:{counts[letter]}" for letter in sorted(counts)))' }
+      }
+    },
+    {
+      id: 'py-practice-more-power-function',
+      title: 'Power Function',
+      duration: '20 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Functions',
+      language: 'python',
+      content: '<p>Define a function that returns the first number raised to the second number.</p>',
+      problem: {
+        difficulty: 'Easy',
+        points: 15,
+        testCases: [
+          { id: 'tc-more-power-function-1', input: '2 5', expectedOutput: '32' },
+          { id: 'tc-more-power-function-2', input: '7 0', expectedOutput: '1' },
+          { id: 'tc-more-power-function-3', input: '3 4', expectedOutput: '81', isHidden: true }
+        ],
+        starterTemplates: { python: 'base, exponent = map(int, input().split())\n\ndef power(number, count):\n    # Return number raised to count\n    pass\n\nprint(power(base, exponent))' },
+        solutionCode: { python: 'base, exponent = map(int, input().split())\n\ndef power(number, count):\n    result = 1\n    for _ in range(count):\n        result *= number\n    return result\n\nprint(power(base, exponent))' }
+      }
+    },
+    {
+      id: 'py-practice-more-prime-function',
+      title: 'Prime Predicate',
+      duration: '20 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Functions',
+      language: 'python',
+      content: '<p>Define a function that prints whether an integer is prime.</p>',
+      problem: {
+        difficulty: 'Medium',
+        points: 20,
+        testCases: [
+          { id: 'tc-more-prime-function-1', input: '2', expectedOutput: 'Prime' },
+          { id: 'tc-more-prime-function-2', input: '15', expectedOutput: 'Not Prime' },
+          { id: 'tc-more-prime-function-3', input: '1', expectedOutput: 'Not Prime', isHidden: true }
+        ],
+        starterTemplates: { python: 'number = int(input())\n\ndef is_prime(value):\n    # Return True when value is prime\n    pass\n\nprint("Prime" if is_prime(number) else "Not Prime")' },
+        solutionCode: { python: 'number = int(input())\n\ndef is_prime(value):\n    if value < 2:\n        return False\n    for divisor in range(2, int(value ** 0.5) + 1):\n        if value % divisor == 0:\n            return False\n    return True\n\nprint("Prime" if is_prime(number) else "Not Prime")' }
+      }
+    },
+    {
+      id: 'py-practice-more-lcm-function',
+      title: 'Least Common Multiple',
+      duration: '20 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Functions',
+      language: 'python',
+      content: '<p>Use helper functions to print the least common multiple of two positive integers.</p>',
+      problem: {
+        difficulty: 'Medium',
+        points: 20,
+        testCases: [
+          { id: 'tc-more-lcm-function-1', input: '4 6', expectedOutput: '12' },
+          { id: 'tc-more-lcm-function-2', input: '5 7', expectedOutput: '35' },
+          { id: 'tc-more-lcm-function-3', input: '12 8', expectedOutput: '24', isHidden: true }
+        ],
+        starterTemplates: { python: 'a, b = map(int, input().split())\n\ndef lcm(first, second):\n    # Return the least common multiple\n    pass\n\nprint(lcm(a, b))' },
+        solutionCode: { python: 'a, b = map(int, input().split())\n\ndef gcd(first, second):\n    while second:\n        first, second = second, first % second\n    return first\n\ndef lcm(first, second):\n    return first * second // gcd(first, second)\n\nprint(lcm(a, b))' }
+      }
+    },
+    {
+      id: 'py-practice-more-positive-count',
+      title: 'Count Positive Values',
+      duration: '20 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Functions',
+      language: 'python',
+      content: '<p>Define a function that counts positive values in a list.</p>',
+      problem: {
+        difficulty: 'Easy',
+        points: 15,
+        testCases: [
+          { id: 'tc-more-positive-count-1', input: '-2 0 4 5', expectedOutput: '2' },
+          { id: 'tc-more-positive-count-2', input: '-1 -3', expectedOutput: '0' },
+          { id: 'tc-more-positive-count-3', input: '7 8 9', expectedOutput: '3', isHidden: true }
+        ],
+        starterTemplates: { python: 'numbers = list(map(int, input().split()))\n\ndef count_positive(values):\n    # Count values greater than zero\n    pass\n\nprint(count_positive(numbers))' },
+        solutionCode: { python: 'numbers = list(map(int, input().split()))\n\ndef count_positive(values):\n    return sum(value > 0 for value in values)\n\nprint(count_positive(numbers))' }
+      }
+    },
+    {
+      id: 'py-practice-more-count-search',
+      title: 'Count Target Occurrences',
+      duration: '20 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Searching',
+      language: 'python',
+      content: '<p>Print how many times the target occurs in the list.</p>',
+      problem: {
+        difficulty: 'Easy',
+        points: 15,
+        testCases: [
+          { id: 'tc-more-count-search-1', input: '1 2 2 3\n2', expectedOutput: '2' },
+          { id: 'tc-more-count-search-2', input: '4 5 6\n1', expectedOutput: '0' },
+          { id: 'tc-more-count-search-3', input: '7 7 7\n7', expectedOutput: '3', isHidden: true }
+        ],
+        starterTemplates: { python: 'numbers = list(map(int, input().split()))\ntarget = int(input())\n# Count target occurrences' },
+        solutionCode: { python: 'numbers = list(map(int, input().split()))\ntarget = int(input())\nprint(numbers.count(target))' }
+      }
+    },
+    {
+      id: 'py-practice-more-last-search',
+      title: 'Last Matching Position',
+      duration: '20 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Searching',
+      language: 'python',
+      content: '<p>Print the last zero-based index of the target, or <code>-1</code> if absent.</p>',
+      problem: {
+        difficulty: 'Easy',
+        points: 15,
+        testCases: [
+          { id: 'tc-more-last-search-1', input: '4 2 4 2\n2', expectedOutput: '3' },
+          { id: 'tc-more-last-search-2', input: '5 6 7\n1', expectedOutput: '-1' },
+          { id: 'tc-more-last-search-3', input: '9 9 8\n9', expectedOutput: '1', isHidden: true }
+        ],
+        starterTemplates: { python: 'numbers = list(map(int, input().split()))\ntarget = int(input())\n# Find the last matching index' },
+        solutionCode: { python: 'numbers = list(map(int, input().split()))\ntarget = int(input())\nanswer = -1\nfor index, value in enumerate(numbers):\n    if value == target:\n        answer = index\nprint(answer)' }
+      }
+    },
+    {
+      id: 'py-practice-more-lower-bound',
+      title: 'Lower Bound Search',
+      duration: '25 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Searching',
+      language: 'python',
+      content: '<p>In a sorted list, print the first index whose value is at least the target, or <code>-1</code>.</p>',
+      problem: {
+        difficulty: 'Medium',
+        points: 20,
+        testCases: [
+          { id: 'tc-more-lower-bound-1', input: '1 3 5 7\n4', expectedOutput: '2' },
+          { id: 'tc-more-lower-bound-2', input: '2 4 6\n8', expectedOutput: '-1' },
+          { id: 'tc-more-lower-bound-3', input: '-3 -1 2\n-3', expectedOutput: '0', isHidden: true }
+        ],
+        starterTemplates: { python: 'numbers = list(map(int, input().split()))\ntarget = int(input())\n# Implement lower-bound search' },
+        solutionCode: { python: 'numbers = list(map(int, input().split()))\ntarget = int(input())\nleft, right = 0, len(numbers)\nwhile left < right:\n    middle = (left + right) // 2\n    if numbers[middle] < target:\n        left = middle + 1\n    else:\n        right = middle\nprint(left if left < len(numbers) else -1)' }
+      }
+    },
+    {
+      id: 'py-practice-more-pair-search',
+      title: 'Pair Sum Exists',
+      duration: '25 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Searching',
+      language: 'python',
+      content: '<p>Print <code>YES</code> if two different values in the list add to the target.</p>',
+      problem: {
+        difficulty: 'Medium',
+        points: 20,
+        testCases: [
+          { id: 'tc-more-pair-search-1', input: '2 7 11 15\n9', expectedOutput: 'YES' },
+          { id: 'tc-more-pair-search-2', input: '1 2 4\n8', expectedOutput: 'NO' },
+          { id: 'tc-more-pair-search-3', input: '3 3\n6', expectedOutput: 'YES', isHidden: true }
+        ],
+        starterTemplates: { python: 'numbers = list(map(int, input().split()))\ntarget = int(input())\n# Search for a pair with the target sum' },
+        solutionCode: { python: 'numbers = list(map(int, input().split()))\ntarget = int(input())\nseen = set()\nfound = False\nfor number in numbers:\n    if target - number in seen:\n        found = True\n        break\n    seen.add(number)\nprint("YES" if found else "NO")' }
+      }
+    },
+    {
+      id: 'py-practice-more-bubble-sort',
+      title: 'Bubble Sort',
+      duration: '25 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Sorting',
+      language: 'python',
+      content: '<p>Sort the numbers in ascending order using bubble sort.</p>',
+      problem: {
+        difficulty: 'Medium',
+        points: 20,
+        testCases: [
+          { id: 'tc-more-bubble-sort-1', input: '5 1 4 2', expectedOutput: '1 2 4 5' },
+          { id: 'tc-more-bubble-sort-2', input: '3 -1 0', expectedOutput: '-1 0 3' },
+          { id: 'tc-more-bubble-sort-3', input: '8 8 2', expectedOutput: '2 8 8', isHidden: true }
+        ],
+        starterTemplates: { python: 'numbers = list(map(int, input().split()))\n# Implement bubble sort\nprint(*numbers)' },
+        solutionCode: { python: 'numbers = list(map(int, input().split()))\nfor end in range(len(numbers) - 1, 0, -1):\n    for index in range(end):\n        if numbers[index] > numbers[index + 1]:\n            numbers[index], numbers[index + 1] = numbers[index + 1], numbers[index]\nprint(*numbers)' }
+      }
+    },
+    {
+      id: 'py-practice-more-absolute-sort',
+      title: 'Sort by Absolute Value',
+      duration: '25 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Sorting',
+      language: 'python',
+      content: '<p>Sort integers by their absolute value in ascending order.</p>',
+      problem: {
+        difficulty: 'Medium',
+        points: 20,
+        testCases: [
+          { id: 'tc-more-absolute-sort-1', input: '-5 2 -1 4', expectedOutput: '-1 2 4 -5' },
+          { id: 'tc-more-absolute-sort-2', input: '3 -3 1', expectedOutput: '1 3 -3' },
+          { id: 'tc-more-absolute-sort-3', input: '-10 0 2', expectedOutput: '0 2 -10', isHidden: true }
+        ],
+        starterTemplates: { python: 'numbers = list(map(int, input().split()))\n# Sort by absolute value' },
+        solutionCode: { python: 'numbers = list(map(int, input().split()))\nnumbers.sort(key=abs)\nprint(*numbers)' }
+      }
+    },
+    {
+      id: 'py-practice-more-word-sort',
+      title: 'Alphabetical Word Sort',
+      duration: '20 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Sorting',
+      language: 'python',
+      content: '<p>Print the input words in alphabetical order.</p>',
+      problem: {
+        difficulty: 'Easy',
+        points: 15,
+        testCases: [
+          { id: 'tc-more-word-sort-1', input: 'pear apple orange', expectedOutput: 'apple orange pear' },
+          { id: 'tc-more-word-sort-2', input: 'zebra ant yak', expectedOutput: 'ant yak zebra' },
+          { id: 'tc-more-word-sort-3', input: 'same same', expectedOutput: 'same same', isHidden: true }
+        ],
+        starterTemplates: { python: 'words = input().split()\n# Sort and print the words' },
+        solutionCode: { python: 'words = input().split()\nprint(*sorted(words))' }
+      }
+    },
+    {
+      id: 'py-practice-more-unique-sort',
+      title: 'Sorted Unique Values',
+      duration: '20 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Sorting',
+      language: 'python',
+      content: '<p>Print the distinct input values in ascending order.</p>',
+      problem: {
+        difficulty: 'Easy',
+        points: 15,
+        testCases: [
+          { id: 'tc-more-unique-sort-1', input: '4 1 4 2 1', expectedOutput: '1 2 4' },
+          { id: 'tc-more-unique-sort-2', input: '3 3 3', expectedOutput: '3' },
+          { id: 'tc-more-unique-sort-3', input: '-2 0 -2 1', expectedOutput: '-2 0 1', isHidden: true }
+        ],
+        starterTemplates: { python: 'numbers = list(map(int, input().split()))\n# Print sorted distinct values' },
+        solutionCode: { python: 'numbers = list(map(int, input().split()))\nprint(*sorted(set(numbers)))' }
+      }
+    },
+    {
+      id: 'py-practice-more-recursive-factorial',
+      title: 'Recursive Factorial',
+      duration: '25 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Recursion',
+      language: 'python',
+      content: '<p>Use recursion to calculate the factorial of a non-negative integer.</p>',
+      problem: {
+        difficulty: 'Medium',
+        points: 20,
+        testCases: [
+          { id: 'tc-more-recursive-factorial-1', input: '0', expectedOutput: '1' },
+          { id: 'tc-more-recursive-factorial-2', input: '5', expectedOutput: '120' },
+          { id: 'tc-more-recursive-factorial-3', input: '6', expectedOutput: '720', isHidden: true }
+        ],
+        starterTemplates: { python: 'n = int(input())\n\ndef factorial(value):\n    # Return the factorial recursively\n    pass\n\nprint(factorial(n))' },
+        solutionCode: { python: 'n = int(input())\n\ndef factorial(value):\n    if value <= 1:\n        return 1\n    return value * factorial(value - 1)\n\nprint(factorial(n))' }
+      }
+    },
+    {
+      id: 'py-practice-more-recursive-fibonacci',
+      title: 'Recursive Fibonacci',
+      duration: '25 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Recursion',
+      language: 'python',
+      content: '<p>Use recursion to print the Fibonacci number at zero-based index <code>n</code>.</p>',
+      problem: {
+        difficulty: 'Medium',
+        points: 20,
+        testCases: [
+          { id: 'tc-more-recursive-fibonacci-1', input: '0', expectedOutput: '0' },
+          { id: 'tc-more-recursive-fibonacci-2', input: '6', expectedOutput: '8' },
+          { id: 'tc-more-recursive-fibonacci-3', input: '8', expectedOutput: '21', isHidden: true }
+        ],
+        starterTemplates: { python: 'n = int(input())\n\ndef fibonacci(index):\n    # Return the Fibonacci value recursively\n    pass\n\nprint(fibonacci(n))' },
+        solutionCode: { python: 'n = int(input())\n\ndef fibonacci(index):\n    if index < 2:\n        return index\n    return fibonacci(index - 1) + fibonacci(index - 2)\n\nprint(fibonacci(n))' }
+      }
+    },
+    {
+      id: 'py-practice-more-recursive-reverse',
+      title: 'Recursive String Reverse',
+      duration: '25 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Recursion',
+      language: 'python',
+      content: '<p>Reverse a word using a recursive function.</p>',
+      problem: {
+        difficulty: 'Medium',
+        points: 20,
+        testCases: [
+          { id: 'tc-more-recursive-reverse-1', input: 'code', expectedOutput: 'edoc' },
+          { id: 'tc-more-recursive-reverse-2', input: 'a', expectedOutput: 'a' },
+          { id: 'tc-more-recursive-reverse-3', input: 'recursion', expectedOutput: 'noisrucer', isHidden: true }
+        ],
+        starterTemplates: { python: 'text = input().strip()\n\ndef reverse(value):\n    # Reverse value recursively\n    pass\n\nprint(reverse(text))' },
+        solutionCode: { python: 'text = input().strip()\n\ndef reverse(value):\n    if len(value) <= 1:\n        return value\n    return reverse(value[1:]) + value[0]\n\nprint(reverse(text))' }
+      }
+    },
+    {
+      id: 'py-practice-more-recursive-gcd',
+      title: 'Recursive GCD',
+      duration: '25 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Recursion',
+      language: 'python',
+      content: '<p>Use the recursive Euclidean algorithm to find the greatest common divisor.</p>',
+      problem: {
+        difficulty: 'Medium',
+        points: 20,
+        testCases: [
+          { id: 'tc-more-recursive-gcd-1', input: '48 18', expectedOutput: '6' },
+          { id: 'tc-more-recursive-gcd-2', input: '17 5', expectedOutput: '1' },
+          { id: 'tc-more-recursive-gcd-3', input: '81 27', expectedOutput: '27', isHidden: true }
+        ],
+        starterTemplates: { python: 'a, b = map(int, input().split())\n\ndef gcd(first, second):\n    # Return the GCD recursively\n    pass\n\nprint(gcd(a, b))' },
+        solutionCode: { python: 'a, b = map(int, input().split())\n\ndef gcd(first, second):\n    return first if second == 0 else gcd(second, first % second)\n\nprint(gcd(a, b))' }
+      }
+    },
+    {
+      id: 'py-practice-more-parse-integer',
+      title: 'Parse an Integer',
+      duration: '20 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Exception Handling',
+      language: 'python',
+      content: '<p>Print the integer when conversion succeeds; otherwise print <code>Invalid</code>.</p>',
+      problem: {
+        difficulty: 'Easy',
+        points: 15,
+        testCases: [
+          { id: 'tc-more-parse-integer-1', input: '42', expectedOutput: '42' },
+          { id: 'tc-more-parse-integer-2', input: '-7', expectedOutput: '-7' },
+          { id: 'tc-more-parse-integer-3', input: 'abc', expectedOutput: 'Invalid', isHidden: true }
+        ],
+        starterTemplates: { python: 'text = input().strip()\n# Convert text safely' },
+        solutionCode: { python: 'text = input().strip()\ntry:\n    print(int(text))\nexcept ValueError:\n    print("Invalid")' }
+      }
+    },
+    {
+      id: 'py-practice-more-safe-index',
+      title: 'Safe List Index',
+      duration: '20 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Exception Handling',
+      language: 'python',
+      content: '<p>Print the value at the requested index, or <code>Invalid</code> when the index is unusable.</p>',
+      problem: {
+        difficulty: 'Easy',
+        points: 15,
+        testCases: [
+          { id: 'tc-more-safe-index-1', input: '10 20 30\n1', expectedOutput: '20' },
+          { id: 'tc-more-safe-index-2', input: '5 6\n4', expectedOutput: 'Invalid' },
+          { id: 'tc-more-safe-index-3', input: '8 9\nx', expectedOutput: 'Invalid', isHidden: true }
+        ],
+        starterTemplates: { python: 'numbers = list(map(int, input().split()))\nindex_text = input().strip()\n# Read the index with exception handling' },
+        solutionCode: { python: 'numbers = list(map(int, input().split()))\nindex_text = input().strip()\ntry:\n    print(numbers[int(index_text)])\nexcept (ValueError, IndexError):\n    print("Invalid")' }
+      }
+    },
+    {
+      id: 'py-practice-more-positive-input',
+      title: 'Validate Positive Input',
+      duration: '20 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Exception Handling',
+      language: 'python',
+      content: '<p>Print a positive integer, or <code>Invalid</code> for bad or non-positive input.</p>',
+      problem: {
+        difficulty: 'Easy',
+        points: 15,
+        testCases: [
+          { id: 'tc-more-positive-input-1', input: '8', expectedOutput: '8' },
+          { id: 'tc-more-positive-input-2', input: '0', expectedOutput: 'Invalid' },
+          { id: 'tc-more-positive-input-3', input: 'nine', expectedOutput: 'Invalid', isHidden: true }
+        ],
+        starterTemplates: { python: 'text = input().strip()\n# Parse and validate a positive integer' },
+        solutionCode: { python: 'text = input().strip()\ntry:\n    value = int(text)\n    print(value if value > 0 else "Invalid")\nexcept ValueError:\n    print("Invalid")' }
+      }
+    },
+    {
+      id: 'py-practice-more-safe-quotient',
+      title: 'Safe Quotient',
+      duration: '20 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Exception Handling',
+      language: 'python',
+      content: '<p>Print a quotient to two decimals, or <code>Invalid</code> for bad input or division by zero.</p>',
+      problem: {
+        difficulty: 'Medium',
+        points: 20,
+        testCases: [
+          { id: 'tc-more-safe-quotient-1', input: '8 2', expectedOutput: '4.00' },
+          { id: 'tc-more-safe-quotient-2', input: '5 0', expectedOutput: 'Invalid' },
+          { id: 'tc-more-safe-quotient-3', input: 'x 3', expectedOutput: 'Invalid', isHidden: true }
+        ],
+        starterTemplates: { python: 'parts = input().split()\n# Parse and divide safely' },
+        solutionCode: { python: 'parts = input().split()\ntry:\n    first, second = map(float, parts)\n    print(f"{first / second:.2f}")\nexcept (ValueError, ZeroDivisionError):\n    print("Invalid")' }
+      }
+    },
+    {
+      id: 'py-practice-more-queue-commands',
+      title: 'Queue Operations',
+      duration: '25 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Stacks and Queues',
+      language: 'python',
+      content: '<p>Process <code>enqueue X</code> and <code>dequeue</code> commands, printing dequeued values or <code>EMPTY</code>.</p>',
+      problem: {
+        difficulty: 'Medium',
+        points: 25,
+        testCases: [
+          { id: 'tc-more-queue-commands-1', input: 'enqueue 4\nenqueue 7\ndequeue\ndequeue', expectedOutput: '4\n7' },
+          { id: 'tc-more-queue-commands-2', input: 'dequeue\nenqueue 9\ndequeue', expectedOutput: 'EMPTY\n9' },
+          { id: 'tc-more-queue-commands-3', input: 'enqueue 1\nenqueue 2\ndequeue\nenqueue 3\ndequeue', expectedOutput: '1\n2', isHidden: true }
+        ],
+        starterTemplates: { python: 'import sys\nqueue = []\n# Process queue commands from standard input' },
+        solutionCode: { python: 'import sys\nqueue = []\nresults = []\nfor command in sys.stdin.read().splitlines():\n    parts = command.split()\n    if parts[0] == "enqueue":\n        queue.append(int(parts[1]))\n    elif queue:\n        results.append(str(queue.pop(0)))\n    else:\n        results.append("EMPTY")\nprint("\\n".join(results))' }
+      }
+    },
+    {
+      id: 'py-practice-more-brackets',
+      title: 'Balanced Brackets',
+      duration: '25 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Stacks and Queues',
+      language: 'python',
+      content: '<p>Use a stack to print <code>Balanced</code> when brackets are correctly nested.</p>',
+      problem: {
+        difficulty: 'Medium',
+        points: 25,
+        testCases: [
+          { id: 'tc-more-brackets-1', input: '([]{})', expectedOutput: 'Balanced' },
+          { id: 'tc-more-brackets-2', input: '([)]', expectedOutput: 'Unbalanced' },
+          { id: 'tc-more-brackets-3', input: '((()))', expectedOutput: 'Balanced', isHidden: true }
+        ],
+        starterTemplates: { python: 'text = input().strip()\n# Check bracket nesting with a stack' },
+        solutionCode: { python: 'text = input().strip()\nstack = []\npairs = {")": "(", "]": "[", "}": "{"}\nfor character in text:\n    if character in "([{":\n        stack.append(character)\n    elif character in pairs and (not stack or stack.pop() != pairs[character]):\n        print("Unbalanced")\n        break\nelse:\n    print("Balanced" if not stack else "Unbalanced")' }
+      }
+    },
+    {
+      id: 'py-practice-more-stack-peek',
+      title: 'Stack Peek Commands',
+      duration: '25 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Stacks and Queues',
+      language: 'python',
+      content: '<p>Process <code>push X</code> and <code>peek</code> commands, printing the top value or <code>EMPTY</code>.</p>',
+      problem: {
+        difficulty: 'Medium',
+        points: 25,
+        testCases: [
+          { id: 'tc-more-stack-peek-1', input: 'push 4\npush 7\npeek\npeek', expectedOutput: '7\n7' },
+          { id: 'tc-more-stack-peek-2', input: 'peek\npush 9\npeek', expectedOutput: 'EMPTY\n9' },
+          { id: 'tc-more-stack-peek-3', input: 'push 1\npush 2\npeek', expectedOutput: '2', isHidden: true }
+        ],
+        starterTemplates: { python: 'import sys\nstack = []\n# Process push and peek commands' },
+        solutionCode: { python: 'import sys\nstack = []\nresults = []\nfor command in sys.stdin.read().splitlines():\n    parts = command.split()\n    if parts[0] == "push":\n        stack.append(int(parts[1]))\n    else:\n        results.append(str(stack[-1]) if stack else "EMPTY")\nprint("\\n".join(results))' }
+      }
+    },
+    {
+      id: 'py-practice-more-stack-reverse',
+      title: 'Reverse with a Stack',
+      duration: '20 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Stacks and Queues',
+      language: 'python',
+      content: '<p>Use a stack to reverse the characters in a word.</p>',
+      problem: {
+        difficulty: 'Easy',
+        points: 15,
+        testCases: [
+          { id: 'tc-more-stack-reverse-1', input: 'hello', expectedOutput: 'olleh' },
+          { id: 'tc-more-stack-reverse-2', input: 'stack', expectedOutput: 'kcats' },
+          { id: 'tc-more-stack-reverse-3', input: 'a', expectedOutput: 'a', isHidden: true }
+        ],
+        starterTemplates: { python: 'text = input().strip()\nstack = []\n# Push characters, then pop them to reverse the word' },
+        solutionCode: { python: 'text = input().strip()\nstack = list(text)\nresult = []\nwhile stack:\n    result.append(stack.pop())\nprint("".join(result))' }
+      }
+    },
+    {
+      id: 'py-practice-more-graph-degree',
+      title: 'Graph Vertex Degree',
+      duration: '25 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Graphs',
+      language: 'python',
+      content: '<p>Read undirected edges, then print the degree of the requested vertex after the <code>?</code> line.</p>',
+      problem: {
+        difficulty: 'Easy',
+        points: 20,
+        testCases: [
+          { id: 'tc-more-graph-degree-1', input: 'A-B\nA-C\nB-D\n?\nA', expectedOutput: '2' },
+          { id: 'tc-more-graph-degree-2', input: '1-2\n2-3\n?\n2', expectedOutput: '2' },
+          { id: 'tc-more-graph-degree-3', input: 'x-y\n?\nx', expectedOutput: '1', isHidden: true }
+        ],
+        starterTemplates: { python: 'import sys\nlines = sys.stdin.read().splitlines()\n# Build the undirected graph and count neighbors' },
+        solutionCode: { python: 'import sys\nlines = sys.stdin.read().splitlines()\nquery = lines[-1]\nadjacency = {}\nfor line in lines[:-1]:\n    if line == "?":\n        continue\n    first, second = line.split("-")\n    adjacency.setdefault(first, set()).add(second)\n    adjacency.setdefault(second, set()).add(first)\nprint(len(adjacency.get(query, set())))' }
+      }
+    },
+    {
+      id: 'py-practice-more-graph-bfs',
+      title: 'Breadth First Traversal',
+      duration: '25 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Graphs',
+      language: 'python',
+      content: '<p>Perform a breadth-first traversal from the vertex after the <code>?</code> line.</p>',
+      problem: {
+        difficulty: 'Medium',
+        points: 25,
+        testCases: [
+          { id: 'tc-more-graph-bfs-1', input: 'A-B\nA-C\nB-D\n?\nA', expectedOutput: 'A B C D' },
+          { id: 'tc-more-graph-bfs-2', input: '1-2\n2-3\n3-4\n?\n2', expectedOutput: '2 1 3 4' },
+          { id: 'tc-more-graph-bfs-3', input: 'x-y\nx-z\n?\nx', expectedOutput: 'x y z', isHidden: true }
+        ],
+        starterTemplates: { python: 'import sys\nlines = sys.stdin.read().splitlines()\n# Build adjacency and traverse with a queue' },
+        solutionCode: { python: 'import sys\nfrom collections import deque\nlines = sys.stdin.read().splitlines()\nsource = lines[-1]\nadjacency = {}\nfor line in lines[:-1]:\n    if line == "?":\n        continue\n    first, second = line.split("-")\n    adjacency.setdefault(first, set()).add(second)\n    adjacency.setdefault(second, set()).add(first)\nqueue = deque([source])\nseen = {source}\norder = []\nwhile queue:\n    vertex = queue.popleft()\n    order.append(vertex)\n    for neighbor in sorted(adjacency.get(vertex, set())):\n        if neighbor not in seen:\n            seen.add(neighbor)\n            queue.append(neighbor)\nprint(" ".join(order))' }
+      }
+    },
+    {
+      id: 'py-practice-more-graph-path',
+      title: 'Graph Path Check',
+      duration: '25 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Graphs',
+      language: 'python',
+      content: '<p>Print <code>YES</code> when a path connects the two requested vertices.</p>',
+      problem: {
+        difficulty: 'Medium',
+        points: 25,
+        testCases: [
+          { id: 'tc-more-graph-path-1', input: 'A-B\nB-C\n?\nA C', expectedOutput: 'YES' },
+          { id: 'tc-more-graph-path-2', input: '1-2\n3-4\n?\n1 4', expectedOutput: 'NO' },
+          { id: 'tc-more-graph-path-3', input: 'x-y\n?\nx y', expectedOutput: 'YES', isHidden: true }
+        ],
+        starterTemplates: { python: 'import sys\nlines = sys.stdin.read().splitlines()\n# Search the graph for a path between the requested vertices' },
+        solutionCode: { python: 'import sys\nlines = sys.stdin.read().splitlines()\nsource, target = lines[-1].split()\nadjacency = {}\nfor line in lines[:-1]:\n    if line == "?":\n        continue\n    first, second = line.split("-")\n    adjacency.setdefault(first, set()).add(second)\n    adjacency.setdefault(second, set()).add(first)\nstack = [source]\nseen = {source}\nwhile stack:\n    vertex = stack.pop()\n    for neighbor in adjacency.get(vertex, set()):\n        if neighbor not in seen:\n            seen.add(neighbor)\n            stack.append(neighbor)\nprint("YES" if target in seen else "NO")' }
+      }
+    },
+    {
+      id: 'py-practice-more-graph-components',
+      title: 'Count Graph Components',
+      duration: '25 min',
+      type: 'problem',
+      isPractice: true,
+      topic: 'Graphs',
+      language: 'python',
+      content: '<p>Read undirected edges followed by <code>?</code> and print the number of connected components.</p>',
+      problem: {
+        difficulty: 'Medium',
+        points: 25,
+        testCases: [
+          { id: 'tc-more-graph-components-1', input: 'A-B\nB-C\nD-E\n?\n', expectedOutput: '2' },
+          { id: 'tc-more-graph-components-2', input: '1-2\n3-4\n5-6\n?\n', expectedOutput: '3' },
+          { id: 'tc-more-graph-components-3', input: 'x-y\n?\n', expectedOutput: '1', isHidden: true }
+        ],
+        starterTemplates: { python: 'import sys\nlines = sys.stdin.read().splitlines()\n# Build the graph and count connected components' },
+        solutionCode: { python: 'import sys\nlines = sys.stdin.read().splitlines()\nadjacency = {}\nfor line in lines:\n    if line == "?":\n        break\n    first, second = line.split("-")\n    adjacency.setdefault(first, set()).add(second)\n    adjacency.setdefault(second, set()).add(first)\nseen = set()\ncomponents = 0\nfor vertex in adjacency:\n    if vertex not in seen:\n        components += 1\n        stack = [vertex]\n        seen.add(vertex)\n        while stack:\n            current = stack.pop()\n            for neighbor in adjacency[current]:\n                if neighbor not in seen:\n                    seen.add(neighbor)\n                    stack.append(neighbor)\nprint(components)' }
+      }
+    }
   ]
 }
 ];

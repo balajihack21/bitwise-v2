@@ -1,6 +1,6 @@
 // ...existing code...
 import React, { useState, useEffect, useMemo } from 'react';
-import { Course, Lesson, Module, ProctorStatus, User, CourseInternalAssessment } from '../types';
+import { Course, Lesson, Module, ProctorStatus, User, CourseInternalAssessment, PracticeProblem } from '../types';
 import { doc, getDoc, setDoc, collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { sanitizeForFirestore } from '../services/firebase';
@@ -50,7 +50,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const isInstructor = currentUser?.role === 'instructor';
   const canManageCourseTests = currentUser?.role === 'instructor' || currentUser?.role === 'admin';
   const canViewInternalMarks = currentUser?.role === 'instructor' || currentUser?.role === 'admin';
-  const [activeTab, setActiveTab] = useState<'courses' | 'instructors' | 'students' | 'submissions' | 'firebase' | 'coding-tests'>('courses');
+  const [activeTab, setActiveTab] = useState<'courses' | 'instructors' | 'students' | 'submissions' | 'firebase' | 'coding-tests' | 'practice-problems'>('courses');
+  const [practiceCourseId, setPracticeCourseId] = useState('');
+  const [practiceTopic, setPracticeTopic] = useState('');
+  const [practiceTitle, setPracticeTitle] = useState('');
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [isEditingNew, setIsEditingNew] = useState<boolean>(false);
   const [assignModalCourse, setAssignModalCourse] = useState<Course | null>(null);
@@ -534,7 +537,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
           return 0;
         }
 
-        const accepted = submissions.filter(sub => sub.status === 'ACCEPTED');
+        const accepted = submissions.filter(sub => sub.status === 'ACCEPTED' && !sub.isPractice);
         if (accepted.length === 0) {
           problemDetails.push({ problemId, test, accepted: false, attempts: submissions.length, elapsedMinutes: null, marks: 0 });
           return 0;
@@ -589,7 +592,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       return sum + module.lessons.filter(lesson => student.completedLessonIds.includes(lesson.id)).length;
     }, 0);
     const totalProblems = courseModules.reduce((sum, module) => sum + module.lessons.filter(lesson => lesson.type === 'problem').length, 0);
-    const acceptedSubmissions = (student.submissions || []).filter(sub => sub.courseId === courseId && sub.status === 'ACCEPTED').length;
+    const acceptedSubmissions = (student.submissions || []).filter(sub => sub.courseId === courseId && sub.status === 'ACCEPTED' && !sub.isPractice).length;
     const learningScore = totalLessons > 0 ? Math.min(25, Math.round((completedLessonsForCourse / totalLessons) * 25)) : 0;
     const efficiencyScore = totalProblems > 0 ? Math.min(25, Math.round((acceptedSubmissions / totalProblems) * 25)) : 0;
     const deadlinePenaltyPercent = getAutoCalculatedDeadlinePenalty(student, courseId, course);
@@ -1429,7 +1432,7 @@ solve()`
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex border-b border-slate-200 mb-6 bg-white rounded-xl p-1.5 shadow-sm">
+        <div className="flex flex-wrap border-b border-slate-200 mb-6 bg-white rounded-xl p-1.5 shadow-sm gap-1">
           <button
             onClick={() => { setActiveTab('courses'); setEditingCourse(null); }}
             className={`flex-1 py-2.5 px-4 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2 ${
@@ -1490,6 +1493,17 @@ solve()`
 
           {!isInstructor && (
             <button
+              onClick={() => { setActiveTab('practice-problems'); setEditingCourse(null); }}
+              className={`flex-1 min-w-[170px] py-2.5 px-4 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2 ${
+                activeTab === 'practice-problems' ? 'bg-sky-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <i className="fa-solid fa-dumbbell"></i> Practice Problems
+            </button>
+          )}
+
+          {!isInstructor && (
+            <button
               onClick={() => { setActiveTab('firebase'); setEditingCourse(null); }}
               className={`flex-1 py-2.5 px-4 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2 ${
                 activeTab === 'firebase'
@@ -1501,6 +1515,61 @@ solve()`
             </button>
           )}
         </div>
+
+        {activeTab === 'practice-problems' && !isInstructor && (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+            <div className="mb-6">
+              <h2 className="text-xl font-bold text-slate-900">Practice Problem Bank</h2>
+              <p className="text-sm text-slate-500">Manage ungraded problems by course and topic. These are separate from the graded curriculum.</p>
+            </div>
+            <div className="grid md:grid-cols-4 gap-3 mb-6">
+              <select value={practiceCourseId} onChange={event => setPracticeCourseId(event.target.value)} className="border border-slate-300 rounded-xl px-3 py-2 text-sm">
+                <option value="">Select course</option>
+                {courses.map(course => <option key={course.id} value={course.id}>{course.title}</option>)}
+              </select>
+              <input value={practiceTopic} onChange={event => setPracticeTopic(event.target.value)} placeholder="Topic (e.g. Arrays)" className="border border-slate-300 rounded-xl px-3 py-2 text-sm" />
+              <input value={practiceTitle} onChange={event => setPracticeTitle(event.target.value)} placeholder="Problem title" className="border border-slate-300 rounded-xl px-3 py-2 text-sm" />
+              <button
+                type="button"
+                disabled={!practiceCourseId || !practiceTopic.trim() || !practiceTitle.trim()}
+                onClick={() => {
+                  const target = courses.find(course => course.id === practiceCourseId);
+                  if (!target) return;
+                  const source = target.modules.flatMap(module => module.lessons).find(lesson => lesson.type === 'problem');
+                  const problem: PracticeProblem = {
+                    ...(source || { id: '', duration: '15 min', type: 'problem', language: 'python' }),
+                    id: `practice-${Date.now()}`,
+                    title: practiceTitle.trim(),
+                    type: 'problem',
+                    isPractice: true,
+                    topic: practiceTopic.trim(),
+                    problem: source?.problem || { difficulty: 'Easy', description: 'Add the problem description in the course editor.', examples: [], constraints: [], testCases: [] }
+                  };
+                  onUpdateCourses(courses.map(course => course.id === target.id
+                    ? { ...course, practiceProblems: [...(course.practiceProblems || []), problem] }
+                    : course));
+                  setPracticeTitle('');
+                }}
+                className="px-4 py-2 bg-sky-600 hover:bg-sky-700 disabled:bg-slate-300 text-white font-bold text-sm rounded-xl"
+              >
+                <i className="fa-solid fa-plus mr-1"></i> Add Problem
+              </button>
+            </div>
+            <div className="space-y-3">
+              {courses.map(course => (course.practiceProblems || []).map(problem => (
+                <div key={`${course.id}-${problem.id}`} className="flex items-center justify-between gap-4 border border-slate-200 rounded-xl p-4">
+                  <div>
+                    <div className="font-bold text-slate-900">{problem.title}</div>
+                    <div className="text-xs text-slate-500">{course.title} · {problem.topic}</div>
+                  </div>
+                  <button type="button" onClick={() => onUpdateCourses(courses.map(item => item.id === course.id ? { ...item, practiceProblems: (item.practiceProblems || []).filter(entry => entry.id !== problem.id) } : item))} className="text-xs font-bold text-red-600 hover:text-red-700">
+                    Delete
+                  </button>
+                </div>
+              )))}
+            </div>
+          </div>
+        )}
 
         {activeTab === 'coding-tests' && !isInstructor && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
@@ -2015,7 +2084,7 @@ solve()`
                                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${
                                     isProblem ? 'bg-amber-100 text-amber-800 border border-amber-200' : isCreativeChallenge ? 'bg-cyan-100 text-cyan-800 border border-cyan-200' : 'bg-slate-100 text-slate-600'
                                   }`}>
-                                    {lesson.type}
+                                    {lesson.isPractice ? 'practice' : lesson.type}
                                   </span>
                                   <input
                                     value={lesson.title}
@@ -2159,9 +2228,10 @@ solve()`
                                 onClick={() => {
                                   const newProblem: Lesson = {
                                     id: `prob-${generateId()}`,
-                                    title: 'Challenge: New Coding Problem',
+                                    title: 'Practice: New Topic Problem',
                                     duration: '25 min',
                                     type: 'problem',
+                                    isPractice: true,
                                     content: '<h3>Problem Description</h3><p>Given an input, print output.</p>',
                                     problem: {
                                       difficulty: 'Easy',
@@ -2195,7 +2265,34 @@ solve()`
                                 }}
                                 className="text-[11px] text-amber-600 font-bold hover:underline cursor-pointer"
                               >
-                                + Add Coding Challenge (Judge0)
+                                + Add Practice Problem
+                              </button>
+                              <span className="text-slate-300">|</span>
+                              <button
+                                onClick={() => {
+                                  const newProblem: Lesson = {
+                                    id: `prob-${generateId()}`,
+                                    title: 'Challenge: New Coding Problem',
+                                    duration: '25 min',
+                                    type: 'problem',
+                                    content: '<h3>Problem Description</h3><p>Given an input, print output.</p>',
+                                    problem: {
+                                      difficulty: 'Easy',
+                                      points: 50,
+                                      testCases: [{ id: `tc-${generateId()}`, input: '5', expectedOutput: '10', explanation: 'Sample Case' }],
+                                      starterTemplates: {
+                                        javascript: 'const input = require("fs").readFileSync(0, "utf-8").trim();\nconsole.log(Number(input) * 2);',
+                                        python: 'n = int(input())\nprint(n * 2)'
+                                      }
+                                    }
+                                  };
+                                  const updated = [...editingCourse.modules];
+                                  updated[mIdx].lessons.push(newProblem);
+                                  setEditingCourse({ ...editingCourse, modules: updated });
+                                }}
+                                className="text-[11px] text-purple-700 font-bold hover:underline cursor-pointer"
+                              >
+                                + Add Graded Challenge
                               </button>
                               <span className="text-slate-300">|</span>
                               <button
@@ -3452,7 +3549,7 @@ solve()`
             const courseProgress = breakdownStudent.enrolledCourses?.find(c => c.courseId === assessmentBreakdown.courseId);
             const completedLessons = courseProgress?.completedLessons || 0;
             const totalLessons = courseProgress?.totalLessons || 0;
-            const acceptedProblems = (breakdownStudent.submissions || []).filter(sub => sub.courseId === assessmentBreakdown.courseId && sub.status === 'ACCEPTED');
+            const acceptedProblems = (breakdownStudent.submissions || []).filter(sub => sub.courseId === assessmentBreakdown.courseId && sub.status === 'ACCEPTED' && !sub.isPractice);
 
             return (
               <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4 overflow-y-auto">
