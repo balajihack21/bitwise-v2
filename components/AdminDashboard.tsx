@@ -4121,6 +4121,44 @@ solve()`
                             </div>
                             {submission.answerText ? (
                               <pre className="m-3 p-3 rounded-lg bg-slate-950 text-emerald-300 text-xs whitespace-pre-wrap font-mono overflow-x-auto">{submission.answerText}</pre>
+                            ) : submission.challengeType === 'flowchart' ? (
+                              <div className="p-4 bg-slate-50">
+                                <div className="flex flex-col items-center">
+                                  {(submission.flowNodes || []).map((node, index) => {
+                                    const nodeStyle = node.type === 'Start / End'
+                                      ? 'rounded-full border-2 border-emerald-400 bg-emerald-50 text-emerald-900'
+                                      : node.type === 'Decision'
+                                        ? '[clip-path:polygon(50%_0%,100%_50%,50%_100%,0%_50%)] border-2 border-amber-400 bg-amber-50 text-amber-900'
+                                        : node.type === 'Input / Output'
+                                          ? 'skew-x-[-10deg] border-2 border-blue-400 bg-blue-50 text-blue-900'
+                                          : 'rounded-lg border-2 border-violet-400 bg-violet-50 text-violet-900';
+                                    const nodeIcon = node.type === 'Start / End'
+                                      ? 'fa-circle-play'
+                                      : node.type === 'Decision'
+                                        ? 'fa-code-branch'
+                                        : node.type === 'Input / Output'
+                                          ? 'fa-right-left'
+                                          : 'fa-gears';
+                                    return (
+                                      <React.Fragment key={node.id || `${submission.id}-${index}`}>
+                                        <div className={`w-full max-w-sm min-h-[58px] px-5 py-2 flex items-center justify-center gap-2 text-center shadow-sm ${nodeStyle}`}>
+                                          <i className={`fa-solid ${nodeIcon} shrink-0`}></i>
+                                          <div>
+                                            <div className="text-[9px] font-bold uppercase tracking-wide opacity-70">{node.type}</div>
+                                            <div className="text-xs font-semibold break-words">{node.text || '(empty step)'}</div>
+                                          </div>
+                                        </div>
+                                        {index < (submission.flowNodes || []).length - 1 && (
+                                          <div className="h-7 flex flex-col items-center justify-center text-slate-400">
+                                            <div className="h-4 border-l-2 border-dashed border-slate-300"></div>
+                                            <i className="fa-solid fa-chevron-down text-[10px]"></i>
+                                          </div>
+                                        )}
+                                      </React.Fragment>
+                                    );
+                                  })}
+                                </div>
+                              </div>
                             ) : (
                               <div className="p-3 space-y-2">
                                 {(submission.flowNodes || []).map((node, index) => (

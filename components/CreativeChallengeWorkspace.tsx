@@ -37,17 +37,33 @@ const CreativeChallengeWorkspace: React.FC<CreativeChallengeWorkspaceProps> = ({
   const [submitted, setSubmitted] = useState(progress.completedLessonIds.includes(lesson.id));
 
   useEffect(() => {
+    const defaultFlowNodes: FlowNode[] = [
+      { id: 'node-1', type: 'Start / End', text: 'Start' },
+      { id: 'node-2', type: 'Input / Output', text: '' },
+      { id: 'node-3', type: 'Decision', text: '' },
+      { id: 'node-4', type: 'Start / End', text: 'End' }
+    ];
+
+    // Reset all lesson-specific state before loading this lesson's draft.
+    setPseudoCode('');
+    setFlowNodes(defaultFlowNodes);
+    setSavedAt(null);
+    setSubmitted(
+      progress.completedLessonIds.includes(lesson.id) ||
+      progress.creativeSubmissions?.some(submission => submission.lessonId === lesson.id) === true
+    );
+
     try {
       const saved = localStorage.getItem(storageKey);
       if (!saved) return;
       const parsed = JSON.parse(saved);
       setPseudoCode(parsed.pseudoCode || '');
-      setFlowNodes(Array.isArray(parsed.flowNodes) ? parsed.flowNodes : flowNodes);
+      setFlowNodes(Array.isArray(parsed.flowNodes) ? parsed.flowNodes : defaultFlowNodes);
       setSavedAt(parsed.savedAt || null);
     } catch {
       // Ignore malformed local drafts and start with an empty challenge.
     }
-  }, [storageKey]);
+  }, [storageKey, lesson.id, progress.completedLessonIds, progress.creativeSubmissions]);
 
   useEffect(() => {
     const draft = JSON.stringify({ pseudoCode, flowNodes, savedAt: new Date().toISOString() });
@@ -73,6 +89,31 @@ const CreativeChallengeWorkspace: React.FC<CreativeChallengeWorkspaceProps> = ({
     onProgressUpdate(updatedProgress);
     setSubmitted(true);
     localStorage.removeItem(storageKey);
+  };
+
+  const flowNodeStyle = (type: string) => {
+    switch (type) {
+      case 'Start / End':
+        return {
+          container: 'rounded-full border-2 border-emerald-400 bg-emerald-50 text-emerald-900',
+          icon: 'fa-circle-play'
+        };
+      case 'Decision':
+        return {
+          container: '[clip-path:polygon(50%_0%,100%_50%,50%_100%,0%_50%)] border-2 border-amber-400 bg-amber-50 text-amber-900',
+          icon: 'fa-code-branch'
+        };
+      case 'Input / Output':
+        return {
+          container: 'skew-x-[-10deg] border-2 border-blue-400 bg-blue-50 text-blue-900',
+          icon: 'fa-right-left'
+        };
+      default:
+        return {
+          container: 'rounded-lg border-2 border-violet-400 bg-violet-50 text-violet-900',
+          icon: 'fa-gears'
+        };
+    }
   };
 
   return (
@@ -104,6 +145,37 @@ const CreativeChallengeWorkspace: React.FC<CreativeChallengeWorkspaceProps> = ({
                 <p className="text-xs text-slate-500">Add nodes in execution order. Each arrow represents the next step.</p>
               </div>
               <button type="button" onClick={() => setFlowNodes(nodes => [...nodes, { id: `node-${Date.now()}`, type: 'Process', text: '' }])} disabled={submitted} className="px-3 py-2 rounded-lg bg-slate-900 text-white text-xs font-bold disabled:opacity-50"><i className="fa-solid fa-plus mr-1"></i>Add node</button>
+            </div>
+            <div className="mb-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Flowchart preview</h3>
+                  <p className="text-[11px] text-slate-500">Your steps are visualized in execution order.</p>
+                </div>
+                <span className="text-[10px] font-semibold text-slate-500">{flowNodes.length} nodes</span>
+              </div>
+              <div className="flex flex-col items-center overflow-x-auto pb-2">
+                {flowNodes.map((node, index) => {
+                  const style = flowNodeStyle(node.type);
+                  return (
+                    <React.Fragment key={`preview-${node.id}`}>
+                      <div className={`w-full max-w-sm min-h-[64px] px-6 py-3 flex items-center justify-center gap-2 text-center shadow-sm ${style.container}`}>
+                        <i className={`fa-solid ${style.icon} shrink-0`}></i>
+                        <div className="min-w-0">
+                          <div className="text-[10px] font-bold uppercase tracking-wide opacity-70">{node.type}</div>
+                          <div className="text-sm font-semibold break-words">{node.text.trim() || 'Describe this step'}</div>
+                        </div>
+                      </div>
+                      {index < flowNodes.length - 1 && (
+                        <div className="h-9 flex flex-col items-center justify-center text-slate-400">
+                          <div className="h-5 border-l-2 border-dashed border-slate-300"></div>
+                          <i className="fa-solid fa-chevron-down text-xs"></i>
+                        </div>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </div>
             </div>
             <div className="space-y-2">
               {flowNodes.map((node, index) => (
