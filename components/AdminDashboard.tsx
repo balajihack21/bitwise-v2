@@ -54,6 +54,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [isEditingNew, setIsEditingNew] = useState<boolean>(false);
   const [assignModalCourse, setAssignModalCourse] = useState<Course | null>(null);
+  const [courseImportPreview, setCourseImportPreview] = useState<Course | null>(null);
+  const [courseImportError, setCourseImportError] = useState<string | null>(null);
+  const [isPublishingCourseImport, setIsPublishingCourseImport] = useState<boolean>(false);
   const [selectedCourseFilter, setSelectedCourseFilter] = useState<string>('ALL');
   const [selectedInstructorFilter, setSelectedInstructorFilter] = useState<string>('ALL');
   const [progressFilter, setProgressFilter] = useState<'ALL' | 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED'>('ALL');
@@ -898,6 +901,56 @@ public class Main {
 
   const generateId = () => Math.random().toString(36).substring(2, 9);
 
+  const createArticleLesson = (): Lesson => ({
+    id: `les-${generateId()}`,
+    title: 'New Conceptual Guide',
+    duration: '15 min',
+    type: 'article',
+    content: '<h3>Overview</h3><p>Explanation goes here.</p>'
+  });
+
+  const createProblemLesson = (): Lesson => ({
+    id: `prob-${generateId()}`,
+    title: 'Challenge: New Coding Problem',
+    duration: '25 min',
+    type: 'problem',
+    content: '<h3>Problem Description</h3><p>Given an input, print output.</p>',
+    problem: {
+      difficulty: 'Easy',
+      points: 50,
+      testCases: [
+        {
+          id: `tc-${generateId()}`,
+          input: '5',
+          expectedOutput: '10',
+          explanation: 'Sample Case'
+        }
+      ],
+      starterTemplates: {
+        javascript: `const fs = require('fs');
+function solve() {
+  const input = fs.readFileSync(0, 'utf-8').trim();
+  console.log(input * 2);
+}
+solve();`,
+        python: `import sys
+def solve():
+    n = int(sys.stdin.read().strip())
+    print(n * 2)
+solve()`
+      }
+    }
+  });
+
+  const insertLessonAt = (moduleIndex: number, lessonIndex: number, type: 'article' | 'problem') => {
+    if (!editingCourse) return;
+    const updatedModules = [...editingCourse.modules];
+    const lessons = [...updatedModules[moduleIndex].lessons];
+    lessons.splice(lessonIndex, 0, type === 'article' ? createArticleLesson() : createProblemLesson());
+    updatedModules[moduleIndex] = { ...updatedModules[moduleIndex], lessons };
+    setEditingCourse({ ...editingCourse, modules: updatedModules });
+  };
+
   // Course Management
   const handleCreateCourse = () => {
     const newCourse: Course = {
@@ -948,6 +1001,65 @@ public class Main {
     onUpdateCourses(updatedCourses);
     saveCoursesToFirestore(updatedCourses).catch(() => {});
     setEditingCourse(null);
+  };
+
+  const handleCourseJsonImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    setCourseImportError(null);
+    setCourseImportPreview(null);
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(String(reader.result || ''));
+        const imported = Array.isArray(parsed) ? parsed[0] : (Array.isArray(parsed.courses) ? parsed.courses[0] : parsed);
+        if (!imported || typeof imported !== 'object') throw new Error('The JSON must contain a course object.');
+        if (imported.id !== 'python-programming') throw new Error('The imported course ID must be python-programming.');
+        if (!Array.isArray(imported.modules) || imported.modules.length === 0) throw new Error('The course must contain at least one module.');
+
+        const lessonIds = imported.modules.flatMap((module: any) => Array.isArray(module.lessons) ? module.lessons.map((lesson: any) => lesson.id) : []);
+        if (imported.modules.some((module: any) => !module.id || !module.title || !Array.isArray(module.lessons))) throw new Error('Every module needs an id, title, and lessons array.');
+        if (imported.modules.some((module: any) => module.lessons.some((lesson: any) => !lesson.id || !lesson.title || !['article', 'video', 'problem', 'algorithm', 'pseudocode', 'flowchart'].includes(lesson.type)))) {
+          throw new Error('Every lesson needs an id, title, and valid type.');
+        }
+        const duplicateLessonIds = lessonIds.filter((id: string, index: number) => lessonIds.indexOf(id) !== index);
+        if (duplicateLessonIds.length > 0) throw new Error(`Duplicate lesson IDs found: ${Array.from(new Set(duplicateLessonIds)).join(', ')}`);
+
+        const existing = courses.find(course => course.id === 'python-programming');
+        const preview: Course = {
+          ...imported,
+          assignedInstructors: imported.assignedInstructors || existing?.assignedInstructors,
+          codingTestSchedule: imported.codingTestSchedule || existing?.codingTestSchedule
+        };
+        setCourseImportPreview(preview);
+      } catch (error: any) {
+        setCourseImportError(error.message || 'Unable to read the course JSON file.');
+      }
+    };
+    reader.onerror = () => setCourseImportError('Unable to read the selected file.');
+    reader.readAsText(file);
+  };
+
+  const publishCourseJsonImport = async () => {
+    if (!courseImportPreview) return;
+    setIsPublishingCourseImport(true);
+    try {
+      const updatedCourses = courses.some(course => course.id === courseImportPreview.id)
+        ? courses.map(course => course.id === courseImportPreview.id ? courseImportPreview : course)
+        : [...courses, courseImportPreview];
+      onUpdateCourses(updatedCourses);
+      await saveCoursesToFirestore(updatedCourses);
+      setCourseImportPreview(null);
+      setCourseImportError(null);
+      setExportSuccessMessage('Course JSON imported and published to Firebase successfully.');
+      setTimeout(() => setExportSuccessMessage(null), 5000);
+    } catch (error: any) {
+      setCourseImportError(error.message || 'Failed to publish course JSON to Firebase.');
+    } finally {
+      setIsPublishingCourseImport(false);
+    }
   };
 
   const handleDeleteCourse = (id: string) => {
@@ -1872,17 +1984,36 @@ public class Main {
                         <div className="space-y-2 pl-2">
                           {mod.lessons.map((lesson, lIdx) => {
                             const isProblem = lesson.type === 'problem';
+                            const isCreativeChallenge = lesson.type === 'algorithm' || lesson.type === 'pseudocode' || lesson.type === 'flowchart';
                             const tcCount = lesson.problem?.testCases?.length || 0;
                             const sampleCount = lesson.problem?.testCases?.filter(t => !t.isHidden).length || 0;
                             const hiddenCount = lesson.problem?.testCases?.filter(t => t.isHidden).length || 0;
 
                             return (
-                              <div key={lesson.id} className={`p-3 rounded-xl border space-y-2.5 transition-all ${
-                                isProblem ? 'bg-amber-50/20 border-amber-200' : 'bg-white border-slate-200'
-                              }`}>
+                              <React.Fragment key={lesson.id}>
+                                {!isInstructor && (
+                                  <div className="flex items-center gap-2 px-1 -mb-1">
+                                    <span className="text-[10px] text-slate-400 font-semibold">Insert before:</span>
+                                    <button
+                                      onClick={() => insertLessonAt(mIdx, lIdx, 'article')}
+                                      className="text-[10px] text-slate-600 hover:text-bitwise-700 font-bold cursor-pointer"
+                                    >
+                                      + Article
+                                    </button>
+                                    <button
+                                      onClick={() => insertLessonAt(mIdx, lIdx, 'problem')}
+                                      className="text-[10px] text-amber-700 hover:text-amber-900 font-bold cursor-pointer"
+                                    >
+                                      + Problem
+                                    </button>
+                                  </div>
+                                )}
+                                <div className={`p-3 rounded-xl border space-y-2.5 transition-all ${
+                                      isProblem ? 'bg-amber-50/20 border-amber-200' : isCreativeChallenge ? 'bg-cyan-50/30 border-cyan-200' : 'bg-white border-slate-200'
+                                }`}>
                                 <div className="flex items-center justify-between gap-3">
                                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${
-                                    isProblem ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-slate-100 text-slate-600'
+                                    isProblem ? 'bg-amber-100 text-amber-800 border border-amber-200' : isCreativeChallenge ? 'bg-cyan-100 text-cyan-800 border border-cyan-200' : 'bg-slate-100 text-slate-600'
                                   }`}>
                                     {lesson.type}
                                   </span>
@@ -1935,6 +2066,38 @@ public class Main {
                                   placeholder="Lesson HTML or challenge description..."
                                 />
 
+                                {isCreativeChallenge && (
+                                  <div className="p-3 rounded-lg border border-cyan-200 bg-cyan-50/60 space-y-2">
+                                    <div className="text-[11px] font-bold text-cyan-900">{lesson.type === 'flowchart' ? 'Flowchart' : lesson.type === 'algorithm' ? 'Algorithm writing' : 'Pseudo-code'} challenge settings</div>
+                                    <input
+                                      value={lesson.challenge?.prompt || ''}
+                                      readOnly={isInstructor}
+                                      onChange={e => {
+                                        const updated = [...editingCourse.modules];
+                                        updated[mIdx].lessons[lIdx].challenge = { ...(lesson.challenge || {}), prompt: e.target.value };
+                                        setEditingCourse({ ...editingCourse, modules: updated });
+                                      }}
+                                      className="w-full text-xs p-2 border border-cyan-200 rounded bg-white"
+                                      placeholder="Task instruction shown to the student"
+                                    />
+                                    <div className="flex items-center gap-2">
+                                      <label className="text-[11px] text-cyan-900 font-semibold">Points</label>
+                                      <input
+                                        type="number"
+                                        min={1}
+                                        value={lesson.challenge?.points || 10}
+                                        readOnly={isInstructor}
+                                        onChange={e => {
+                                          const updated = [...editingCourse.modules];
+                                          updated[mIdx].lessons[lIdx].challenge = { ...(lesson.challenge || {}), points: Number(e.target.value || 10) };
+                                          setEditingCourse({ ...editingCourse, modules: updated });
+                                        }}
+                                        className="w-20 text-xs p-2 border border-cyan-200 rounded bg-white"
+                                      />
+                                    </div>
+                                  </div>
+                                )}
+
                                 {/* Dedicated Problem & Test Case Manager Button for Problem Lessons */}
                                 {isProblem && (
                                   <div className="pt-1 flex flex-wrap items-center justify-between gap-2 border-t border-amber-100 bg-white/70 p-2 rounded-lg">
@@ -1967,7 +2130,8 @@ public class Main {
                                     </button>
                                   </div>
                                 )}
-                              </div>
+                                </div>
+                              </React.Fragment>
                             );
                           })}
 
@@ -2033,6 +2197,63 @@ solve()`
                               >
                                 + Add Coding Challenge (Judge0)
                               </button>
+                              <span className="text-slate-300">|</span>
+                              <button
+                                onClick={() => {
+                                  const newLesson: Lesson = {
+                                    id: `pseudo-${generateId()}`,
+                                    title: 'Write Pseudo-code: New Task',
+                                    duration: '20 min',
+                                    type: 'pseudocode',
+                                    content: '<h3>Pseudo-code Task</h3><p>Describe the algorithm clearly using structured pseudo-code.</p>',
+                                    challenge: { prompt: 'Write the algorithm step by step.', points: 10, expectedElements: [] }
+                                  };
+                                  const updated = [...editingCourse.modules];
+                                  updated[mIdx].lessons.push(newLesson);
+                                  setEditingCourse({ ...editingCourse, modules: updated });
+                                }}
+                                className="text-[11px] text-cyan-700 font-bold hover:underline cursor-pointer"
+                              >
+                                + Add Pseudo-code Task
+                              </button>
+                              <span className="text-slate-300">|</span>
+                              <button
+                                onClick={() => {
+                                  const newLesson: Lesson = {
+                                    id: `algorithm-${generateId()}`,
+                                    title: 'Write Algorithm: New Task',
+                                    duration: '20 min',
+                                    type: 'algorithm',
+                                    content: '<h3>Algorithm Writing Task</h3><p>Write the solution as ordered, unambiguous steps before implementing it in Python.</p>',
+                                    challenge: { prompt: 'Describe the input, processing steps, decisions, repetition, and output clearly.', points: 10, expectedElements: ['Start', 'Input', 'Ordered processing steps', 'Decision or repetition where required', 'Output', 'End'] }
+                                  };
+                                  const updated = [...editingCourse.modules];
+                                  updated[mIdx].lessons.push(newLesson);
+                                  setEditingCourse({ ...editingCourse, modules: updated });
+                                }}
+                                className="text-[11px] text-cyan-700 font-bold hover:underline cursor-pointer"
+                              >
+                                + Add Algorithm Task
+                              </button>
+                              <span className="text-slate-300">|</span>
+                              <button
+                                onClick={() => {
+                                  const newLesson: Lesson = {
+                                    id: `flow-${generateId()}`,
+                                    title: 'Create Flowchart: New Task',
+                                    duration: '30 min',
+                                    type: 'flowchart',
+                                    content: '<h3>Flowchart Task</h3><p>Build the solution flow from start to end using ordered nodes.</p>',
+                                    challenge: { prompt: 'Create a clear flowchart for this problem.', points: 15, requiredNodes: [] }
+                                  };
+                                  const updated = [...editingCourse.modules];
+                                  updated[mIdx].lessons.push(newLesson);
+                                  setEditingCourse({ ...editingCourse, modules: updated });
+                                }}
+                                className="text-[11px] text-cyan-700 font-bold hover:underline cursor-pointer"
+                              >
+                                + Add Flowchart Task
+                              </button>
                             </div>
                           )}
                         </div>
@@ -2067,15 +2288,53 @@ solve()`
                       </button>
                     )}
                     {!isInstructor && (
-                      <button
-                        onClick={handleCreateCourse}
-                        className="bg-bitwise-600 hover:bg-bitwise-700 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-sm flex items-center gap-1.5 cursor-pointer"
-                      >
-                        <i className="fa-solid fa-plus"></i> Create Course
-                      </button>
+                      <>
+                        <label className="bg-white border border-cyan-300 hover:bg-cyan-50 text-cyan-700 text-xs font-bold px-4 py-2 rounded-lg shadow-sm flex items-center gap-1.5 cursor-pointer">
+                          <i className="fa-solid fa-file-arrow-up"></i> Import Course JSON
+                          <input type="file" accept="application/json,.json" onChange={handleCourseJsonImport} className="hidden" />
+                        </label>
+                        <button
+                          onClick={handleCreateCourse}
+                          className="bg-bitwise-600 hover:bg-bitwise-700 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-sm flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <i className="fa-solid fa-plus"></i> Create Course
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
+
+                {courseImportError && (
+                  <div className="mx-4 mt-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-start gap-2">
+                    <i className="fa-solid fa-circle-exclamation mt-0.5"></i>
+                    <span>{courseImportError}</span>
+                    <button type="button" onClick={() => setCourseImportError(null)} className="ml-auto text-rose-500 hover:text-rose-700" title="Dismiss error"><i className="fa-solid fa-xmark"></i></button>
+                  </div>
+                )}
+
+                {courseImportPreview && (
+                  <div className="mx-4 mt-4 p-4 rounded-xl bg-cyan-50 border border-cyan-200">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <i className="fa-solid fa-file-circle-check text-cyan-700"></i>
+                          <h3 className="text-sm font-bold text-cyan-950">Ready to publish course JSON</h3>
+                        </div>
+                        <p className="text-xs text-cyan-900 mt-1">
+                          <strong>{courseImportPreview.title}</strong> · {courseImportPreview.modules.length} modules · {courseImportPreview.modules.reduce((total, module) => total + module.lessons.length, 0)} lessons · {courseImportPreview.modules.reduce((total, module) => total + module.lessons.filter(lesson => lesson.type === 'problem').length, 0)} coding challenges
+                        </p>
+                        <p className="text-[11px] text-cyan-800 mt-1">Existing instructor assignments and coding-test schedules are preserved when the JSON does not provide them.</p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button type="button" onClick={() => setCourseImportPreview(null)} className="px-3 py-2 border border-cyan-300 text-cyan-800 bg-white rounded-lg text-xs font-bold cursor-pointer">Cancel</button>
+                        <button type="button" onClick={publishCourseJsonImport} disabled={isPublishingCourseImport} className="px-4 py-2 bg-cyan-700 hover:bg-cyan-800 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-60">
+                          {isPublishingCourseImport ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-cloud-arrow-up"></i>}
+                          Publish to Firebase
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <div className="overflow-x-auto">
                   <table className="w-full text-left">
@@ -3841,6 +4100,44 @@ solve()`
                         );
                       })}
                     </div>
+                  </div>
+
+                  {/* Submissions History for this student */}
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-2">
+                      <i className="fa-solid fa-diagram-project text-cyan-600"></i>
+                      Algorithm, Pseudo-code & Flowchart Submissions
+                    </h3>
+                    {selectedStudentForDetails.creativeSubmissions && selectedStudentForDetails.creativeSubmissions.length > 0 ? (
+                      <div className="space-y-3">
+                        {selectedStudentForDetails.creativeSubmissions.map(submission => (
+                          <div key={submission.id} className="bg-white rounded-xl border border-cyan-200 overflow-hidden shadow-sm">
+                            <div className="p-3 bg-cyan-50/60 border-b border-cyan-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                              <div>
+                                <div className="text-xs font-bold text-slate-900">{submission.lessonTitle}</div>
+                                <div className="text-[10px] text-slate-500 uppercase">{submission.challengeType} · {new Date(submission.submittedAt).toLocaleString()}</div>
+                              </div>
+                              <span className="px-2 py-1 rounded-full bg-amber-100 text-amber-800 border border-amber-200 text-[10px] font-bold">{submission.status} · {submission.points} points</span>
+                            </div>
+                            {submission.answerText ? (
+                              <pre className="m-3 p-3 rounded-lg bg-slate-950 text-emerald-300 text-xs whitespace-pre-wrap font-mono overflow-x-auto">{submission.answerText}</pre>
+                            ) : (
+                              <div className="p-3 space-y-2">
+                                {(submission.flowNodes || []).map((node, index) => (
+                                  <div key={node.id} className="flex items-center gap-2 text-xs">
+                                    <span className="w-5 h-5 rounded-full bg-cyan-100 text-cyan-700 flex items-center justify-center font-bold">{index + 1}</span>
+                                    <span className="font-bold text-slate-600">{node.type}</span>
+                                    <span className="text-slate-800">{node.text || '(empty step)'}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="bg-white rounded-xl p-6 border border-slate-200 text-center text-slate-400 text-xs">No creative challenge submissions yet.</div>
+                    )}
                   </div>
 
                   {/* Submissions History for this student */}

@@ -1,0 +1,2287 @@
+{
+  "id": "python-programming",
+  "title": "Python Programming",
+  "description": "Computational thinking, Python programming, control flow, functions, file handling, modules, packages, data structures, searching, and sorting.",
+  "level": "Beginner",
+  "thumbnail": "https://images.unsplash.com/photo-1526379095098-d400fd0bf935?ixlib=rb-1.2.1&auto=format&fit=crop&w=800&q=80",
+  "tags": [
+    "Python",
+    "Computational Thinking",
+    "Problem Solving",
+    "Data Structures",
+    "Algorithms"
+  ],
+  "modules": [
+    {
+      "id": "py-unit-1",
+      "title": "Unit I: Computational Thinking and Problem Solving",
+      "lessons": [
+        {
+          "id": "py-u1-fundamentals",
+          "title": "Fundamentals of Computing and Computational Problems",
+          "duration": "20 min",
+          "type": "article",
+          "language": "python",
+          "content": "<h2>Fundamentals of Computing and Identification of Computational Problems</h2><p>Learn the fundamentals of computing and how to identify computational problems, including inputs, outputs, constraints, assumptions, and expected results.</p><h3>Learning resources</h3><ul><li><a href=\"https://docs.google.com/document/d/1x-jEbe_2pqoExxKYA77FR6R0Z5VMbp6o/edit?usp=drive_link\" target=\"_blank\" rel=\"noreferrer\">Fundamentals of Computing Notes</a></li><li><a href=\"https://docs.google.com/document/d/1eB-t_1grUa-73YekEqmCvuinOPzfVZxa/edit?usp=drive_link\" target=\"_blank\" rel=\"noreferrer\">Computational Problems Notes</a></li></ul><h3>Sample program concept</h3><p>No sample program. Focus on identifying the problem, input, processing, and output.</p>"
+        },
+        {
+          "id": "py-u1-algorithms",
+          "title": "Algorithms and Building Blocks of Algorithms",
+          "duration": "25 min",
+          "type": "article",
+          "language": "python",
+          "content": "<h2>Algorithms and Building Blocks of Algorithms</h2><p>Study statements, state, control flow, functions, decomposition, and the role of notation in algorithm design.</p><p><a href=\"https://www.geeksforgeeks.org/dsa/introduction-to-algorithms/\" target=\"_blank\" rel=\"noreferrer\">What is an Algorithm? - GeeksforGeeks</a></p><h3>Sample program concepts</h3><ol><li>Write an algorithm to add two numbers.</li><li>Write an algorithm to find the largest of two numbers.</li><li>Write an algorithm to check whether a number is even or odd.</li><li>Write an algorithm to check whether a number is positive, negative, or zero.</li><li>Write an algorithm to calculate the area of a circle.</li></ol>"
+        },
+        {
+          "id": "py-u1-pseudocode",
+          "title": "Notation Challenge: Pseudo-code, Flowcharts and Programming Languages",
+          "duration": "30 min",
+          "type": "pseudocode",
+          "language": "python",
+          "content": "<h2>Notation: Pseudo-code, Flowcharts and Programming Languages</h2><p>Learn how the same algorithm can be represented using pseudo-code, flowcharts, and a programming language.</p><h3>Learning resources</h3><ul><li><a href=\"https://www.geeksforgeeks.org/dsa/what-is-pseudocode-a-complete-tutorial/\" target=\"_blank\" rel=\"noreferrer\">What is PseudoCode - GeeksforGeeks</a></li><li><a href=\"https://www.geeksforgeeks.org/dsa/an-introduction-to-flowcharts/\" target=\"_blank\" rel=\"noreferrer\">Introduction to Flowcharts - GeeksforGeeks</a></li><li><a href=\"https://www.geeksforgeeks.org/computer-science-fundamentals/introduction-to-programming-languages/\" target=\"_blank\" rel=\"noreferrer\">Introduction to Programming Languages - GeeksforGeeks</a></li></ul><h3>Pseudo-code tasks</h3><ol><li>Calculate the area of a rectangle.</li><li>Calculate the total marks of three subjects.</li><li>Calculate the average marks of three subjects.</li><li>Check whether a student has passed or failed.</li></ol><h3>Flowchart tasks</h3><ol><li>Calculate the final bill amount after discount.</li><li>Convert Celsius to Fahrenheit.</li><li>Calculate the salary after adding a bonus.</li></ol>",
+          "challenge": {
+            "prompt": "Write pseudo-code for one of the listed tasks. Include clear input, processing, decision, and output steps. You may then open the related flowchart task.",
+            "points": 15,
+            "expectedElements": [
+              "START or BEGIN",
+              "Input step",
+              "Processing step",
+              "Decision step where required",
+              "Output step",
+              "END"
+            ]
+          }
+        },
+        {
+          "id": "py-u1-flowchart",
+          "title": "Flowchart Challenge: Represent an Algorithm",
+          "duration": "30 min",
+          "type": "flowchart",
+          "language": "python",
+          "content": "<h2>Create a Flowchart</h2><p>Create a flowchart for one of the Unit I tasks: final bill after discount, Celsius to Fahrenheit conversion, or salary after adding a bonus.</p><p>Use standard flowchart notation and connect every step in execution order.</p>",
+          "challenge": {
+            "prompt": "Build the flow in execution order using start, input, process, decision where required, output, and end nodes.",
+            "points": 15,
+            "requiredNodes": [
+              "Start",
+              "Input",
+              "Process",
+              "Decision where required",
+              "Output",
+              "End"
+            ]
+          }
+        },
+        {
+          "id": "py-u1-strategies",
+          "title": "Algorithmic Problem Solving, Iteration and Recursion",
+          "duration": "30 min",
+          "type": "article",
+          "language": "python",
+          "content": "<h2>Algorithmic Problem Solving and Strategies</h2><p>Practice decomposition, iteration, recursion, tracing, testing, and improving algorithms.</p><p><a href=\"https://drive.google.com/file/d/13IhHS9IL4_yFQ4Y0lubbjQry7zCYXZf9/view?usp=drive_link\" target=\"_blank\" rel=\"noreferrer\">Algorithmic Problem Solving Notes</a></p><p><a href=\"https://drive.google.com/file/d/15VI8MG4mfMeMg7lk7OdTeYp0XXN1Pxz5/view?usp=drive_link\" target=\"_blank\" rel=\"noreferrer\">Iteration and Recursion Notes</a></p><h3>Sample program concepts</h3><ol><li>Write a Python program to find the factorial of a number using iteration.</li><li>Write a Python program to find the nth Fibonacci number using recursion.</li></ol>"
+        },
+        {
+          "id": "py-u1-algorithm-challenge",
+          "title": "Iteration and Recursion Challenge",
+          "duration": "25 min",
+          "type": "pseudocode",
+          "language": "python",
+          "content": "<h2>Iteration and Recursion Challenge</h2><p>Write the algorithm or pseudo-code for both sample tasks: factorial using iteration and nth Fibonacci number using recursion.</p>",
+          "challenge": {
+            "prompt": "Submit a clear solution plan for factorial using iteration and Fibonacci using recursion. Include the recursive base case and the loop state.",
+            "points": 15,
+            "expectedElements": [
+              "Input number",
+              "Factorial loop",
+              "Fibonacci base case",
+              "Recursive call",
+              "Updated state",
+              "Output result"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "py-unit-2",
+      "title": "Unit II: Python Fundamentals and Problem Solving",
+      "lessons": [
+        {
+          "id": "py-l1",
+          "title": "Introduction to Python",
+          "duration": "15 min",
+          "type": "article",
+          "isPro": false,
+          "content": "<p>Learn Python introduction, features, applications, and basic syntax. Resources: <a href=\"https://www.geeksforgeeks.org/python-introduction/\" target=\"_blank\">Python Introduction - GFG</a></p>",
+          "language": "python",
+          "codeSnippet": "# Print Hello World\nprint(\"Hello World\")"
+        },
+        {
+          "id": "pr-py-l1",
+          "title": "Print Hello Python",
+          "duration": "15 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Write a Python program that prints <code>Hello Python</code>.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Easy",
+            "points": 5,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "",
+                "expectedOutput": "Hello Python",
+                "explanation": "Check the basic case."
+              },
+              {
+                "id": "tc2",
+                "input": "",
+                "expectedOutput": "Hello Python",
+                "explanation": "Check another valid input."
+              }
+            ],
+            "starterTemplates": {
+              "python": "print(\"Hello Python\")"
+            },
+            "solutionCode": {
+              "python": "print(\"Hello Python\")"
+            }
+          }
+        },
+        {
+          "id": "py-l1a",
+          "title": "Data Types",
+          "duration": "15 min",
+          "type": "article",
+          "isPro": false,
+          "content": "<p>Learn integer, float, string, boolean, and other Python data types. Resources: <a href=\"https://www.geeksforgeeks.org/python-data-types/\" target=\"_blank\">Python Data Types - GFG</a></p>",
+          "language": "python",
+          "codeSnippet": "age = 20\nmarks = 85.5\nname = \"Python\"\npassed = True\n\nprint(age)\nprint(marks)\nprint(name)\nprint(type(age))"
+        },
+        {
+          "id": "pr-py-l1a",
+          "title": "Check Data Type",
+          "duration": "15 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Read an integer and print its Python type.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Easy",
+            "points": 5,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "10",
+                "expectedOutput": "<class 'int'>",
+                "explanation": "Check the basic case."
+              },
+              {
+                "id": "tc2",
+                "input": "25",
+                "expectedOutput": "<class 'int'>",
+                "explanation": "Check another valid input."
+              }
+            ],
+            "starterTemplates": {
+              "python": "value = int(input())\nprint(type(value))"
+            },
+            "solutionCode": {
+              "python": "value = int(input())\nprint(type(value))"
+            }
+          }
+        },
+        {
+          "id": "py-l1b",
+          "title": "Constants",
+          "duration": "15 min",
+          "type": "article",
+          "isPro": false,
+          "content": "<p>Understand constants and their use in Python programs. Resources: <a href=\"https://www.geeksforgeeks.org/python-constants/\" target=\"_blank\">Python Constant - GFG</a></p>",
+          "language": "python",
+          "codeSnippet": "PI = 3.14\nradius = 5\narea = PI * radius * radius\nprint(area)"
+        },
+        {
+          "id": "pr-py-l1b",
+          "title": "Calculate Circle Area",
+          "duration": "15 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Read a radius and calculate the circle area using 3.14.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Easy",
+            "points": 5,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "5",
+                "expectedOutput": "78.5",
+                "explanation": "Check the basic case."
+              },
+              {
+                "id": "tc2",
+                "input": "2",
+                "expectedOutput": "12.56",
+                "explanation": "Check another valid input."
+              }
+            ],
+            "starterTemplates": {
+              "python": "radius = float(input())\nprint(3.14 * radius * radius)"
+            },
+            "solutionCode": {
+              "python": "radius = float(input())\nprint(3.14 * radius * radius)"
+            }
+          }
+        },
+        {
+          "id": "py-l1c",
+          "title": "Input and Output",
+          "duration": "15 min",
+          "type": "article",
+          "isPro": false,
+          "content": "<p>Learn how to read input and display output using input() and print(). Resources: <a href=\"https://www.geeksforgeeks.org/input-and-output-in-python/\" target=\"_blank\">Input and Output in Python - GFG</a></p>",
+          "language": "python",
+          "codeSnippet": "name = input()\nage = int(input())\nprint(\"Name:\", name)\nprint(\"Age:\", age)"
+        },
+        {
+          "id": "pr-py-l1c",
+          "title": "Read and Print Name",
+          "duration": "15 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Read a name and print <code>Hello, name</code>.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Easy",
+            "points": 5,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "Arun",
+                "expectedOutput": "Hello, Arun",
+                "explanation": "Check the basic case."
+              },
+              {
+                "id": "tc2",
+                "input": "Priya",
+                "expectedOutput": "Hello, Priya",
+                "explanation": "Check another valid input."
+              }
+            ],
+            "starterTemplates": {
+              "python": "name = input()\nprint(\"Hello, \" + name)"
+            },
+            "solutionCode": {
+              "python": "name = input()\nprint(\"Hello, \" + name)"
+            }
+          }
+        },
+        {
+          "id": "py-l1d",
+          "title": "Variables",
+          "duration": "15 min",
+          "type": "article",
+          "isPro": false,
+          "content": "<p>Learn variable declaration, assignment, naming rules, and variable manipulation. Resources: <a href=\"https://www.geeksforgeeks.org/python-variables/\" target=\"_blank\">Variable in Programming - GFG</a></p>",
+          "language": "python",
+          "codeSnippet": "name = \"Python\"\nversion = 3.12\nprint(name)\nprint(version)"
+        },
+        {
+          "id": "pr-py-l1d",
+          "title": "Store a Variable",
+          "duration": "15 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Read an integer, store it in a variable, and print it.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Easy",
+            "points": 5,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "25",
+                "expectedOutput": "25",
+                "explanation": "Check the basic case."
+              },
+              {
+                "id": "tc2",
+                "input": "100",
+                "expectedOutput": "100",
+                "explanation": "Check another valid input."
+              }
+            ],
+            "starterTemplates": {
+              "python": "value = int(input())\nprint(value)"
+            },
+            "solutionCode": {
+              "python": "value = int(input())\nprint(value)"
+            }
+          }
+        },
+        {
+          "id": "py-l1e",
+          "title": "Operators",
+          "duration": "20 min",
+          "type": "article",
+          "isPro": false,
+          "content": "<p>Learn arithmetic, relational, logical, assignment, and other Python operators. Resources: <a href=\"https://www.geeksforgeeks.org/python-operators/\" target=\"_blank\">Python Operators - GFG</a></p>",
+          "language": "python",
+          "codeSnippet": "a = 10\nb = 3\n\nprint(a + b)\nprint(a - b)\nprint(a * b)\nprint(a / b)\nprint(a % b)\nprint(a // b)"
+        },
+        {
+          "id": "pr-py-l1e",
+          "title": "Basic Arithmetic",
+          "duration": "15 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Read two integers and print their sum.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Easy",
+            "points": 5,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "10 20",
+                "expectedOutput": "30",
+                "explanation": "Check the basic case."
+              },
+              {
+                "id": "tc2",
+                "input": "7 8",
+                "expectedOutput": "15",
+                "explanation": "Check another valid input."
+              }
+            ],
+            "starterTemplates": {
+              "python": "a, b = map(int, input().split())\nprint(a + b)"
+            },
+            "solutionCode": {
+              "python": "a, b = map(int, input().split())\nprint(a + b)"
+            }
+          }
+        },
+        {
+          "id": "py-l1f",
+          "title": "Expressions",
+          "duration": "15 min",
+          "type": "article",
+          "isPro": false,
+          "content": "<p>Learn Python expressions, evaluation, and operator precedence. Resources: <a href=\"https://www.geeksforgeeks.org/python-expressions/\" target=\"_blank\">Expressions in Python - GFG</a></p>",
+          "language": "python",
+          "codeSnippet": "a = 10\nb = 20\nc = 30\naverage = (a + b + c) / 3\nprint(average)"
+        },
+        {
+          "id": "pr-py-l1f",
+          "title": "Average of Three Numbers",
+          "duration": "15 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Read three numbers and print their average.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Easy",
+            "points": 5,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "10 20 30",
+                "expectedOutput": "20.0",
+                "explanation": "Check the basic case."
+              },
+              {
+                "id": "tc2",
+                "input": "5 10 15",
+                "expectedOutput": "10.0",
+                "explanation": "Check another valid input."
+              }
+            ],
+            "starterTemplates": {
+              "python": "a, b, c = map(int, input().split())\nprint((a + b + c) / 3)"
+            },
+            "solutionCode": {
+              "python": "a, b, c = map(int, input().split())\nprint((a + b + c) / 3)"
+            }
+          }
+        },
+        {
+          "id": "py-l1g",
+          "title": "Strings and String Operations",
+          "duration": "20 min",
+          "type": "article",
+          "isPro": false,
+          "content": "<p>Learn strings, indexing, concatenation, slicing, and common string operations. Resources: <a href=\"https://www.geeksforgeeks.org/python-strings/\" target=\"_blank\">Python Strings - GFG</a></p>",
+          "language": "python",
+          "codeSnippet": "text = \"Hello Python\"\nprint(text[0])\nprint(text[0:5])\nprint(text + \" Programming\")"
+        },
+        {
+          "id": "pr-py-l1g",
+          "title": "Reverse a String",
+          "duration": "15 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Read a string and print it in reverse.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Easy",
+            "points": 5,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "python",
+                "expectedOutput": "nohtyp",
+                "explanation": "Check the basic case."
+              },
+              {
+                "id": "tc2",
+                "input": "hello",
+                "expectedOutput": "olleh",
+                "explanation": "Check another valid input."
+              }
+            ],
+            "starterTemplates": {
+              "python": "text = input()\nprint(text[::-1])"
+            },
+            "solutionCode": {
+              "python": "text = input()\nprint(text[::-1])"
+            }
+          }
+        },
+        {
+          "id": "py-l1h",
+          "title": "Basic String Methods",
+          "duration": "15 min",
+          "type": "article",
+          "isPro": false,
+          "content": "<p>Learn common Python string methods such as upper(), lower(), count(), replace(), and strip(). Resources: <a href=\"https://www.geeksforgeeks.org/python-string-methods/\" target=\"_blank\">Python String Methods - GFG</a></p>",
+          "language": "python",
+          "codeSnippet": "text = \"Hello Python\"\nprint(text.upper())\nprint(text.lower())\nprint(text.count(\"o\"))"
+        },
+        {
+          "id": "pr-py-l1h",
+          "title": "Convert String Case",
+          "duration": "15 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Read a string and print it in uppercase.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Easy",
+            "points": 5,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "python",
+                "expectedOutput": "PYTHON",
+                "explanation": "Check the basic case."
+              },
+              {
+                "id": "tc2",
+                "input": "Hello World",
+                "expectedOutput": "HELLO WORLD",
+                "explanation": "Check another valid input."
+              }
+            ],
+            "starterTemplates": {
+              "python": "text = input()\nprint(text.upper())"
+            },
+            "solutionCode": {
+              "python": "text = input()\nprint(text.upper())"
+            }
+          }
+        },
+        {
+          "id": "py-l1i",
+          "title": "Comments",
+          "duration": "10 min",
+          "type": "article",
+          "isPro": false,
+          "content": "<p>Learn single-line and multi-line comments in Python. Resources: <a href=\"https://www.geeksforgeeks.org/python-comments/\" target=\"_blank\">Python Comments - GFG</a></p>",
+          "language": "python",
+          "codeSnippet": "# This is a single-line comment\nprint(\"Hello\")"
+        },
+        {
+          "id": "pr-py-l1i",
+          "title": "Add a Comment",
+          "duration": "15 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Write a program that contains a comment and prints <code>Learning Python</code>.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Easy",
+            "points": 5,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "",
+                "expectedOutput": "Learning Python",
+                "explanation": "Check the basic case."
+              },
+              {
+                "id": "tc2",
+                "input": "",
+                "expectedOutput": "Learning Python",
+                "explanation": "Check another valid input."
+              }
+            ],
+            "starterTemplates": {
+              "python": "# This is a comment\nprint(\"Learning Python\")"
+            },
+            "solutionCode": {
+              "python": "# This is a comment\nprint(\"Learning Python\")"
+            }
+          }
+        },
+        {
+          "id": "py-p1",
+          "title": "Hello World and Variables",
+          "duration": "20 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Write a Python program that demonstrates basic output and variables.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Easy",
+            "points": 10,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "",
+                "expectedOutput": "Hello Python",
+                "explanation": "Print the required message."
+              },
+              {
+                "id": "tc2",
+                "input": "",
+                "expectedOutput": "Hello Python",
+                "explanation": "Verify exact output formatting."
+              },
+              {
+                "id": "tc3",
+                "input": "",
+                "expectedOutput": "Hello Python",
+                "explanation": "Check basic Python execution."
+              },
+              {
+                "id": "tc4",
+                "input": "",
+                "expectedOutput": "Hello Python",
+                "explanation": "Check output without extra spaces."
+              }
+            ],
+            "starterTemplates": {
+              "python": "# Write your code\nprint(\"Hello Python\")"
+            },
+            "solutionCode": {
+              "python": "print(\"Hello Python\")"
+            }
+          }
+        },
+        {
+          "id": "py-p1b",
+          "title": "Odd or Even Number",
+          "duration": "20 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Check whether a number is odd or even.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Easy",
+            "points": 10,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "10",
+                "expectedOutput": "Even",
+                "explanation": "10 is divisible by 2."
+              },
+              {
+                "id": "tc2",
+                "input": "7",
+                "expectedOutput": "Odd",
+                "explanation": "7 is not divisible by 2."
+              },
+              {
+                "id": "tc3",
+                "input": "0",
+                "expectedOutput": "Even",
+                "explanation": "Zero is even."
+              },
+              {
+                "id": "tc4",
+                "input": "-5",
+                "expectedOutput": "Odd",
+                "explanation": "Negative odd numbers remain odd."
+              },
+              {
+                "id": "tc5",
+                "input": "24",
+                "expectedOutput": "Even",
+                "explanation": "24 is divisible by 2."
+              }
+            ],
+            "starterTemplates": {
+              "python": "n = int(input())\n# Check odd or even"
+            },
+            "solutionCode": {
+              "python": "n = int(input())\nprint(\"Even\" if n % 2 == 0 else \"Odd\")"
+            }
+          }
+        },
+        {
+          "id": "py-p1c",
+          "title": "Largest of Two Numbers",
+          "duration": "20 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Read two numbers and print the larger number.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Easy",
+            "points": 10,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "10 20",
+                "expectedOutput": "20",
+                "explanation": "20 is larger."
+              },
+              {
+                "id": "tc2",
+                "input": "50 30",
+                "expectedOutput": "50",
+                "explanation": "50 is larger."
+              },
+              {
+                "id": "tc3",
+                "input": "-5 -2",
+                "expectedOutput": "-2",
+                "explanation": "-2 is larger."
+              },
+              {
+                "id": "tc4",
+                "input": "7 7",
+                "expectedOutput": "7",
+                "explanation": "Both numbers are equal."
+              },
+              {
+                "id": "tc5",
+                "input": "100 1",
+                "expectedOutput": "100",
+                "explanation": "100 is larger."
+              }
+            ],
+            "starterTemplates": {
+              "python": "a, b = map(int, input().split())\n# Find the larger number"
+            },
+            "solutionCode": {
+              "python": "a, b = map(int, input().split())\nprint(max(a, b))"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "py-unit-3",
+      "title": "Unit III: Data Types, Expressions, Statements, Control Flow and Functions",
+      "lessons": [
+        {
+          "id": "py-l2",
+          "title": "Control Flow",
+          "duration": "20 min",
+          "type": "article",
+          "isPro": false,
+          "content": "<p>Learn conditional statements and control flow in Python.</p>",
+          "language": "python",
+          "codeSnippet": "n = 10\nif n > 0:\n    print(\"Positive\")"
+        },
+        {
+          "id": "pr-py-l2",
+          "title": "Control Flow Practice",
+          "duration": "15 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Read an integer and print <code>Positive</code>, <code>Negative</code>, or <code>Zero</code>.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Easy",
+            "points": 5,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "5",
+                "expectedOutput": "Positive",
+                "explanation": "Check the basic case."
+              },
+              {
+                "id": "tc2",
+                "input": "0",
+                "expectedOutput": "Zero",
+                "explanation": "Check another valid input."
+              }
+            ],
+            "starterTemplates": {
+              "python": "n = int(input())\n# Check the value"
+            },
+            "solutionCode": {
+              "python": "n = int(input())\nif n > 0:\n    print(\"Positive\")\nelif n < 0:\n    print(\"Negative\")\nelse:\n    print(\"Zero\")"
+            }
+          }
+        },
+        {
+          "id": "py-l2a",
+          "title": "While Loop",
+          "duration": "20 min",
+          "type": "article",
+          "isPro": false,
+          "content": "<p>Learn how while loops work and how to use them for repeated execution.</p>",
+          "language": "python",
+          "codeSnippet": "i = 1\nwhile i <= 5:\n    print(i)\n    i += 1"
+        },
+        {
+          "id": "pr-py-l2a",
+          "title": "While Loop Counter",
+          "duration": "15 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Use a while loop to print numbers from 1 to n.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Easy",
+            "points": 5,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "5",
+                "expectedOutput": "1\n2\n3\n4\n5",
+                "explanation": "Check the basic case."
+              },
+              {
+                "id": "tc2",
+                "input": "3",
+                "expectedOutput": "1\n2\n3",
+                "explanation": "Check another valid input."
+              }
+            ],
+            "starterTemplates": {
+              "python": "n = int(input())\ni = 1\nwhile i <= n:\n    # Print the current number\n    i += 1"
+            },
+            "solutionCode": {
+              "python": "n = int(input())\ni = 1\nwhile i <= n:\n    print(i)\n    i += 1"
+            }
+          }
+        },
+        {
+          "id": "py-l2b",
+          "title": "For Loop",
+          "duration": "20 min",
+          "type": "article",
+          "isPro": false,
+          "content": "<p>Learn for loops, range(), and iteration over sequences.</p>",
+          "language": "python",
+          "codeSnippet": "for i in range(1, 6):\n    print(i)"
+        },
+        {
+          "id": "pr-py-l2b",
+          "title": "For Loop Sum",
+          "duration": "15 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Use a for loop to calculate the sum from 1 to n.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Easy",
+            "points": 5,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "5",
+                "expectedOutput": "15",
+                "explanation": "Check the basic case."
+              },
+              {
+                "id": "tc2",
+                "input": "4",
+                "expectedOutput": "10",
+                "explanation": "Check another valid input."
+              }
+            ],
+            "starterTemplates": {
+              "python": "n = int(input())\ntotal = 0\nfor i in range(1, n + 1):\n    # Add i to total\n    pass\nprint(total)"
+            },
+            "solutionCode": {
+              "python": "n = int(input())\ntotal = 0\nfor i in range(1, n + 1):\n    total += i\nprint(total)"
+            }
+          }
+        },
+        {
+          "id": "py-l2c",
+          "title": "Break Statement",
+          "duration": "15 min",
+          "type": "article",
+          "isPro": false,
+          "content": "<p>Learn how the break statement exits a loop early.</p>",
+          "language": "python",
+          "codeSnippet": "for i in range(10):\n    if i == 5:\n        break\n    print(i)"
+        },
+        {
+          "id": "pr-py-l2c",
+          "title": "Stop at Five",
+          "duration": "15 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Print numbers starting from 1 and stop when the number reaches 5.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Easy",
+            "points": 5,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "8",
+                "expectedOutput": "1\n2\n3\n4\n5",
+                "explanation": "Check the basic case."
+              },
+              {
+                "id": "tc2",
+                "input": "3",
+                "expectedOutput": "1\n2\n3",
+                "explanation": "Check another valid input."
+              }
+            ],
+            "starterTemplates": {
+              "python": "for i in range(1, 9):\n    # Use break when i reaches 5\n    print(i)"
+            },
+            "solutionCode": {
+              "python": "for i in range(1, 9):\n    print(i)\n    if i == 5:\n        break"
+            }
+          }
+        },
+        {
+          "id": "py-l2d",
+          "title": "Continue Statement",
+          "duration": "15 min",
+          "type": "article",
+          "isPro": false,
+          "content": "<p>Learn how continue skips the current iteration of a loop.</p>",
+          "language": "python",
+          "codeSnippet": "for i in range(1, 6):\n    if i == 3:\n        continue\n    print(i)"
+        },
+        {
+          "id": "pr-py-l2d",
+          "title": "Skip Even Numbers",
+          "duration": "15 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Print odd numbers from 1 to n using continue.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Easy",
+            "points": 5,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "7",
+                "expectedOutput": "1\n3\n5\n7",
+                "explanation": "Check the basic case."
+              },
+              {
+                "id": "tc2",
+                "input": "5",
+                "expectedOutput": "1\n3\n5",
+                "explanation": "Check another valid input."
+              }
+            ],
+            "starterTemplates": {
+              "python": "n = int(input())\nfor i in range(1, n + 1):\n    # Skip even numbers\n    print(i)"
+            },
+            "solutionCode": {
+              "python": "n = int(input())\nfor i in range(1, n + 1):\n    if i % 2 == 0:\n        continue\n    print(i)"
+            }
+          }
+        },
+        {
+          "id": "py-l2e",
+          "title": "Pass Statement",
+          "duration": "15 min",
+          "type": "article",
+          "isPro": false,
+          "content": "<p>Learn the pass statement and when it is useful as a placeholder.</p>",
+          "language": "python",
+          "codeSnippet": "for i in range(5):\n    if i == 2:\n        pass\n    print(i)"
+        },
+        {
+          "id": "pr-py-l2e",
+          "title": "Pass in a Loop",
+          "duration": "15 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Use pass for the value 3 and print all numbers from 1 to 5.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Easy",
+            "points": 5,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "",
+                "expectedOutput": "1\n2\n3\n4\n5",
+                "explanation": "Check the basic case."
+              },
+              {
+                "id": "tc2",
+                "input": "",
+                "expectedOutput": "1\n2\n3\n4\n5",
+                "explanation": "Check another valid input."
+              }
+            ],
+            "starterTemplates": {
+              "python": "for i in range(1, 6):\n    if i == 3:\n        pass\n    print(i)"
+            },
+            "solutionCode": {
+              "python": "for i in range(1, 6):\n    if i == 3:\n        pass\n    print(i)"
+            }
+          }
+        },
+        {
+          "id": "py-l2f",
+          "title": "Function Definition and Calling",
+          "duration": "20 min",
+          "type": "article",
+          "isPro": false,
+          "content": "<p>Learn how to define functions and call them in Python.</p>",
+          "language": "python",
+          "codeSnippet": "def greet():\n    print(\"Hello\")\n\ngreet()"
+        },
+        {
+          "id": "pr-py-l2f",
+          "title": "Call a Function",
+          "duration": "15 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Define a function <code>greet()</code> that prints <code>Hello Function</code>.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Easy",
+            "points": 5,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "",
+                "expectedOutput": "Hello Function",
+                "explanation": "Check the basic case."
+              },
+              {
+                "id": "tc2",
+                "input": "",
+                "expectedOutput": "Hello Function",
+                "explanation": "Check another valid input."
+              }
+            ],
+            "starterTemplates": {
+              "python": "def greet():\n    # Print the required message\n    pass\n\ngreet()"
+            },
+            "solutionCode": {
+              "python": "def greet():\n    print(\"Hello Function\")\ngreet()"
+            }
+          }
+        },
+        {
+          "id": "py-l2g",
+          "title": "Parameters and Arguments",
+          "duration": "20 min",
+          "type": "article",
+          "isPro": false,
+          "content": "<p>Learn function parameters, arguments, default arguments, and passing values to functions.</p>",
+          "language": "python",
+          "codeSnippet": "def greet(name):\n    print(\"Hello\", name)\n\ngreet(\"Arun\")"
+        },
+        {
+          "id": "pr-py-l2g",
+          "title": "Function Parameter",
+          "duration": "15 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Define a function that receives a name and prints <code>Hello name</code>.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Easy",
+            "points": 5,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "Arun",
+                "expectedOutput": "Hello Arun",
+                "explanation": "Check the basic case."
+              },
+              {
+                "id": "tc2",
+                "input": "Priya",
+                "expectedOutput": "Hello Priya",
+                "explanation": "Check another valid input."
+              }
+            ],
+            "starterTemplates": {
+              "python": "def greet(name):\n    # Print greeting\n    pass\n\ngreet(input())"
+            },
+            "solutionCode": {
+              "python": "def greet(name):\n    print(\"Hello \" + name)\ngreet(input())"
+            }
+          }
+        },
+        {
+          "id": "py-l2h",
+          "title": "Return Values",
+          "duration": "20 min",
+          "type": "article",
+          "isPro": false,
+          "content": "<p>Learn how functions return values using the return statement.</p>",
+          "language": "python",
+          "codeSnippet": "def add(a, b):\n    return a + b\n\nprint(add(10, 20))"
+        },
+        {
+          "id": "pr-py-l2h",
+          "title": "Return a Value",
+          "duration": "15 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Create a function that returns the square of a number.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Easy",
+            "points": 5,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "6",
+                "expectedOutput": "36",
+                "explanation": "Check the basic case."
+              },
+              {
+                "id": "tc2",
+                "input": "9",
+                "expectedOutput": "81",
+                "explanation": "Check another valid input."
+              }
+            ],
+            "starterTemplates": {
+              "python": "def square(n):\n    # Return the square\n    pass\n\nprint(square(int(input())))"
+            },
+            "solutionCode": {
+              "python": "def square(n):\n    return n * n\nprint(square(int(input())))"
+            }
+          }
+        },
+        {
+          "id": "py-l2i",
+          "title": "Recursion",
+          "duration": "25 min",
+          "type": "article",
+          "isPro": false,
+          "content": "<p>Learn recursion, base cases, recursive calls, and recursive problem solving.</p>",
+          "language": "python",
+          "codeSnippet": "def factorial(n):\n    if n == 0:\n        return 1\n    return n * factorial(n - 1)"
+        },
+        {
+          "id": "pr-py-l2i",
+          "title": "Recursive Countdown",
+          "duration": "15 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Use recursion to print numbers from n down to 1.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Easy",
+            "points": 5,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "4",
+                "expectedOutput": "4\n3\n2\n1",
+                "explanation": "Check the basic case."
+              },
+              {
+                "id": "tc2",
+                "input": "3",
+                "expectedOutput": "3\n2\n1",
+                "explanation": "Check another valid input."
+              }
+            ],
+            "starterTemplates": {
+              "python": "def countdown(n):\n    if n == 0:\n        return\n    # Print n and call recursively\n    pass\n\ncountdown(int(input()))"
+            },
+            "solutionCode": {
+              "python": "def countdown(n):\n    if n == 0:\n        return\n    print(n)\n    countdown(n - 1)\ncountdown(int(input()))"
+            }
+          }
+        },
+        {
+          "id": "py-p2",
+          "title": "Largest of Three Numbers",
+          "duration": "20 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Read three numbers and print the largest number.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Easy",
+            "points": 10,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "10 20 30",
+                "expectedOutput": "30",
+                "explanation": "30 is the largest."
+              },
+              {
+                "id": "tc2",
+                "input": "50 20 40",
+                "expectedOutput": "50",
+                "explanation": "50 is the largest."
+              },
+              {
+                "id": "tc3",
+                "input": "-1 -5 -3",
+                "expectedOutput": "-1",
+                "explanation": "-1 is the largest."
+              },
+              {
+                "id": "tc4",
+                "input": "7 7 5",
+                "expectedOutput": "7",
+                "explanation": "Two values are equal and largest."
+              },
+              {
+                "id": "tc5",
+                "input": "100 1 50",
+                "expectedOutput": "100",
+                "explanation": "100 is the largest."
+              }
+            ],
+            "starterTemplates": {
+              "python": "a, b, c = map(int, input().split())\n# Find the largest"
+            },
+            "solutionCode": {
+              "python": "a, b, c = map(int, input().split())\nprint(max(a, b, c))"
+            }
+          }
+        },
+        {
+          "id": "py-p2b",
+          "title": "Factorial Using Recursion",
+          "duration": "25 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Calculate the factorial of a number using recursion.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Medium",
+            "points": 20,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "5",
+                "expectedOutput": "120",
+                "explanation": "5 factorial is 120."
+              },
+              {
+                "id": "tc2",
+                "input": "3",
+                "expectedOutput": "6",
+                "explanation": "3 factorial is 6."
+              }
+            ],
+            "starterTemplates": {
+              "python": "def factorial(n):\n    # Write recursive solution\n    pass\n\nprint(factorial(int(input())))"
+            },
+            "solutionCode": {
+              "python": "def factorial(n):\n    if n == 0:\n        return 1\n    return n * factorial(n - 1)\n\nprint(factorial(int(input())))"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "py-unit-4",
+      "title": "Unit IV: Python Built-in Functions",
+      "lessons": [
+        {
+          "id": "py-l4",
+          "title": "Python Built-in Functions",
+          "duration": "20 min",
+          "type": "article",
+          "isPro": false,
+          "content": "<p>Learn useful Python built-in functions for solving programming problems.</p>",
+          "language": "python",
+          "codeSnippet": "numbers = [10, 20, 30]\nprint(len(numbers))\nprint(max(numbers))\nprint(sum(numbers))"
+        },
+        {
+          "id": "pr-py-l4",
+          "title": "Built-in Function Practice",
+          "duration": "15 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Read two integers and print the larger value using a built-in function.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Easy",
+            "points": 5,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "10 25",
+                "expectedOutput": "25",
+                "explanation": "Check the basic case."
+              },
+              {
+                "id": "tc2",
+                "input": "30 12",
+                "expectedOutput": "30",
+                "explanation": "Check another valid input."
+              }
+            ],
+            "starterTemplates": {
+              "python": "a, b = map(int, input().split())\n# Use a built-in function"
+            },
+            "solutionCode": {
+              "python": "a, b = map(int, input().split())\nprint(max(a, b))"
+            }
+          }
+        },
+        {
+          "id": "py-l4a",
+          "title": "Input and Output Functions",
+          "duration": "15 min",
+          "type": "article",
+          "isPro": false,
+          "content": "<p>Learn input(), print(), and formatting techniques for Python programs.</p>",
+          "language": "python",
+          "codeSnippet": "name = input()\nprint(\"Hello\", name)"
+        },
+        {
+          "id": "pr-py-l4a",
+          "title": "Use Input Function",
+          "duration": "15 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Read an integer using input() and print it.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Easy",
+            "points": 5,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "42",
+                "expectedOutput": "42",
+                "explanation": "Check the basic case."
+              },
+              {
+                "id": "tc2",
+                "input": "99",
+                "expectedOutput": "99",
+                "explanation": "Check another valid input."
+              }
+            ],
+            "starterTemplates": {
+              "python": "value = input()\nprint(value)"
+            },
+            "solutionCode": {
+              "python": "value = input()\nprint(value)"
+            }
+          }
+        },
+        {
+          "id": "py-l4b",
+          "title": "Type Conversion Functions",
+          "duration": "20 min",
+          "type": "article",
+          "isPro": false,
+          "content": "<p>Learn int(), float(), str(), bool(), and other type conversion functions.</p>",
+          "language": "python",
+          "codeSnippet": "value = \"25\"\nnumber = int(value)\nprint(number + 5)"
+        },
+        {
+          "id": "pr-py-l4b",
+          "title": "Convert to Integer",
+          "duration": "15 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Read two numeric strings and print their integer sum.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Easy",
+            "points": 5,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "10 20",
+                "expectedOutput": "30",
+                "explanation": "Check the basic case."
+              },
+              {
+                "id": "tc2",
+                "input": "5 7",
+                "expectedOutput": "12",
+                "explanation": "Check another valid input."
+              }
+            ],
+            "starterTemplates": {
+              "python": "a, b = input().split()\n# Convert the values to integers"
+            },
+            "solutionCode": {
+              "python": "a, b = input().split()\nprint(int(a) + int(b))"
+            }
+          }
+        },
+        {
+          "id": "py-l4c",
+          "title": "Mathematical Functions",
+          "duration": "20 min",
+          "type": "article",
+          "isPro": false,
+          "content": "<p>Learn mathematical built-in functions such as abs(), pow(), round(), min(), and max().</p>",
+          "language": "python",
+          "codeSnippet": "print(abs(-10))\nprint(pow(2, 3))\nprint(round(3.14159, 2))"
+        },
+        {
+          "id": "pr-py-l4c",
+          "title": "Use Math Functions",
+          "duration": "15 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Read a number and print its absolute value.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Easy",
+            "points": 5,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "-15",
+                "expectedOutput": "15",
+                "explanation": "Check the basic case."
+              },
+              {
+                "id": "tc2",
+                "input": "20",
+                "expectedOutput": "20",
+                "explanation": "Check another valid input."
+              }
+            ],
+            "starterTemplates": {
+              "python": "value = int(input())\n# Find absolute value"
+            },
+            "solutionCode": {
+              "python": "value = int(input())\nprint(abs(value))"
+            }
+          }
+        },
+        {
+          "id": "py-l4d",
+          "title": "Collection Functions",
+          "duration": "20 min",
+          "type": "article",
+          "isPro": false,
+          "content": "<p>Learn built-in functions that work with collections, including len(), sorted(), sum(), min(), and max().</p>",
+          "language": "python",
+          "codeSnippet": "nums = [5, 2, 8, 1]\nprint(len(nums))\nprint(sorted(nums))"
+        },
+        {
+          "id": "pr-py-l4d",
+          "title": "Use Collection Functions",
+          "duration": "15 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Read numbers and print the number of elements.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Easy",
+            "points": 5,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "10 20 30 40",
+                "expectedOutput": "4",
+                "explanation": "Check the basic case."
+              },
+              {
+                "id": "tc2",
+                "input": "1 2",
+                "expectedOutput": "2",
+                "explanation": "Check another valid input."
+              }
+            ],
+            "starterTemplates": {
+              "python": "nums = input().split()\n# Find the number of elements"
+            },
+            "solutionCode": {
+              "python": "nums = input().split()\nprint(len(nums))"
+            }
+          }
+        },
+        {
+          "id": "py-l4e",
+          "title": "File Handling Functions",
+          "duration": "20 min",
+          "type": "article",
+          "isPro": false,
+          "content": "<p>Learn functions and methods used to open, read, write, and manage files.</p>",
+          "language": "python",
+          "codeSnippet": "with open(\"data.txt\", \"w\") as f:\n    f.write(\"Python\")"
+        },
+        {
+          "id": "pr-py-l4e",
+          "title": "Read File Content",
+          "duration": "15 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Create a file with <code>Python</code>, read it, and print the content.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Easy",
+            "points": 5,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "",
+                "expectedOutput": "Python",
+                "explanation": "Check the basic case."
+              },
+              {
+                "id": "tc2",
+                "input": "",
+                "expectedOutput": "Python",
+                "explanation": "Check another valid input."
+              }
+            ],
+            "starterTemplates": {
+              "python": "with open(\"test.txt\", \"w\") as f:\n    f.write(\"Python\")\n# Read and print the file"
+            },
+            "solutionCode": {
+              "python": "with open(\"test.txt\", \"w\") as f:\n    f.write(\"Python\")\nwith open(\"test.txt\", \"r\") as f:\n    print(f.read())"
+            }
+          }
+        },
+        {
+          "id": "py-l4f",
+          "title": "Exception Handling",
+          "duration": "20 min",
+          "type": "article",
+          "isPro": false,
+          "content": "<p>Learn try, except, else, finally, and how to handle runtime errors.</p>",
+          "language": "python",
+          "codeSnippet": "try:\n    value = int(input())\n    print(value)\nexcept ValueError:\n    print(\"Invalid input\")"
+        },
+        {
+          "id": "pr-py-l4f",
+          "title": "Handle Division Error",
+          "duration": "15 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Read two integers and print their division. If the divisor is zero, print <code>Cannot divide</code>.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Easy",
+            "points": 5,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "10 0",
+                "expectedOutput": "Cannot divide",
+                "explanation": "The divisor is zero."
+              },
+              {
+                "id": "tc2",
+                "input": "20 4",
+                "expectedOutput": "5.0",
+                "explanation": "Normal division is performed."
+              }
+            ],
+            "starterTemplates": {
+              "python": "a, b = map(int, input().split())\ntry:\n    # Perform division\n    pass\nexcept ZeroDivisionError:\n    print(\"Cannot divide\")"
+            },
+            "solutionCode": {
+              "python": "a, b = map(int, input().split())\ntry:\n    print(a / b)\nexcept ZeroDivisionError:\n    print(\"Cannot divide\")"
+            }
+          }
+        },
+        {
+          "id": "py-p4",
+          "title": "Use Built-ins to Solve",
+          "duration": "25 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Use Python built-in functions to solve a collection-based problem.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Medium",
+            "points": 20,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "5 10 20 30 40",
+                "expectedOutput": "5",
+                "explanation": "Find the minimum value."
+              },
+              {
+                "id": "tc2",
+                "input": "8 3 6 2",
+                "expectedOutput": "2",
+                "explanation": "Find the minimum value."
+              }
+            ],
+            "starterTemplates": {
+              "python": "nums = list(map(int, input().split()))\n# Use built-in functions"
+            },
+            "solutionCode": {
+              "python": "nums = list(map(int, input().split()))\nprint(min(nums))"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "py-unit-5",
+      "title": "Unit V: Data Structures, Searching and Sorting",
+      "lessons": [
+        {
+          "id": "py-l3",
+          "title": "Data Structures",
+          "duration": "20 min",
+          "type": "article",
+          "isPro": false,
+          "content": "<p>Learn the basic data structures available in Python.</p>",
+          "language": "python",
+          "codeSnippet": "nums = [1, 2, 3]\nprint(nums)"
+        },
+        {
+          "id": "pr-py-l3",
+          "title": "Data Structures Practice",
+          "duration": "15 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Read three integers into a list and print the list.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Easy",
+            "points": 5,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "1 2 3",
+                "expectedOutput": "[1, 2, 3]",
+                "explanation": "Check the basic case."
+              },
+              {
+                "id": "tc2",
+                "input": "4 5 6",
+                "expectedOutput": "[4, 5, 6]",
+                "explanation": "Check another valid input."
+              }
+            ],
+            "starterTemplates": {
+              "python": "nums = list(map(int, input().split()))\nprint(nums)"
+            },
+            "solutionCode": {
+              "python": "nums = list(map(int, input().split()))\nprint(nums)"
+            }
+          }
+        },
+        {
+          "id": "py-l3a",
+          "title": "Arrays and Lists",
+          "duration": "20 min",
+          "type": "article",
+          "isPro": false,
+          "content": "<p>Learn arrays and lists in Python, including creation, indexing, and traversal.</p>",
+          "language": "python",
+          "codeSnippet": "nums = [10, 20, 30, 40]\nprint(nums[0])\nfor n in nums:\n    print(n)"
+        },
+        {
+          "id": "pr-py-l3a",
+          "title": "List Maximum",
+          "duration": "15 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Read numbers into a list and print the maximum value.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Easy",
+            "points": 5,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "4 8 2 6",
+                "expectedOutput": "8",
+                "explanation": "Check the basic case."
+              },
+              {
+                "id": "tc2",
+                "input": "1 2 9",
+                "expectedOutput": "9",
+                "explanation": "Check another valid input."
+              }
+            ],
+            "starterTemplates": {
+              "python": "nums = list(map(int, input().split()))\n# Find maximum"
+            },
+            "solutionCode": {
+              "python": "nums = list(map(int, input().split()))\nprint(max(nums))"
+            }
+          }
+        },
+        {
+          "id": "py-l3b",
+          "title": "Basic List Operations",
+          "duration": "20 min",
+          "type": "article",
+          "isPro": false,
+          "content": "<p>Learn common list operations including append, remove, pop, sort, and extend. Resources: <a href=\"https://www.geeksforgeeks.org/python-list-methods/\" target=\"_blank\">Python List Methods - GFG</a></p>",
+          "language": "python",
+          "codeSnippet": "nums = [10, 20, 30]\nnums.append(40)\nprint(nums)"
+        },
+        {
+          "id": "pr-py-l3b",
+          "title": "List Sum",
+          "duration": "15 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Read a list of integers and print their sum.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Easy",
+            "points": 5,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "1 2 3 4",
+                "expectedOutput": "10",
+                "explanation": "Check the basic case."
+              },
+              {
+                "id": "tc2",
+                "input": "5 5 5",
+                "expectedOutput": "15",
+                "explanation": "Check another valid input."
+              }
+            ],
+            "starterTemplates": {
+              "python": "nums = list(map(int, input().split()))\n# Calculate sum"
+            },
+            "solutionCode": {
+              "python": "nums = list(map(int, input().split()))\nprint(sum(nums))"
+            }
+          }
+        },
+        {
+          "id": "py-l3c",
+          "title": "Insertion and Deletion",
+          "duration": "20 min",
+          "type": "article",
+          "isPro": false,
+          "content": "<p>Learn how to insert and delete elements from Python lists.</p>",
+          "language": "python",
+          "codeSnippet": "nums = [10, 20, 30]\nnums.insert(1, 15)\nnums.remove(30)\nprint(nums)"
+        },
+        {
+          "id": "pr-py-l3c",
+          "title": "Insert Into a List",
+          "duration": "15 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Read three integers, insert 10 at the beginning, and print the list.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Easy",
+            "points": 5,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "1 2 3",
+                "expectedOutput": "[10, 1, 2, 3]",
+                "explanation": "Check the basic case."
+              },
+              {
+                "id": "tc2",
+                "input": "7 8",
+                "expectedOutput": "[10, 7, 8]",
+                "explanation": "Check another valid input."
+              }
+            ],
+            "starterTemplates": {
+              "python": "nums = list(map(int, input().split()))\n# Insert 10 at the beginning"
+            },
+            "solutionCode": {
+              "python": "nums = list(map(int, input().split()))\nnums.insert(0, 10)\nprint(nums)"
+            }
+          }
+        },
+        {
+          "id": "py-l3d",
+          "title": "Tuples and Dictionaries",
+          "duration": "20 min",
+          "type": "article",
+          "isPro": false,
+          "content": "<p>Learn tuples and dictionaries, including creation, access, and modification. Resources: <a href=\"https://www.geeksforgeeks.org/python-dictionary/\" target=\"_blank\">Python Dictionary - GFG</a></p>",
+          "language": "python",
+          "codeSnippet": "student = {\n    \"name\": \"Arun\",\n    \"mark\": 90\n}\nprint(student[\"name\"])"
+        },
+        {
+          "id": "pr-py-l3d",
+          "title": "Dictionary Value",
+          "duration": "15 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Read a name and mark, store them in a dictionary, and print the mark.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Easy",
+            "points": 5,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "Arun 90",
+                "expectedOutput": "90",
+                "explanation": "Check the basic case."
+              },
+              {
+                "id": "tc2",
+                "input": "Priya 75",
+                "expectedOutput": "75",
+                "explanation": "Check another valid input."
+              }
+            ],
+            "starterTemplates": {
+              "python": "name, mark = input().split()\nstudent = {\"name\": name, \"mark\": int(mark)}\nprint(student[\"mark\"])"
+            },
+            "solutionCode": {
+              "python": "name, mark = input().split()\nstudent = {\"name\": name, \"mark\": int(mark)}\nprint(student[\"mark\"])"
+            }
+          }
+        },
+        {
+          "id": "py-l3e",
+          "title": "Stacks and Queues",
+          "duration": "25 min",
+          "type": "article",
+          "isPro": false,
+          "content": "<p>Learn stack and queue implementation using Python lists. Resources: <a href=\"https://www.geeksforgeeks.org/implement-stack-using-queues/\" target=\"_blank\">Implement Stack using Queues - GFG</a></p>",
+          "language": "python",
+          "codeSnippet": "# Stack using list\nstack = []\nstack.append(10)\nstack.append(20)\nprint(stack.pop())\n\n# Queue using list\nqueue = []\nqueue.append(10)\nqueue.append(20)\nprint(queue.pop(0))"
+        },
+        {
+          "id": "pr-py-l3e",
+          "title": "Stack Pop",
+          "duration": "15 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Create a stack, push 10 and 20, then print the popped value.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Easy",
+            "points": 5,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "",
+                "expectedOutput": "20",
+                "explanation": "Check the basic case."
+              },
+              {
+                "id": "tc2",
+                "input": "",
+                "expectedOutput": "20",
+                "explanation": "Check another valid input."
+              }
+            ],
+            "starterTemplates": {
+              "python": "stack = []\n# Push values and pop the top value"
+            },
+            "solutionCode": {
+              "python": "stack = []\nstack.append(10)\nstack.append(20)\nprint(stack.pop())"
+            }
+          }
+        },
+        {
+          "id": "py-l3f",
+          "title": "Introduction to Trees and Graphs",
+          "duration": "25 min",
+          "type": "article",
+          "isPro": false,
+          "content": "<p>Learn the basics of trees, graphs, binary trees, and adjacency lists. Resources: <a href=\"https://www.geeksforgeeks.org/introduction-to-graph-data-structure-and-algorithms/\" target=\"_blank\">Introduction to Graph Data Structure - GFG</a></p>",
+          "language": "python",
+          "codeSnippet": "# Simple graph using adjacency list\ngraph = {\n    0: [1, 2],\n    1: [0, 2],\n    2: [0, 1]\n}\nprint(graph)"
+        },
+        {
+          "id": "pr-py-l3f",
+          "title": "Graph Neighbors",
+          "duration": "15 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Create the given graph and print the neighbors of node 0.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Easy",
+            "points": 5,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "",
+                "expectedOutput": "[1, 2]",
+                "explanation": "Check the basic case."
+              },
+              {
+                "id": "tc2",
+                "input": "",
+                "expectedOutput": "[1, 2]",
+                "explanation": "Check another valid input."
+              }
+            ],
+            "starterTemplates": {
+              "python": "graph = {0: [1, 2], 1: [0], 2: [0]}\nprint(graph[0])"
+            },
+            "solutionCode": {
+              "python": "graph = {0: [1, 2], 1: [0], 2: [0]}\nprint(graph[0])"
+            }
+          }
+        },
+        {
+          "id": "py-l3g",
+          "title": "File Handling",
+          "duration": "20 min",
+          "type": "article",
+          "isPro": false,
+          "content": "<p>Learn how to create, write, read, and manage files in Python. Resources: <a href=\"https://www.geeksforgeeks.org/file-handling-python/\" target=\"_blank\">File Handling - GFG</a></p>",
+          "language": "python",
+          "codeSnippet": "with open(\"test.txt\", \"w\") as f:\n    f.write(\"Hello Python\")"
+        },
+        {
+          "id": "pr-py-l3g",
+          "title": "Write a File",
+          "duration": "15 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Create a file named <code>test.txt</code>, write <code>Hello Python</code>, read it, and print the content.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Easy",
+            "points": 5,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "",
+                "expectedOutput": "Hello Python",
+                "explanation": "Check the basic case."
+              },
+              {
+                "id": "tc2",
+                "input": "",
+                "expectedOutput": "Hello Python",
+                "explanation": "Check another valid input."
+              }
+            ],
+            "starterTemplates": {
+              "python": "with open(\"test.txt\", \"w\") as f:\n    # Write the required text\n    pass"
+            },
+            "solutionCode": {
+              "python": "with open(\"test.txt\", \"w\") as f:\n    f.write(\"Hello Python\")\nwith open(\"test.txt\", \"r\") as f:\n    print(f.read())"
+            }
+          }
+        },
+        {
+          "id": "py-p3",
+          "title": "List Operations Problem",
+          "duration": "25 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Read a list of numbers and find the maximum element.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Easy",
+            "points": 15,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "1 2 3 4 5",
+                "expectedOutput": "5",
+                "explanation": "5 is the maximum."
+              },
+              {
+                "id": "tc2",
+                "input": "10 5 20 3",
+                "expectedOutput": "20",
+                "explanation": "20 is the maximum."
+              },
+              {
+                "id": "tc3",
+                "input": "-10 -5 -20",
+                "expectedOutput": "-5",
+                "explanation": "-5 is the maximum."
+              },
+              {
+                "id": "tc4",
+                "input": "100",
+                "expectedOutput": "100",
+                "explanation": "A single-element list has that element as maximum."
+              },
+              {
+                "id": "tc5",
+                "input": "7 7 7 7",
+                "expectedOutput": "7",
+                "explanation": "All elements are equal."
+              }
+            ],
+            "starterTemplates": {
+              "python": "nums = list(map(int, input().split()))\n# find max"
+            },
+            "solutionCode": {
+              "python": "nums = list(map(int, input().split()))\nprint(max(nums))"
+            }
+          }
+        },
+        {
+          "id": "py-p3b",
+          "title": "Stack Using List",
+          "duration": "25 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Implement basic stack operations using a Python list.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Medium",
+            "points": 20,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "3\nPUSH 10\nPUSH 20\nPOP",
+                "expectedOutput": "20",
+                "explanation": "20 is the top element."
+              },
+              {
+                "id": "tc2",
+                "input": "4\nPUSH 5\nPUSH 15\nPOP\nPOP",
+                "expectedOutput": "15\n5",
+                "explanation": "Elements are removed in LIFO order."
+              }
+            ],
+            "starterTemplates": {
+              "python": "n = int(input())\nstack = []\nfor _ in range(n):\n    command = input().split()\n    # Implement stack operations"
+            },
+            "solutionCode": {
+              "python": "n = int(input())\nstack = []\nfor _ in range(n):\n    command = input().split()\n    if command[0] == \"PUSH\":\n        stack.append(int(command[1]))\n    elif command[0] == \"POP\":\n        print(stack.pop())"
+            }
+          }
+        },
+        {
+          "id": "py-l5",
+          "title": "Searching and Sorting",
+          "duration": "20 min",
+          "type": "article",
+          "isPro": false,
+          "content": "<p>Learn fundamental searching and sorting algorithms and how they are used to solve programming problems.</p>",
+          "language": "python",
+          "codeSnippet": "nums = [5, 2, 8, 1]\nnums.sort()\nprint(nums)"
+        },
+        {
+          "id": "pr-py-l5",
+          "title": "Searching and Sorting Practice",
+          "duration": "15 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Read numbers and print them in ascending order.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Easy",
+            "points": 5,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "3 1 2",
+                "expectedOutput": "1 2 3",
+                "explanation": "Check the basic case."
+              },
+              {
+                "id": "tc2",
+                "input": "4 2 1",
+                "expectedOutput": "1 2 4",
+                "explanation": "Check another valid input."
+              }
+            ],
+            "starterTemplates": {
+              "python": "nums = list(map(int, input().split()))\n# Sort the numbers\nprint(*nums)"
+            },
+            "solutionCode": {
+              "python": "nums = list(map(int, input().split()))\nnums.sort()\nprint(*nums)"
+            }
+          }
+        },
+        {
+          "id": "py-l5a",
+          "title": "Binary Search",
+          "duration": "25 min",
+          "type": "article",
+          "isPro": false,
+          "content": "<p>Learn binary search on sorted arrays and understand its O(log n) time complexity.</p>",
+          "language": "python",
+          "codeSnippet": "nums = [1, 3, 5, 7, 9]\ntarget = 7\nleft, right = 0, len(nums) - 1\nwhile left <= right:\n    mid = (left + right) // 2\n    if nums[mid] == target:\n        print(mid)\n        break"
+        },
+        {
+          "id": "pr-py-l5a",
+          "title": "Binary Search Index",
+          "duration": "15 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Read a sorted list and a target, then print the target index or -1.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Easy",
+            "points": 5,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "1 3 5 7 9\n7",
+                "expectedOutput": "3",
+                "explanation": "The target 7 is at index 3."
+              },
+              {
+                "id": "tc2",
+                "input": "2 4 6 8 10\n6",
+                "expectedOutput": "2",
+                "explanation": "The target 6 is at index 2."
+              }
+            ],
+            "starterTemplates": {
+              "python": "nums = list(map(int, input().split()))\ntarget = int(input())\n# Implement binary search"
+            },
+            "solutionCode": {
+              "python": "nums = list(map(int, input().split()))\ntarget = int(input())\nleft, right = 0, len(nums) - 1\nwhile left <= right:\n    mid = (left + right) // 2\n    if nums[mid] == target:\n        print(mid)\n        break\n    if nums[mid] < target:\n        left = mid + 1\n    else:\n        right = mid - 1\nelse:\n    print(-1)"
+            }
+          }
+        },
+        {
+          "id": "py-l5b",
+          "title": "Bubble Sort",
+          "duration": "25 min",
+          "type": "article",
+          "isPro": false,
+          "content": "<p>Learn bubble sort, adjacent comparisons, swapping, and O(n²) time complexity.</p>",
+          "language": "python",
+          "codeSnippet": "arr = [5, 2, 4, 1]\nfor i in range(len(arr)):\n    for j in range(0, len(arr) - i - 1):\n        if arr[j] > arr[j + 1]:\n            arr[j], arr[j + 1] = arr[j + 1], arr[j]\nprint(arr)"
+        },
+        {
+          "id": "pr-py-l5b",
+          "title": "Bubble Sort",
+          "duration": "15 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Read numbers and sort them using bubble sort.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Easy",
+            "points": 5,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "5 2 4 1",
+                "expectedOutput": "1 2 4 5",
+                "explanation": "Sort the numbers in ascending order."
+              },
+              {
+                "id": "tc2",
+                "input": "4 3 2 1",
+                "expectedOutput": "1 2 3 4",
+                "explanation": "Sort the numbers in ascending order."
+              }
+            ],
+            "starterTemplates": {
+              "python": "arr = list(map(int, input().split()))\n# Implement bubble sort\nprint(*arr)"
+            },
+            "solutionCode": {
+              "python": "arr = list(map(int, input().split()))\nfor i in range(len(arr)):\n    for j in range(0, len(arr) - i - 1):\n        if arr[j] > arr[j + 1]:\n            arr[j], arr[j + 1] = arr[j + 1], arr[j]\nprint(*arr)"
+            }
+          }
+        },
+        {
+          "id": "py-l5c",
+          "title": "Selection Sort",
+          "duration": "25 min",
+          "type": "article",
+          "isPro": false,
+          "content": "<p>Learn selection sort, finding the minimum element, swapping, and O(n²) time complexity.</p>",
+          "language": "python",
+          "codeSnippet": "arr = [5, 2, 4, 1]\nfor i in range(len(arr)):\n    min_index = i\n    for j in range(i + 1, len(arr)):\n        if arr[j] < arr[min_index]:\n            min_index = j\n    arr[i], arr[min_index] = arr[min_index], arr[i]\nprint(*arr)"
+        },
+        {
+          "id": "pr-py-l5c",
+          "title": "Selection Sort",
+          "duration": "15 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Read numbers and sort them using selection sort.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Easy",
+            "points": 5,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "5 2 4 1",
+                "expectedOutput": "1 2 4 5",
+                "explanation": "Sort the numbers in ascending order."
+              },
+              {
+                "id": "tc2",
+                "input": "9 7 8 6",
+                "expectedOutput": "6 7 8 9",
+                "explanation": "Sort the numbers in ascending order."
+              }
+            ],
+            "starterTemplates": {
+              "python": "arr = list(map(int, input().split()))\n# Implement selection sort\nprint(*arr)"
+            },
+            "solutionCode": {
+              "python": "arr = list(map(int, input().split()))\nfor i in range(len(arr)):\n    min_index = i\n    for j in range(i + 1, len(arr)):\n        if arr[j] < arr[min_index]:\n            min_index = j\n    arr[i], arr[min_index] = arr[min_index], arr[i]\nprint(*arr)"
+            }
+          }
+        },
+        {
+          "id": "py-p5",
+          "title": "Linear Search Problem",
+          "duration": "25 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Search for a target element in a list using linear search.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Easy",
+            "points": 15,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "10 20 30 40\n30",
+                "expectedOutput": "2",
+                "explanation": "30 is at index 2."
+              },
+              {
+                "id": "tc2",
+                "input": "5 8 2 9\n9",
+                "expectedOutput": "3",
+                "explanation": "9 is at index 3."
+              }
+            ],
+            "starterTemplates": {
+              "python": "nums = list(map(int, input().split()))\ntarget = int(input())\n# Implement linear search"
+            },
+            "solutionCode": {
+              "python": "nums = list(map(int, input().split()))\ntarget = int(input())\nfor i, value in enumerate(nums):\n    if value == target:\n        print(i)\n        break\nelse:\n    print(-1)"
+            }
+          }
+        },
+        {
+          "id": "py-p5b",
+          "title": "Binary Search Problem",
+          "duration": "25 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Search for a target element in a sorted list using binary search.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Medium",
+            "points": 20,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "1 3 5 7 9 11\n7",
+                "expectedOutput": "3",
+                "explanation": "7 is at index 3."
+              },
+              {
+                "id": "tc2",
+                "input": "2 4 6 8 10\n8",
+                "expectedOutput": "3",
+                "explanation": "8 is at index 3."
+              }
+            ],
+            "starterTemplates": {
+              "python": "nums = list(map(int, input().split()))\ntarget = int(input())\n# Implement binary search"
+            },
+            "solutionCode": {
+              "python": "nums = list(map(int, input().split()))\ntarget = int(input())\nleft, right = 0, len(nums) - 1\nwhile left <= right:\n    mid = (left + right) // 2\n    if nums[mid] == target:\n        print(mid)\n        break\n    elif nums[mid] < target:\n        left = mid + 1\n    else:\n        right = mid - 1\nelse:\n    print(-1)"
+            }
+          }
+        },
+        {
+          "id": "py-p5c",
+          "title": "Bubble Sort Problem",
+          "duration": "25 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Sort an array of numbers using bubble sort.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Medium",
+            "points": 20,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "5 2 4 1",
+                "expectedOutput": "1 2 4 5",
+                "explanation": "The sorted array is 1 2 4 5."
+              },
+              {
+                "id": "tc2",
+                "input": "4 3 2 1",
+                "expectedOutput": "1 2 3 4",
+                "explanation": "The sorted array is 1 2 3 4."
+              }
+            ],
+            "starterTemplates": {
+              "python": "arr = list(map(int, input().split()))\n# Implement bubble sort"
+            },
+            "solutionCode": {
+              "python": "arr = list(map(int, input().split()))\nfor i in range(len(arr)):\n    for j in range(0, len(arr) - i - 1):\n        if arr[j] > arr[j + 1]:\n            arr[j], arr[j + 1] = arr[j + 1], arr[j]\nprint(*arr)"
+            }
+          }
+        },
+        {
+          "id": "py-p5d",
+          "title": "Selection Sort Problem",
+          "duration": "25 min",
+          "type": "problem",
+          "isPro": false,
+          "content": "<p>Sort an array of numbers using selection sort.</p>",
+          "language": "python",
+          "problem": {
+            "difficulty": "Medium",
+            "points": 20,
+            "testCases": [
+              {
+                "id": "tc1",
+                "input": "5 2 4 1",
+                "expectedOutput": "1 2 4 5",
+                "explanation": "The sorted array is 1 2 4 5."
+              },
+              {
+                "id": "tc2",
+                "input": "9 7 8 6",
+                "expectedOutput": "6 7 8 9",
+                "explanation": "The sorted array is 6 7 8 9."
+              }
+            ],
+            "starterTemplates": {
+              "python": "arr = list(map(int, input().split()))\n# Implement selection sort"
+            },
+            "solutionCode": {
+              "python": "arr = list(map(int, input().split()))\nfor i in range(len(arr)):\n    min_index = i\n    for j in range(i + 1, len(arr)):\n        if arr[j] < arr[min_index]:\n            min_index = j\n    arr[i], arr[min_index] = arr[min_index], arr[i]\nprint(*arr)"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

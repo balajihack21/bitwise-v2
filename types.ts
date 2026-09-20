@@ -63,16 +63,24 @@ export interface ProblemMetadata {
   acceptanceRate?: string;
 }
 
+export interface CreativeChallengeMetadata {
+  prompt?: string;
+  points?: number;
+  expectedElements?: string[];
+  requiredNodes?: string[];
+}
+
 export interface Lesson {
   id: string;
   title: string;
   duration: string;
-  type: 'video' | 'article' | 'problem';
+  type: 'video' | 'article' | 'problem' | 'algorithm' | 'pseudocode' | 'flowchart';
   isPro?: boolean;
   content?: string;
   codeSnippet?: string;
   language?: string;
   problem?: ProblemMetadata;
+  challenge?: CreativeChallengeMetadata;
 }
 
 export interface Module {
@@ -196,6 +204,7 @@ export interface UserProgress {
   completedLessonIds: string[];
   unlockedLessonIds: string[];
   submissions: SubmissionRecord[];
+  creativeSubmissions?: CreativeChallengeSubmission[];
   xp: number;
   streakDays: number;
   lastActiveDate: string;
@@ -206,6 +215,22 @@ export interface UserProgress {
   proctorNotes?: string;
   proctorReviewedAt?: string;
   proctorReviewedBy?: string;
+}
+
+export interface CreativeChallengeSubmission {
+  id: string;
+  lessonId: string;
+  lessonTitle: string;
+  courseId: string;
+  courseTitle?: string;
+  challengeType: 'algorithm' | 'pseudocode' | 'flowchart';
+  answerText?: string;
+  flowNodes?: { id: string; type: string; text: string }[];
+  points: number;
+  submittedAt: string;
+  status: 'SUBMITTED' | 'REVIEWED';
+  instructorScore?: number;
+  instructorFeedback?: string;
 }
 
 export interface Judge0Config {

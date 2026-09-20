@@ -1085,6 +1085,7 @@ export interface StudentOverview {
   lastActive: string;
   enrolledCourses: CourseProgressDetail[];
   submissions: SubmissionRecord[];
+  creativeSubmissions?: import('../types').CreativeChallengeSubmission[];
   completedLessonIds: string[];
   tabSwitchCount: number;
   focusLossCount: number;
@@ -1426,6 +1427,7 @@ export const fetchAllStudentsFromFirestore = async (customCatalog?: Course[], in
       let completedCount = 0;
       let completedLessonIds: string[] = [];
       let submissions: SubmissionRecord[] = [];
+      let creativeSubmissions: import('../types').CreativeChallengeSubmission[] = [];
       let lastActive = uData.lastLogin || uData.createdAt || 'Recent';
       let tabSwitchCount = 0;
       let focusLossCount = 0;
@@ -1453,6 +1455,7 @@ export const fetchAllStudentsFromFirestore = async (customCatalog?: Course[], in
                 completedLessonIds: Array.from(new Set([...(p?.completedLessonIds || []), ...(otherP?.completedLessonIds || [])])),
                 unlockedLessonIds: Array.from(new Set([...(p?.unlockedLessonIds || []), ...(otherP?.unlockedLessonIds || [])])),
                 submissions: Array.from(new Map([...(p?.submissions || []), ...(otherP?.submissions || [])].map(s => [s.id || JSON.stringify(s), s])).values()),
+                creativeSubmissions: Array.from(new Map([...(p?.creativeSubmissions || []), ...(otherP?.creativeSubmissions || [])].map(s => [s.id || JSON.stringify(s), s])).values()),
                 xp: Math.max(p?.xp || 0, otherP?.xp || 0),
                 streakDays: Math.max(p?.streakDays || 1, otherP?.streakDays || 1),
                 lastActiveDate: p?.lastActiveDate || otherP?.lastActiveDate || 'Today',
@@ -1477,6 +1480,7 @@ export const fetchAllStudentsFromFirestore = async (customCatalog?: Course[], in
           completedLessonIds = p.completedLessonIds || [];
           completedCount = completedLessonIds.length;
           submissions = p.submissions || [];
+          creativeSubmissions = p.creativeSubmissions || [];
           if (p.lastActiveDate) lastActive = p.lastActiveDate;
           tabSwitchCount = p.tabSwitchCount || 0;
           focusLossCount = p.focusLossCount || 0;
@@ -1549,6 +1553,7 @@ export const fetchAllStudentsFromFirestore = async (customCatalog?: Course[], in
         lastActive,
         enrolledCourses,
         submissions,
+        creativeSubmissions,
         completedLessonIds,
         tabSwitchCount,
         focusLossCount,

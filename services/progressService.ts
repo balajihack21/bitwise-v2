@@ -1,4 +1,4 @@
-import { UserProgress, SubmissionRecord, Course, Lesson, User } from '../types';
+import { UserProgress, SubmissionRecord, Course, Lesson, User, CreativeChallengeSubmission } from '../types';
 import { 
   saveUserProgressToFirestore, 
   loadUserProgressFromFirestore,
@@ -324,6 +324,41 @@ export const recordCompletion = (
     updatedProgress,
     newlyUnlockedLesson: nextLesson
   };
+};
+
+export const submitCreativeChallenge = (
+  userOrName: string | User,
+  lesson: Lesson,
+  course: Course,
+  answer: Pick<CreativeChallengeSubmission, 'answerText' | 'flowNodes'>
+): { updatedProgress: UserProgress; newlyUnlockedLesson: Lesson | null } => {
+  const username = typeof userOrName === 'string' ? userOrName : (userOrName?.username || 'guest');
+  const uid = typeof userOrName === 'object' ? userOrName?.uid : undefined;
+  const currentProgress = loadUserProgress(username);
+  const completion = recordCompletion(userOrName, lesson.id, course, lesson.challenge?.points || 10);
+  const submission: CreativeChallengeSubmission = {
+    id: `creative-${lesson.id}-${Date.now()}`,
+    lessonId: lesson.id,
+    lessonTitle: lesson.title,
+    courseId: course.id,
+    courseTitle: course.title,
+    challengeType: lesson.type as CreativeChallengeSubmission['challengeType'],
+    answerText: answer.answerText,
+    flowNodes: answer.flowNodes,
+    points: lesson.challenge?.points || 10,
+    submittedAt: new Date().toISOString(),
+    status: 'SUBMITTED'
+  };
+  const updatedProgress: UserProgress = {
+    ...completion.updatedProgress,
+    creativeSubmissions: [
+      ...(currentProgress.creativeSubmissions || []).filter(item => item.lessonId !== lesson.id),
+      submission
+    ]
+  };
+  saveUserProgress(username, updatedProgress);
+  if (uid) saveUserProgressToFirestore(uid, updatedProgress).catch(() => {});
+  return { updatedProgress, newlyUnlockedLesson: completion.newlyUnlockedLesson };
 };
 
 /**

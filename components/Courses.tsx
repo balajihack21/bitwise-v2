@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Course, Lesson, SupportedLanguage, User, UserProgress } from '../types';
 import ProblemWorkspace from './ProblemWorkspace';
+import CreativeChallengeWorkspace from './CreativeChallengeWorkspace';
 import { translateContent } from '../services/geminiService';
 import { 
   isLessonUnlocked, 
@@ -569,6 +570,12 @@ const Courses: React.FC<CoursesProps> = ({
                               <i className="fa-solid fa-lock text-slate-400 text-xs shrink-0"></i>
                             ) : lesson.type === 'problem' ? (
                               <i className="fa-solid fa-code text-purple-600 text-xs shrink-0"></i>
+                            ) : lesson.type === 'pseudocode' ? (
+                              <i className="fa-solid fa-terminal text-cyan-600 text-xs shrink-0"></i>
+                            ) : lesson.type === 'algorithm' ? (
+                              <i className="fa-solid fa-list-ol text-cyan-600 text-xs shrink-0"></i>
+                            ) : lesson.type === 'flowchart' ? (
+                              <i className="fa-solid fa-diagram-project text-cyan-600 text-xs shrink-0"></i>
                             ) : (
                               <i className="fa-solid fa-file-lines text-bitwise-500 text-xs shrink-0"></i>
                             )}
@@ -579,6 +586,11 @@ const Courses: React.FC<CoursesProps> = ({
                             {lesson.type === 'problem' && (
                               <span className="px-1.5 py-0.5 bg-purple-50 text-purple-700 font-mono text-[9px] font-bold rounded">
                                 Challenge
+                              </span>
+                            )}
+                            {(lesson.type === 'algorithm' || lesson.type === 'pseudocode' || lesson.type === 'flowchart') && (
+                              <span className="px-1.5 py-0.5 bg-cyan-50 text-cyan-700 font-mono text-[9px] font-bold rounded">
+                                {lesson.type === 'flowchart' ? 'Flowchart' : lesson.type === 'algorithm' ? 'Algorithm' : 'Pseudo-code'}
                               </span>
                             )}
                             {lesson.isPro && !isPro && (
@@ -651,6 +663,15 @@ const Courses: React.FC<CoursesProps> = ({
                   onClose={() => setSelectedLesson(null)}
                   onOpenPlayground={onOpenPlayground}
                   onActivateWorkspace={() => { /* handled by parent via view state if needed */ }}
+                />
+              ) : selectedLesson.type === 'algorithm' || selectedLesson.type === 'pseudocode' || selectedLesson.type === 'flowchart' ? (
+                <CreativeChallengeWorkspace
+                  lesson={selectedLesson}
+                  course={selectedCourse}
+                  user={user}
+                  progress={progress}
+                  onProgressUpdate={onProgressUpdate}
+                  onClose={() => setSelectedLesson(null)}
                 />
               ) : (
                 /* Article / Conceptual Lesson Layout */
