@@ -11,7 +11,8 @@ import {
   isInstructorForCourse,
   completeAllCourseLessons,
   resetCourseProgress,
-  getEffectiveModuleDeadline
+  getEffectiveModuleDeadline,
+  getModuleScheduleState
 } from '../services/progressService';
 
 interface CoursesProps {
@@ -55,7 +56,10 @@ const Courses: React.FC<CoursesProps> = ({
     const isAssignedInstructor = isInstructorForCourse(user, course);
 
     for (const module of course.modules) {
-      if (isModuleExpiredForStudent(course, module.id) && !isAssignedInstructor) {
+      if (
+        !isAssignedInstructor &&
+        getModuleScheduleState(user, course, module.id) !== 'active'
+      ) {
         continue;
       }
 
@@ -66,9 +70,6 @@ const Courses: React.FC<CoursesProps> = ({
       }
     }
 
-    if (course.modules.length > 0 && course.modules[0].lessons.length > 0) {
-      return course.modules[0].lessons[0];
-    }
     return null;
   };
 
@@ -201,9 +202,11 @@ const Courses: React.FC<CoursesProps> = ({
   };
 
   const isModuleExpiredForStudent = (course: Course, moduleId: string) => {
-    const effectiveDeadline = getEffectiveModuleDeadline(user, course, moduleId);
-    const hasStudentOverride = !!user?.moduleDeadlineOverrides?.[course.id]?.[moduleId];
-    return !!effectiveDeadline && new Date(effectiveDeadline) < new Date() && !hasStudentOverride;
+    return getModuleScheduleState(user, course, moduleId) === 'expired';
+  };
+
+  const isModuleNotStartedForStudent = (course: Course, moduleId: string) => {
+    return getModuleScheduleState(user, course, moduleId) === 'not-started';
   };
 
   // Instructor test mode for bypassing deadlines and locks
@@ -217,7 +220,10 @@ const Courses: React.FC<CoursesProps> = ({
         if (initialLessonId) {
           for (const m of foundCourse.modules) {
             const l = m.lessons.find(less => less.id === initialLessonId);
-            if (l) {
+            if (l && (
+              isInstructorForCourse(user, foundCourse) ||
+              getModuleScheduleState(user, foundCourse, m.id) === 'active'
+            )) {
               setSelectedLesson(l);
               return;
             }
@@ -235,7 +241,10 @@ const Courses: React.FC<CoursesProps> = ({
     let targetLesson: Lesson | null = null;
     const extendedModule = course.modules.find(m => isModuleExtended(course, m.id));
 
-    if (extendedModule) {
+    if (
+      extendedModule &&
+      (isInstructor || getModuleScheduleState(user, course, extendedModule.id) === 'active')
+    ) {
       const firstPendingLesson = extendedModule.lessons.find(l => !progress.completedLessonIds.includes(l.id));
       if (firstPendingLesson) {
         targetLesson = firstPendingLesson;
@@ -245,6 +254,9 @@ const Courses: React.FC<CoursesProps> = ({
     if (!targetLesson) {
       for (const m of course.modules) {
         if (!isInstructor && isModuleExpiredForStudent(course, m.id)) {
+          continue;
+        }
+        if (!isInstructor && isModuleNotStartedForStudent(course, m.id)) {
           continue;
         }
 
@@ -270,7 +282,18 @@ const Courses: React.FC<CoursesProps> = ({
 
     const currentModule = selectedCourse.modules.find(module => module.lessons.some(l => l.id === lesson.id));
     const effectiveDeadline = currentModule ? getEffectiveModuleDeadline(user, selectedCourse, currentModule.id) : undefined;
-    const isDeadlinePassed = effectiveDeadline && new Date(effectiveDeadline) < new Date();
+    const isDeadlinePassed = currentModule
+      ? getModuleScheduleState(user, selectedCourse, currentModule.id) === 'expired'
+      : false;
+    const isModuleNotStarted = currentModule
+      ? isModuleNotStartedForStudent(selectedCourse, currentModule.id)
+      : false;
+
+    if (isModuleNotStarted) {
+      setLockedNotice(`🔒 "${lesson.title}" is locked because this module has not started yet.`);
+      setTimeout(() => setLockedNotice(null), 4000);
+      return;
+    }
 
     if (isDeadlinePassed && !progress.completedLessonIds.includes(lesson.id)) {
       setLockedNotice(`🔒 "${lesson.title}" is locked because the module deadline has passed and no further progression is allowed.`);
@@ -497,7 +520,7 @@ const Courses: React.FC<CoursesProps> = ({
               {selectedCourse.modules.filter((module) => {
                 const effectiveDeadline = getEffectiveModuleDeadline(user, selectedCourse, module.id);
                 const hasStudentOverride = !!user?.moduleDeadlineOverrides?.[selectedCourse.id]?.[module.id];
-                const isDeadlinePassed = !!effectiveDeadline && new Date(effectiveDeadline) < new Date();
+                const isDeadlinePassed = getModuleScheduleState(user, selectedCourse, module.id) === 'expired';
 
                 if (isDeadlinePassed && !hasStudentOverride) {
                   return true;
@@ -511,7 +534,7 @@ const Courses: React.FC<CoursesProps> = ({
                     {(() => {
                       const effectiveDeadline = getEffectiveModuleDeadline(user, selectedCourse, module.id);
                       const hasStudentOverride = !!user?.moduleDeadlineOverrides?.[selectedCourse.id]?.[module.id];
-                      const isDeadlinePassed = !!effectiveDeadline && new Date(effectiveDeadline) < new Date() && !hasStudentOverride;
+                      const isDeadlinePassed = getModuleScheduleState(user, selectedCourse, module.id) === 'expired' && !hasStudentOverride;
 
                       if (isModuleExtended(selectedCourse, module.id)) {
                         return (
@@ -535,7 +558,7 @@ const Courses: React.FC<CoursesProps> = ({
                   <div className="space-y-0.5">
                     {module.lessons.filter((lesson) => {
                         const effectiveDeadline = getEffectiveModuleDeadline(user, selectedCourse, module.id);
-                        const isDeadlinePassed = effectiveDeadline && new Date(effectiveDeadline) < new Date();
+                        const isDeadlinePassed = getModuleScheduleState(user, selectedCourse, module.id) === 'expired';
                         if (isDeadlinePassed) return true; // keep all lessons visible in a passed module, but lock incomplete ones
                         return true;
                     }).map((lesson) => {
@@ -544,8 +567,10 @@ const Courses: React.FC<CoursesProps> = ({
                       const isSelected = selectedLesson?.id === lesson.id;
                       const effectiveDeadline = getEffectiveModuleDeadline(user, selectedCourse, module.id);
                       const hasStudentOverride = !!user?.moduleDeadlineOverrides?.[selectedCourse.id]?.[module.id];
-                      const isPastDeadline = !!effectiveDeadline && new Date(effectiveDeadline) < new Date() && !hasStudentOverride;
-                      const isDisabled = isPastDeadline && !isCompleted;
+                      const scheduleState = getModuleScheduleState(user, selectedCourse, module.id);
+                      const isPastDeadline = scheduleState === 'expired' && !hasStudentOverride;
+                      const isNotStarted = scheduleState === 'not-started';
+                      const isDisabled = isNotStarted || (isPastDeadline && !isCompleted);
 
                       return (
                         <button
@@ -605,7 +630,7 @@ const Courses: React.FC<CoursesProps> = ({
                     {(() => {
                       const effectiveDeadline = getEffectiveModuleDeadline(user, selectedCourse, module.id);
                       const hasStudentOverride = !!user?.moduleDeadlineOverrides?.[selectedCourse.id]?.[module.id];
-                      const isDeadlinePassed = !!effectiveDeadline && new Date(effectiveDeadline) < new Date() && !hasStudentOverride;
+                      const isDeadlinePassed = getModuleScheduleState(user, selectedCourse, module.id) === 'expired' && !hasStudentOverride;
                       if (!effectiveDeadline) return null;
                       const isExtended = isModuleExtended(selectedCourse, module.id);
                       return (
@@ -747,8 +772,10 @@ const Courses: React.FC<CoursesProps> = ({
                           onClick={() => {
                             const mod = selectedCourse.modules.find(m => m.lessons.some(l => l.id === selectedLesson.id));
                             const effectiveDeadline = mod ? getEffectiveModuleDeadline(user, selectedCourse, mod.id) : undefined;
-                            const passed = effectiveDeadline && new Date(effectiveDeadline) < new Date();
-                            if (passed) return; // block completion on passed module too
+                            const scheduleState = mod
+                              ? getModuleScheduleState(user, selectedCourse, mod.id)
+                              : 'active';
+                            if (scheduleState !== 'active') return; // block completion outside the module window
                             handleCompleteArticle(selectedLesson.id);
                           }}
                           className="px-5 py-2.5 bg-bitwise-600 hover:bg-bitwise-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center gap-2 hover:scale-105"

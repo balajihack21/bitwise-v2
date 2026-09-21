@@ -146,6 +146,32 @@ export const getEffectiveModuleDeadline = (
   return override || targetModule?.endDate;
 };
 
+const getScheduleDate = (value?: string, endOfDay = false): Date | undefined => {
+  if (!value) return undefined;
+  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value);
+  const date = dateOnly
+    ? (() => {
+        const [year, month, day] = value.split('-').map(Number);
+        return new Date(year, month - 1, day, endOfDay ? 23 : 0, endOfDay ? 59 : 0, endOfDay ? 59 : 0, endOfDay ? 999 : 0);
+      })()
+    : new Date(value);
+  return Number.isNaN(date.getTime()) ? undefined : date;
+};
+
+export const getModuleScheduleState = (
+  user: User | null | undefined,
+  course: Course,
+  moduleId: string,
+  now = new Date()
+): 'not-started' | 'active' | 'expired' => {
+  const module = course.modules?.find(m => m.id === moduleId);
+  const startDate = getScheduleDate(module?.startDate);
+  const endDate = getScheduleDate(getEffectiveModuleDeadline(user, course, moduleId), true);
+  if (startDate && now < startDate) return 'not-started';
+  if (endDate && now > endDate) return 'expired';
+  return 'active';
+};
+
 export const isLessonUnlocked = (
   lessonId: string,
   course: Course,
@@ -158,9 +184,6 @@ export const isLessonUnlocked = (
   }
 
   if (!progress) return true;
-  if (progress.completedLessonIds?.includes(lessonId) || progress.unlockedLessonIds?.includes(lessonId)) {
-    return true;
-  }
 
   // Find lesson index
   const allLessons: Lesson[] = [];
@@ -169,11 +192,27 @@ export const isLessonUnlocked = (
   });
   const lessonIndex = allLessons.findIndex(l => l.id === lessonId);
   if (lessonIndex === -1) return true;
+
+  const currentModule = course.modules?.find(m => m.lessons?.some(l => l.id === lessonId));
+  const currentModuleState = currentModule
+    ? getModuleScheduleState(user, course, currentModule.id)
+    : 'active';
+
+  // Schedule restrictions must take precedence over cached unlocks.
+  if (currentModuleState === 'not-started') return false;
+  if (currentModuleState === 'expired') {
+    return progress.completedLessonIds?.includes(lessonId) || false;
+  }
+
   if (lessonIndex === 0) return true;
 
   const prevLesson = allLessons[lessonIndex - 1];
   const prevModule = course.modules?.find(m => m.lessons?.some(l => l.id === prevLesson.id));
-  const currentModule = course.modules?.find(m => m.lessons?.some(l => l.id === lessonId));
+
+  if (progress.completedLessonIds?.includes(lessonId) || progress.unlockedLessonIds?.includes(lessonId)) {
+    return true;
+  }
+
   const previousModuleDeadline = prevModule ? getEffectiveModuleDeadline(user, course, prevModule.id) : undefined;
   const currentModuleDeadline = currentModule ? getEffectiveModuleDeadline(user, course, currentModule.id) : undefined;
 
