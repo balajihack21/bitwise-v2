@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Course, Lesson, SupportedLanguage, User, UserProgress } from '../types';
+import { Course, Lesson, User, UserProgress } from '../types';
 import ProblemWorkspace from './ProblemWorkspace';
 import CreativeChallengeWorkspace from './CreativeChallengeWorkspace';
-import { translateContent } from '../services/geminiService';
 import { 
   isLessonUnlocked, 
   getCourseProgress, 
@@ -89,9 +88,6 @@ const Courses: React.FC<CoursesProps> = ({
     return null;
   });
 
-  const [language, setLanguage] = useState<SupportedLanguage>('en');
-  const [translatedContent, setTranslatedContent] = useState<string>('');
-  const [isTranslating, setIsTranslating] = useState(false);
   const [lockedNotice, setLockedNotice] = useState<string | null>(null);
 
   const getCourseCodingTests = (course: Course) => {
@@ -316,7 +312,6 @@ const Courses: React.FC<CoursesProps> = ({
   const handleBack = () => {
     setSelectedCourse(null);
     setSelectedLesson(null);
-    setLanguage('en');
     setLockedNotice(null);
   };
 
@@ -348,35 +343,6 @@ const Courses: React.FC<CoursesProps> = ({
     }
   };
 
-  // Translation Logic
-  useEffect(() => {
-    const translate = async () => {
-      if (!selectedLesson?.content) return;
-      
-      if (language === 'en') {
-        setTranslatedContent(selectedLesson.content);
-        return;
-      }
-
-      setIsTranslating(true);
-      const translated = await translateContent(selectedLesson.content, getLanguageName(language));
-      setTranslatedContent(translated);
-      setIsTranslating(false);
-    };
-
-    translate();
-  }, [language, selectedLesson]);
-
-  const getLanguageName = (code: SupportedLanguage) => {
-    switch (code) {
-      case 'ta': return 'Tamil';
-      case 'te': return 'Telugu';
-      case 'hi': return 'Hindi';
-      case 'fr': return 'French';
-      case 'es': return 'Spanish';
-      default: return 'English';
-    }
-  };
 
   if (selectedCourse) {
     const isProLocked = selectedLesson?.isPro && !isPro;
@@ -413,23 +379,6 @@ const Courses: React.FC<CoursesProps> = ({
               <span className="text-slate-400">({courseStats.completed}/{courseStats.total})</span>
             </div>
 
-            {selectedLesson?.type !== 'problem' && (
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs text-slate-500"><i className="fa-solid fa-language mr-1"></i> Read in:</span>
-                <select 
-                  value={language}
-                  onChange={(e) => setLanguage(e.target.value as SupportedLanguage)}
-                  className="bg-white border border-slate-300 text-slate-700 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:border-bitwise-500"
-                >
-                  <option value="en">English</option>
-                  <option value="ta">Tamil</option>
-                  <option value="te">Telugu</option>
-                  <option value="hi">Hindi</option>
-                  <option value="fr">French</option>
-                  <option value="es">Spanish</option>
-                </select>
-              </div>
-            )}
           </div>
         </div>
 
@@ -725,16 +674,9 @@ const Courses: React.FC<CoursesProps> = ({
                       </div>
                     </div>
 
-                    {isTranslating ? (
-                      <div className="py-20 text-center">
-                        <i className="fa-solid fa-circle-notch fa-spin text-3xl text-bitwise-600 mb-4"></i>
-                        <p className="text-slate-500 text-sm">Translating to {getLanguageName(language)}...</p>
-                      </div>
-                    ) : (
-                      <div className="prose prose-slate max-w-none text-slate-700 leading-relaxed mb-8">
-                        <div dangerouslySetInnerHTML={{ __html: translatedContent || '' }} />
-                      </div>
-                    )}
+                    <div className="prose prose-slate max-w-none text-slate-700 leading-relaxed mb-8">
+                      <div dangerouslySetInnerHTML={{ __html: selectedLesson.content || '' }} />
+                    </div>
 
                     {selectedLesson.codeSnippet && (
                       <div className="mt-6 bg-slate-900 rounded-xl overflow-hidden border border-slate-800 shadow-lg">

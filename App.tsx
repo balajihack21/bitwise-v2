@@ -4,7 +4,6 @@ import Footer from './components/Footer';
 import Hero from './components/Hero';
 import Courses from './components/Courses';
 import ProgressDashboard from './components/ProgressDashboard';
-import AITutor from './components/AITutor';
 import CodeEditor from './components/CodeEditor';
 import PracticeProblems from './components/PracticeProblems';
 import Login from './components/Login';
@@ -368,7 +367,7 @@ const App: React.FC = () => {
             setAuthBanner(null);
             setCurrentView(ViewState.HOME);
           }} 
-          bannerNotice={authBanner || '🔒 Member Perks Locked: Please log in or create an account to access interactive coding sandboxes, lessons, certificates, AI tutor, and progress tracking.'}
+          bannerNotice={authBanner || '🔒 Member Perks Locked: Please log in or create an account to access interactive coding sandboxes, lessons, certificates, and progress tracking.'}
         />
       );
     }
@@ -546,15 +545,6 @@ const App: React.FC = () => {
       </main>
 
       {currentView !== ViewState.PLAYGROUND && currentView !== ViewState.PRACTICE && currentView !== ViewState.AUTH && currentView !== ViewState.ADMIN && currentView !== ViewState.COURSES && <Footer />}
-      {currentView !== ViewState.COURSES && (
-        <AITutor
-          user={user}
-          onLoginClick={() => {
-            setAuthBanner('🔒 BitBot AI Tutor is a member perk! Please log in to chat with AI assistance.');
-            setCurrentView(ViewState.AUTH);
-          }}
-        />
-      )}
     </div>
   );
 };

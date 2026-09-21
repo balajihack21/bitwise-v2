@@ -64,25 +64,3 @@ export const executeCodeWithAI = async (language: string, code: string, stdin: s
     return 'Error executing code via AI simulation. Please try again.';
   }
 };
-
-export const translateContent = async (htmlContent: string, targetLanguage: string): Promise<string> => {
-  try {
-    const response = await fetch('/api/gemini/translate', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ htmlContent, targetLanguage }),
-    });
-
-    if (!response.ok) {
-      return htmlContent;
-    }
-
-    const data = await response.json();
-    return data.translatedContent || htmlContent;
-  } catch (error) {
-    console.error('Translation Error:', error);
-    return htmlContent;
-  }
-};

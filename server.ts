@@ -126,36 +126,6 @@ Rules:
   }
 });
 
-// 3. Multilingual Translation Route
-app.post('/api/gemini/translate', async (req, res) => {
-  try {
-    const { htmlContent, targetLanguage } = req.body;
-    if (!htmlContent || !targetLanguage) {
-      res.status(400).json({ error: 'htmlContent and targetLanguage are required' });
-      return;
-    }
-
-    const ai = getAI();
-    const prompt = `Translate the following educational HTML content into ${targetLanguage}.
-Maintain all HTML tags, attributes, classes, and structure exactly as they are.
-Only translate the human-readable text inside the tags.
-Do not translate code snippets or technical keywords (like 'console.log', 'public static void', 'for', 'while') that must remain in English.
-
-HTML Content:
-${htmlContent}`;
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.7-flash',
-      contents: prompt,
-    });
-
-    res.json({ translatedContent: response.text || htmlContent });
-  } catch (error: any) {
-    console.error('Server Gemini Translate Error:', error);
-    res.status(500).json({ error: error.message || 'Translation failed', translatedContent: req.body.htmlContent });
-  }
-});
-
 // Start Server & Integrate Vite Middleware
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
