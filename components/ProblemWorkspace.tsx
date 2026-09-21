@@ -430,8 +430,8 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
         executionTime,
         timestamp: new Date().toLocaleTimeString() + ', ' + new Date().toLocaleDateString(),
         testResults: results,
-        tabSwitchesDuringTest: sessionTabSwitches
-        ,isPractice: lesson.isPractice
+        tabSwitchesDuringTest: sessionTabSwitches,
+        isPractice: lesson.isPractice
       };
 
       const updatedWithSub = addSubmission(user || username, newSubmission);
@@ -512,10 +512,10 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
   const currentResult = testResults[selectedTestCaseIndex];
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col w-screen h-screen overflow-hidden text-slate-100 select-none-area animate-fade-in">
+    <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col w-full h-[100dvh] min-h-0 overflow-hidden text-slate-100 select-none-area animate-fade-in">
       {/* Top Proctored Exam Header Bar */}
-      <header className="h-12 bg-slate-900 border-b border-slate-800 px-3 flex items-center justify-between shrink-0 shadow-lg">
-        <div className="flex items-center gap-2 min-w-0">
+      <header className="min-h-12 bg-slate-900 border-b border-slate-800 px-2 sm:px-3 py-1.5 flex flex-wrap items-center justify-between gap-2 shrink-0 shadow-lg">
+        <div className="flex items-center gap-2 min-w-0 max-w-[55%] sm:max-w-none">
           {/* Proctored Badge */}
           <div className="flex items-center gap-2 bg-emerald-950/80 border border-emerald-500/40 px-2.5 py-0.5 rounded-full text-[10px] font-bold text-emerald-300">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
@@ -525,14 +525,14 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
           <span className="text-slate-600 hidden sm:inline">|</span>
 
           {/* Problem Title & Course */}
-          <div className="hidden sm:block">
+          <div className="hidden sm:block min-w-0 truncate">
             <span className="text-xs text-slate-400 font-medium">{course.title}: </span>
             <span className="text-xs font-bold text-white">{lesson.title}</span>
           </div>
         </div>
 
         {/* Center Live Timer & Proctoring Stats */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 order-3 sm:order-none w-full sm:w-auto justify-center">
           {/* Active Timer */}
           <div className="flex items-center gap-1 bg-slate-950 border border-slate-800 px-2 py-0.5 rounded-lg text-[10px] font-mono text-slate-300">
             <i className="fa-regular fa-clock text-bitwise-400"></i>
@@ -551,7 +551,7 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
         </div>
 
         {/* Right Action Tools */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 ml-auto">
           {/* Fullscreen toggle */}
           <button
             onClick={toggleFullscreen}
@@ -575,12 +575,12 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
       </header>
 
       {/* Single-column workspace layout */}
-      <div className="flex-1 flex flex-col overflow-hidden bg-slate-950">
+      <div className="flex-1 min-h-0 flex flex-col overflow-hidden bg-slate-950">
         {/* Problem Description & Submissions */}
         <div className="w-full flex flex-col border-b border-slate-800 bg-slate-950">
           {/* Tab Navigation */}
-          <div className="flex items-center justify-between px-4 py-2 bg-slate-900/90 border-b border-slate-800 text-xs shrink-0">
-            <div className="flex gap-1">
+          <div className="flex items-center justify-between gap-2 px-2 sm:px-4 py-2 bg-slate-900/90 border-b border-slate-800 text-xs shrink-0">
+            <div className="flex gap-1 min-w-0 overflow-x-auto scrollbar-hide">
               <button
                 onClick={() => setActiveTab('problem')}
                 className={`px-3 py-1.5 rounded-lg font-semibold transition-colors flex items-center gap-1.5 ${
@@ -589,7 +589,7 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
                     : 'text-slate-400 hover:text-white hover:bg-slate-800'
                 }`}
               >
-                <i className="fa-solid fa-file-code"></i> Description
+                <i className="fa-solid fa-file-code"></i><span className="hidden sm:inline">Description</span>
               </button>
               <button
                 onClick={() => setActiveTab('submissions')}
@@ -599,7 +599,7 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
                     : 'text-slate-400 hover:text-white hover:bg-slate-800'
                 }`}
               >
-                <i className="fa-solid fa-clock-rotate-left"></i> Submissions
+                <i className="fa-solid fa-clock-rotate-left"></i><span className="hidden sm:inline">Submissions</span>
                 {progress.submissions.filter(s => s.problemId === lesson.id).length > 0 && (
                   <span className="ml-1 px-1.5 py-0.2 bg-slate-800 text-[10px] rounded-full border border-slate-700">
                     {progress.submissions.filter(s => s.problemId === lesson.id).length}
@@ -615,7 +615,7 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
                       : 'text-slate-400 hover:text-white hover:bg-slate-800'
                   }`}
                 >
-                  <i className="fa-regular fa-lightbulb text-amber-400"></i> Hints
+                  <i className="fa-regular fa-lightbulb text-amber-400"></i><span className="hidden sm:inline">Hints</span>
                 </button>
               )}
             </div>
@@ -630,7 +630,7 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
           </div>
 
           {/* Tab Body */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-6 space-y-5 sm:space-y-6">
             {activeTab === 'problem' && (
               <div className="space-y-6">
                 {/* Problem Title & Meta Badges */}
@@ -655,7 +655,7 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
                     )}
                   </div>
 
-                  <h1 className="text-2xl font-bold text-white tracking-tight">{lesson.title}</h1>
+                  <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight break-words">{lesson.title}</h1>
                 </div>
 
                 {/* Description HTML */}
@@ -805,13 +805,13 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
             </div>
           )}
 
-          <div className="flex items-center justify-between px-4 py-2 bg-slate-800 border-b border-slate-700 shrink-0">
-            <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-2 sm:px-4 py-2 bg-slate-800 border-b border-slate-700 shrink-0">
+            <div className="flex items-center gap-2 min-w-0">
               {/* Language Selector */}
               <select
                 value={language}
                 onChange={(e) => handleLanguageChange(e.target.value)}
-                className="bg-slate-900 text-slate-200 text-xs font-mono px-3 py-1.5 rounded-lg border border-slate-700 focus:outline-none focus:border-bitwise-500"
+                className="bg-slate-900 text-slate-200 text-xs font-mono px-2 sm:px-3 py-1.5 rounded-lg border border-slate-700 focus:outline-none focus:border-bitwise-500 max-w-[45vw]"
               >
                 {JUDGE0_LANGUAGES.map(lang => (
                   <option key={lang.key} value={lang.key}>
@@ -825,11 +825,11 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
                 className="text-slate-400 hover:text-white text-xs px-2 py-1 rounded transition-colors"
                 title="Reset starter template"
               >
-                <i className="fa-solid fa-rotate-left mr-1"></i> Reset Starter
+                <i className="fa-solid fa-rotate-left mr-1"></i><span className="hidden sm:inline">Reset Starter</span>
               </button>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 ml-auto">
               {/* Judge0 Sandbox Engine Settings */}
               <button
                 onClick={() => setShowSettingsModal(true)}
@@ -837,7 +837,7 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
                 title="Judge0 Sandbox Settings"
               >
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                Sandbox Engine
+                <span className="hidden sm:inline">Sandbox Engine</span>
                 <i className="fa-solid fa-gear ml-1 text-slate-400"></i>
               </button>
 
@@ -854,7 +854,7 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
           </div>
 
           {/* Code Editor TextArea */}
-          <div className="flex-1 relative bg-slate-950 min-h-[260px] overflow-hidden flex flex-col">
+          <div className="flex-1 relative bg-slate-950 min-h-[220px] overflow-hidden flex flex-col">
             <textarea
               value={code}
               onChange={(e) => {
@@ -880,7 +880,7 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
               onDragStart={(e) => e.preventDefault()}
               readOnly={isSplitScreenMode}
               spellCheck={false}
-              className={`w-full h-full p-4 font-mono text-sm leading-relaxed resize-none focus:outline-none focus:ring-0 border-none select-text ${
+              className={`w-full h-full p-3 sm:p-4 font-mono text-sm leading-relaxed resize-none focus:outline-none focus:ring-0 border-none select-text ${
                 isSplitScreenMode ? 'bg-slate-900 text-slate-500 cursor-not-allowed' : 'bg-slate-950 text-slate-100'
               }`}
               placeholder={isSplitScreenMode ? '// Editing disabled while split-screen is active' : '// Write your code to solve the challenge...'}
@@ -888,10 +888,10 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
           </div>
 
           {/* Test Cases & Validation Panel */}
-          <div className="h-64 border-t border-slate-800 bg-slate-900 flex flex-col shrink-0">
+          <div className="h-64 max-h-[42vh] min-h-[220px] border-t border-slate-800 bg-slate-900 flex flex-col shrink-0 overflow-hidden">
             {/* Test Case Tab Bar */}
-            <div className="flex items-center justify-between px-4 py-2 bg-slate-800/80 border-b border-slate-800 shrink-0">
-              <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide text-xs">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-2 sm:px-4 py-2 bg-slate-800/80 border-b border-slate-800 shrink-0">
+              <div className="flex min-w-0 max-w-full items-center gap-1.5 overflow-x-auto scrollbar-hide text-xs">
                 <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-2">
                   Sample Cases:
                 </span>
@@ -934,7 +934,7 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
 
               {/* Run & Submit Actions */}
               {!isSplitScreenMode && (
-                <div className="flex items-center gap-2">
+                <div className="flex w-full sm:w-auto items-center justify-end gap-2">
                   <button
                     onClick={handleRunSampleTests}
                     disabled={isRunning || isSubmitting}
@@ -963,7 +963,7 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
             </div>
 
             {/* Test Case Content Area */}
-            <div className="flex-1 p-4 overflow-y-auto font-mono text-xs space-y-3 bg-slate-950/60">
+            <div className="flex-1 min-h-0 min-w-0 p-3 sm:p-4 overflow-y-auto overflow-x-hidden font-mono text-xs space-y-3 bg-slate-950/60">
               {/* Overall Submission Result Feedback Banner */}
               {submissionFeedback.message && (
                 <div className={`p-2.5 rounded-lg flex items-center justify-between text-xs font-sans ${

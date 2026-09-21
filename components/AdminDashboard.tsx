@@ -1543,7 +1543,7 @@ solve()`
                     type: 'problem',
                     isPractice: true,
                     topic: practiceTopic.trim(),
-                    problem: source?.problem || { difficulty: 'Easy', description: 'Add the problem description in the course editor.', examples: [], constraints: [], testCases: [] }
+                    problem: source?.problem || { difficulty: 'Easy', testCases: [] }
                   };
                   onUpdateCourses(courses.map(course => course.id === target.id
                     ? { ...course, practiceProblems: [...(course.practiceProblems || []), problem] }
@@ -3793,6 +3793,7 @@ solve()`
                         </div>
                         <div className="text-[10px] text-slate-400 mt-1">Attempts to leave problem while locked</div>
                       </div>
+
                     </div>
 
                     {/* Admin Status Chooser */}

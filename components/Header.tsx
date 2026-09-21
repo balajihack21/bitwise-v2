@@ -43,7 +43,7 @@ const Header: React.FC<HeaderProps> = ({
   return (
     <>
       <header className="sticky top-0 z-40 w-full backdrop-blur-md bg-white/95 border-b border-slate-200/90 shadow-2xs">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
+        <div className="container mx-auto px-3 sm:px-4 min-h-16 py-2 flex items-center justify-between gap-2">
           {/* Logo */}
           <div 
             className="flex items-center gap-2.5 cursor-pointer select-none group" 
@@ -53,7 +53,7 @@ const Header: React.FC<HeaderProps> = ({
             <div className="w-9 h-9 bg-slate-900 group-hover:bg-bitwise-700 rounded-xl flex items-center justify-center text-white font-mono font-bold text-sm shadow-sm transition-colors">
               <span>{`</>`}</span>
             </div>
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-1.5">
                 <span className="text-base font-extrabold text-slate-950 tracking-tight block leading-tight">
                   Bitwise
