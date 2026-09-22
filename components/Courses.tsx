@@ -39,9 +39,15 @@ const Courses: React.FC<CoursesProps> = ({
   initialCourseId,
   initialLessonId
 }) => {
+  const visibleCourses = useMemo(() => {
+    if (user?.role !== 'student') return courses;
+    const assignedCourseIds = new Set(user.assignedCourseIds || []);
+    return courses.filter(course => assignedCourseIds.has(course.id));
+  }, [courses, user?.role, user?.assignedCourseIds]);
+
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(() => {
     if (initialCourseId) {
-      return courses.find(c => c.id === initialCourseId) || null;
+      return visibleCourses.find(c => c.id === initialCourseId) || null;
     }
     return null;
   });
@@ -74,7 +80,7 @@ const Courses: React.FC<CoursesProps> = ({
 
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(() => {
     if (initialCourseId) {
-      const foundCourse = courses.find(c => c.id === initialCourseId);
+      const foundCourse = visibleCourses.find(c => c.id === initialCourseId);
       if (foundCourse) {
         if (initialLessonId) {
           for (const m of foundCourse.modules) {
@@ -210,7 +216,7 @@ const Courses: React.FC<CoursesProps> = ({
 
   useEffect(() => {
     if (initialCourseId) {
-      const foundCourse = courses.find(c => c.id === initialCourseId);
+      const foundCourse = visibleCourses.find(c => c.id === initialCourseId);
       if (foundCourse) {
         setSelectedCourse(foundCourse);
         if (initialLessonId) {
@@ -226,9 +232,12 @@ const Courses: React.FC<CoursesProps> = ({
           }
         }
         setSelectedLesson(findFirstAvailableLessonForCourse(foundCourse));
+      } else {
+        setSelectedCourse(null);
+        setSelectedLesson(null);
       }
     }
-  }, [initialCourseId, initialLessonId, courses]);
+  }, [initialCourseId, initialLessonId, visibleCourses]);
 
   const handleCourseClick = (course: Course) => {
     setSelectedCourse(course);
@@ -779,7 +788,7 @@ const Courses: React.FC<CoursesProps> = ({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {courses.map((course) => {
+        {visibleCourses.map((course) => {
           const stats = getCourseProgress(course, progress);
           return (
             <div 
@@ -854,6 +863,18 @@ const Courses: React.FC<CoursesProps> = ({
           );
         })}
       </div>
+
+      {visibleCourses.length === 0 && (
+        <div className="max-w-xl mx-auto bg-white border border-slate-200 rounded-2xl p-8 text-center shadow-sm">
+          <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center text-xl">
+            <i className="fa-solid fa-lock"></i>
+          </div>
+          <h3 className="text-lg font-bold text-slate-900 mb-2">No Courses Assigned</h3>
+          <p className="text-sm text-slate-500">
+            Your administrator has not assigned any course yet. Please contact your administrator for access.
+          </p>
+        </div>
+      )}
     </div>
   );
 };
