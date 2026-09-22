@@ -1,11 +1,12 @@
 /**
  * Client-side parser for seeding student CSV / TSV files.
- * Expected headers (case-insensitive): name, reg_no, email, dob, section, dept
+ * Expected headers (case-insensitive): name, reg_no, email, password, dob, section, dept
  */
 export interface SeedStudentRow {
   name: string;
   regNo: string;
   email: string;
+  password: string;
   dob: string;
   section: string;
   dept: string;
@@ -31,6 +32,7 @@ export function parseSeedFile(text: string): { rows: SeedStudentRow[]; errors: s
   const nameIdx = headers.findIndex(h => h === 'name' || h === 'displayname' || h === 'studentname' || h === 'student');
   const regIdx = headers.findIndex(h => h === 'regno' || h === 'reg_no' || h === 'registernumber' || h === 'registrationno' || h === 'register' || h === 'reg');
   const emailIdx = headers.findIndex(h => h === 'email' || h === 'mail' || h === 'e-mail');
+  const passwordIdx = headers.findIndex(h => h === 'password' || h === 'pass' || h === 'pwd');
   const dobIdx = headers.findIndex(h => h === 'dob' || h === 'dateofbirth' || h === 'birthdate' || h === 'dateofbirth' || h === 'birth');
   const sectionIdx = headers.findIndex(h => h === 'section' || h === 'sectionname' || h === 'group');
   const deptIdx = headers.findIndex(h => h === 'dept' || h === 'department' || h === 'deptname' || h === 'branch');
@@ -46,6 +48,7 @@ export function parseSeedFile(text: string): { rows: SeedStudentRow[]; errors: s
     const name = nameIdx >= 0 ? (cols[nameIdx] || '').trim() : '';
     const regNo = regIdx >= 0 ? (cols[regIdx] || '').trim() : '';
     const email = emailIdx >= 0 ? (cols[emailIdx] || '').trim() : '';
+    const password = passwordIdx >= 0 ? (cols[passwordIdx] || '').trim() : '';
     const dob = dobIdx >= 0 ? (cols[dobIdx] || '').trim() : '';
     const section = sectionIdx >= 0 ? (cols[sectionIdx] || '').trim() : '';
     const dept = deptIdx >= 0 ? (cols[deptIdx] || '').trim() : '';
@@ -56,7 +59,7 @@ export function parseSeedFile(text: string): { rows: SeedStudentRow[]; errors: s
     if (!regNo) errors.push(`Row ${i}: missing reg_no`);
     if (!email) errors.push(`Row ${i}: missing email`);
 
-    rows.push({ name, regNo, email, dob, section, dept, year });
+    rows.push({ name, regNo, email, password, dob, section, dept, year });
   }
   return { rows, errors };
 }

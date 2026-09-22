@@ -2654,7 +2654,7 @@ solve()`
                       <div className="text-left">
                         <h3 className="font-bold text-sm text-slate-900">Seed Students from CSV / Excel</h3>
                         <p className="text-xs text-slate-500 mt-0.5">
-                          Bulk-import student records (name, reg_no, email, dob, section, dept) into Firestore
+                          Bulk-import student records (name, reg_no, email, password, dob, section, dept) into Firestore
                         </p>
                       </div>
                     </div>
@@ -2684,7 +2684,7 @@ solve()`
                           </button>
                         )}
                         <span className="text-[11px] text-slate-400">
-                          Expected headers: <code className="bg-slate-100 px-1 py-0.5 rounded text-slate-600">name, reg_no, email, dob, section, dept, year</code>
+                          Expected headers: <code className="bg-slate-100 px-1 py-0.5 rounded text-slate-600">name, reg_no, email, password, dob, section, dept, year</code>
                         </span>
                       </div>
 
@@ -2718,6 +2718,7 @@ solve()`
                                   <th className="p-2.5">Name</th>
                                   <th className="p-2.5">Reg No</th>
                                   <th className="p-2.5">Email</th>
+                                  <th className="p-2.5">Password</th>
                                   <th className="p-2.5">DOB</th>
                                   <th className="p-2.5">Section</th>
                                   <th className="p-2.5">Dept</th>
@@ -2731,6 +2732,7 @@ solve()`
                                     <td className="p-2.5 font-semibold text-slate-800">{row.name || <span className="text-red-400 italic">missing</span>}</td>
                                     <td className="p-2.5 font-mono text-slate-700">{row.regNo || <span className="text-red-400 italic">missing</span>}</td>
                                     <td className="p-2.5 text-slate-600">{row.email || <span className="text-red-400 italic">missing</span>}</td>
+                                    <td className="p-2.5 font-mono text-slate-600">{row.password || <span className="text-slate-400">—</span>}</td>
                                     <td className="p-2.5 text-slate-500">{row.dob || '—'}</td>
                                     <td className="p-2.5 text-slate-500">{row.section || '—'}</td>
                                     <td className="p-2.5 text-slate-500">{row.dept || '—'}</td>

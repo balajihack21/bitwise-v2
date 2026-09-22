@@ -1678,7 +1678,7 @@ export { exportFirestoreToJSON } from './exportFirestoreToJSON';
 export { sanitizeStudentAssignments, mergeDuplicateStudentProgressRecords } from './migration';
 
 export const seedStudentsToFirestore = async (
-  students: { name: string; regNo: string; email: string; dob?: string; section?: string; dept?: string; year?: string }[]
+  students: { name: string; regNo: string; email: string; password?: string; dob?: string; section?: string; dept?: string; year?: string }[]
 ): Promise<{ success: number; failed: number; errors: string[] }> => {
   let success = 0;
   let failed = 0;
@@ -1700,6 +1700,7 @@ export const seedStudentsToFirestore = async (
         role: 'student',
         regNo: s.regNo,
         dob: s.dob || '',
+        ...(s.password ? { password: s.password } : {}),
         section: s.section || '',
         dept: s.dept || '',
         year: s.year || '',
@@ -1709,22 +1710,25 @@ export const seedStudentsToFirestore = async (
         assignedInstructorId: existingFirestore?.data()?.assignedInstructorId || undefined
       }), { merge: true });
 
-      const progressDocRef = doc(db, 'user_progress', uid);
       try {
-        await setDoc(progressDocRef, sanitizeForFirestore({
-          completedLessonIds: [],
-          unlockedLessonIds: [],
-          submissions: [],
-          xp: 0,
-          streakDays: 1,
-          lastActiveDate: new Date().toISOString().split('T')[0],
-          tabSwitchCount: 0,
-          focusLossCount: 0,
-          testExitAttempts: 0,
-          proctorStatus: 'CLEAN',
-          proctorNotes: '',
-          updatedAt: new Date().toISOString()
-        }), { merge: true });
+        const progressDocRef = doc(db, 'user_progress', uid);
+        const existingProgress = await getDoc(progressDocRef);
+        if (!existingProgress.exists()) {
+          await setDoc(progressDocRef, sanitizeForFirestore({
+            completedLessonIds: [],
+            unlockedLessonIds: [],
+            submissions: [],
+            xp: 0,
+            streakDays: 1,
+            lastActiveDate: new Date().toISOString().split('T')[0],
+            tabSwitchCount: 0,
+            focusLossCount: 0,
+            testExitAttempts: 0,
+            proctorStatus: 'CLEAN',
+            proctorNotes: '',
+            updatedAt: new Date().toISOString()
+          }));
+        }
       } catch (e) {
         // non-fatal: user doc is the critical write
       }
