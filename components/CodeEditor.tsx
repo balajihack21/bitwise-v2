@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { executeViaJudge0, JUDGE0_LANGUAGES } from '../services/judge0Service';
-import Judge0SettingsModal from './Judge0SettingsModal';
 
 interface CodeEditorProps {
   initialCode?: string;
@@ -169,7 +168,6 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   const [output, setOutput] = useState('');
   const [stats, setStats] = useState<{ time?: string; memory?: string; status?: string } | null>(null);
   const [isRunning, setIsRunning] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
     if (initialCode) setCode(initialCode);
@@ -271,14 +269,6 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowSettings(true)}
-            className="text-slate-400 hover:text-white px-2 py-1 text-xs transition-colors flex items-center gap-1"
-            title="Judge0 Sandbox Settings"
-          >
-            <i className="fa-solid fa-gear"></i> Sandbox
-          </button>
-
           <button 
             onClick={() => setCode('')} 
             className="text-slate-400 hover:text-white px-2 py-1 text-xs transition-colors"
@@ -301,9 +291,9 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       </div>
 
       {/* Main Area */}
-      <div className="flex-1 flex flex-col md:flex-row min-h-0">
+      <div className="flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden">
         {/* Editor Side */}
-        <div className="flex-1 flex flex-col min-h-0 bg-slate-950">
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-slate-950">
           <textarea 
             value={code}
             onChange={(e) => setCode(e.target.value)}
@@ -332,7 +322,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         </div>
 
         {/* Output Panel */}
-        <div className="h-48 md:h-auto md:w-2/5 border-t md:border-t-0 md:border-l bg-slate-950 border-slate-800 flex flex-col">
+        <div className="h-48 min-h-0 md:h-auto md:w-2/5 border-t md:border-t-0 md:border-l bg-slate-950 border-slate-800 flex flex-col overflow-hidden">
           <div className="bg-slate-900 px-4 py-2 text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-800 flex justify-between items-center">
             <span>Sandbox Output</span>
             {stats && (
@@ -341,7 +331,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
               </span>
             )}
           </div>
-          <div className="flex-1 p-4 font-mono text-xs overflow-auto">
+          <div className="flex-1 min-h-0 p-4 font-mono text-xs overflow-y-auto overflow-x-auto overscroll-contain">
             {output ? (
               <pre className="text-emerald-400 whitespace-pre-wrap leading-relaxed">{output}</pre>
             ) : (
@@ -350,11 +340,6 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
           </div>
         </div>
       </div>
-
-      <Judge0SettingsModal
-        isOpen={showSettings}
-        onClose={() => setShowSettings(false)}
-      />
     </div>
   );
 };

@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { ViewState, User, UserProgress } from '../types';
-import Judge0SettingsModal from './Judge0SettingsModal';
 
 interface HeaderProps {
   currentView: ViewState;
@@ -20,7 +19,6 @@ const Header: React.FC<HeaderProps> = ({
   onLoginClick
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [showJudge0Settings, setShowJudge0Settings] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   // Filter Nav items based on role
@@ -117,18 +115,6 @@ const Header: React.FC<HeaderProps> = ({
             )}
             
             <div className="pl-3 border-l border-slate-200 flex items-center gap-2.5">
-              {/* Judge0 Config Button */}
-              {user && (
-                <button
-                  onClick={() => setShowJudge0Settings(true)}
-                  className="text-slate-500 hover:text-slate-900 p-2 text-xs rounded-lg hover:bg-slate-100 transition-colors cursor-pointer border border-transparent hover:border-slate-200"
-                  title="Judge0 Sandbox Settings"
-                  aria-label="Judge0 Sandbox Settings"
-                >
-                  <i className="fa-solid fa-server"></i>
-                </button>
-              )}
-
               {user ? (
                 <div className="flex items-center gap-2.5">
                   {/* User Profile Badge */}
@@ -313,11 +299,6 @@ const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
       )}
-
-      <Judge0SettingsModal
-        isOpen={showJudge0Settings}
-        onClose={() => setShowJudge0Settings(false)}
-      />
     </>
   );
 };

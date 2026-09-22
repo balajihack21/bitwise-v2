@@ -3,7 +3,6 @@ import confetti from 'canvas-confetti';
 import { Lesson, Course, TestCaseResult, User, UserProgress, SubmissionRecord, TestCase } from '../types';
 import { runTestCases, JUDGE0_LANGUAGES } from '../services/judge0Service';
 import { recordCompletion, addSubmission, getNextLesson, recordProctoringInfraction } from '../services/progressService';
-import Judge0SettingsModal from './Judge0SettingsModal';
 
 // Clean starter boilerplates (skeletons without solutions)
 const getCleanStarterTemplate = (lang: string): string => {
@@ -100,7 +99,6 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
     totalTests?: number;
   }>({ status: 'IDLE', message: '' });
 
-  const [showSettingsModal, setShowSettingsModal] = useState<boolean>(false);
   const [unlockedNextLesson, setUnlockedNextLesson] = useState<Lesson | null>(null);
   const [isSplitScreenMode, setIsSplitScreenMode] = useState<boolean>(false);
 
@@ -796,7 +794,7 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
         </div>
 
         {/* Code Editor & Judge0 Test Runner */}
-        <div className="w-full flex flex-col bg-slate-900">
+        <div className="w-full flex-1 min-h-0 flex flex-col bg-slate-900 overflow-hidden">
           {/* Editor Toolbar */}
           {isSplitScreenMode && (
             <div className="px-4 py-3 bg-red-950/80 border-b border-red-800 text-red-100 text-[12px] font-bold flex items-center justify-center gap-2 shrink-0 shadow-inner">
@@ -830,17 +828,6 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
             </div>
 
             <div className="flex items-center gap-1.5 ml-auto">
-              {/* Judge0 Sandbox Engine Settings */}
-              <button
-                onClick={() => setShowSettingsModal(true)}
-                className="flex items-center gap-1.5 text-[11px] font-mono px-2.5 py-1 bg-slate-900 hover:bg-slate-700 text-bitwise-400 border border-slate-700 rounded-lg transition-colors"
-                title="Judge0 Sandbox Settings"
-              >
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span className="hidden sm:inline">Sandbox Engine</span>
-                <i className="fa-solid fa-gear ml-1 text-slate-400"></i>
-              </button>
-
               {onOpenPlayground && (
                 <button
                   onClick={() => onOpenPlayground(code, language)}
@@ -854,7 +841,7 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
           </div>
 
           {/* Code Editor TextArea */}
-          <div className="flex-1 relative bg-slate-950 min-h-[220px] overflow-hidden flex flex-col">
+          <div className="flex-1 relative bg-slate-950 min-h-0 overflow-hidden flex flex-col">
             <textarea
               value={code}
               onChange={(e) => {
@@ -963,10 +950,10 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
             </div>
 
             {/* Test Case Content Area */}
-            <div className="flex-1 min-h-0 min-w-0 p-3 sm:p-4 overflow-y-auto overflow-x-hidden font-mono text-xs space-y-3 bg-slate-950/60">
+            <div className="flex-1 min-h-0 min-w-0 p-3 sm:p-4 overflow-y-auto overflow-x-auto overscroll-contain font-mono text-xs space-y-3 bg-slate-950/60">
               {/* Overall Submission Result Feedback Banner */}
               {submissionFeedback.message && (
-                <div className={`p-2.5 rounded-lg flex items-center justify-between text-xs font-sans ${
+                <div className={`max-h-24 overflow-y-auto overflow-x-auto overscroll-contain p-2.5 rounded-lg flex items-start justify-between gap-3 text-xs font-sans ${
                   submissionFeedback.status === 'ACCEPTED' ? 'bg-emerald-950/80 border border-emerald-800 text-emerald-300' :
                   submissionFeedback.status === 'WRONG_ANSWER' ? 'bg-red-950/80 border border-red-800 text-red-300' :
                   submissionFeedback.status === 'COMPILE_ERROR' || submissionFeedback.status === 'RUNTIME_ERROR' ? 'bg-amber-950/80 border border-amber-800 text-amber-300' :
@@ -978,7 +965,7 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
                       submissionFeedback.status === 'WRONG_ANSWER' ? 'fa-circle-xmark text-red-400' :
                       'fa-triangle-exclamation text-amber-400'
                     } text-sm`}></i>
-                    <span className="font-semibold">{submissionFeedback.message}</span>
+                    <span className="font-semibold break-words">{submissionFeedback.message}</span>
                   </div>
                   {submissionFeedback.executionTime && (
                     <span className="text-[11px] font-mono text-slate-400">
@@ -1029,7 +1016,7 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
                           {currentResult.passed ? 'Test Passed' : 'Test Failed'}
                         </span>
                       </div>
-                      <div className={`p-2.5 bg-slate-900 border rounded-lg whitespace-pre max-h-24 overflow-y-auto ${
+                      <div className={`p-2.5 bg-slate-900 border rounded-lg whitespace-pre max-h-32 overflow-y-auto overflow-x-auto overscroll-contain ${
                         currentResult.passed ? 'border-emerald-800/60 text-slate-200' : 'border-red-800/60 text-red-300'
                       }`}>
                         {currentResult.actualOutput || currentResult.error || '(no output generated)'}
@@ -1101,10 +1088,6 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
       )}
 
       {/* Judge0 Settings Modal */}
-      <Judge0SettingsModal
-        isOpen={showSettingsModal}
-        onClose={() => setShowSettingsModal(false)}
-      />
     </div>
   );
 };

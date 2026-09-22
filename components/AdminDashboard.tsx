@@ -29,6 +29,7 @@ import { exportStudentsToExcel, exportStudentsToCsv } from '../services/excelExp
 import { AdminProblemEditorModal } from './AdminProblemEditorModal';
 import { AdminInstructorManager } from './AdminInstructorManager';
 import { AssignCourseModal } from './AssignCourseModal';
+import Judge0SettingsModal from './Judge0SettingsModal';
 import { fetchInstructorsList } from '../services/firebase';
 import { InstructorAccount } from '../types';
 
@@ -66,6 +67,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [studentSort, setStudentSort] = useState<'NAME' | 'PROGRESS_DESC' | 'LAST_ACTIVE' | 'ALERTS_DESC'>('NAME');
   const [bulkSelectMode, setBulkSelectMode] = useState<'none' | 'all-matched'>('none');
   const [bulkSelectedUids, setBulkSelectedUids] = useState<Set<string>>(new Set());
+  const [showJudge0Settings, setShowJudge0Settings] = useState(false);
 
   // Instructor Course Scoping:
   const currentInstructorEmail = currentUser?.email?.toLowerCase().trim();
@@ -1360,6 +1362,15 @@ solve()`
           <div className="flex items-center gap-3">
             {!isInstructor && (
               <>
+                <button
+                  type="button"
+                  onClick={() => setShowJudge0Settings(true)}
+                  className="px-3 py-2 bg-slate-800 text-white text-xs font-bold rounded-lg hover:bg-slate-950 cursor-pointer flex items-center gap-1.5"
+                  title="Configure Judge0 code execution"
+                >
+                  <i className="fa-solid fa-server"></i>
+                  Judge0 Settings
+                </button>
                 <button
                   onClick={async () => {
                     const data = await exportFirestoreToJSON();
@@ -4577,6 +4588,10 @@ solve()`
           )}
         </div>
       </div>
+      <Judge0SettingsModal
+        isOpen={showJudge0Settings}
+        onClose={() => setShowJudge0Settings(false)}
+      />
     </div>
   );
 };
