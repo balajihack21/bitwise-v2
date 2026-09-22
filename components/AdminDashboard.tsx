@@ -1,7 +1,7 @@
 // ...existing code...
 import React, { useState, useEffect, useMemo } from 'react';
 import { Course, Lesson, Module, ProctorStatus, User, CourseInternalAssessment, PracticeProblem } from '../types';
-import { doc, getDoc, setDoc, collection, getDocs, query, where } from 'firebase/firestore';
+import { doc, setDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { sanitizeForFirestore } from '../services/firebase';
 import {
@@ -128,6 +128,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // Search & Filters
   const [studentSearch, setStudentSearch] = useState<string>('');
+  const [studentDeptFilter, setStudentDeptFilter] = useState<string>('ALL');
+  const [studentSectionFilter, setStudentSectionFilter] = useState<string>('ALL');
+  const [studentYearFilter, setStudentYearFilter] = useState<string>('ALL');
   const [submissionFilter, setSubmissionFilter] = useState<string>('ALL');
   const [proctorFilter, setProctorFilter] = useState<'ALL' | 'FLAGGED' | 'WARNING' | 'EXCUSED' | 'SWITCHES' | 'CLEAN'>('ALL');
 
@@ -744,34 +747,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const loadStudents = async () => {
     setIsLoadingStudents(true);
     try {
-      // Ensure any newly added students have a progress doc initialized in Firestore
-      // so their progress appears immediately (fix for missing progress on new students)
-      try {
-        const newStudentsQuery = query(collection(db, 'users'), where('role', '==', 'student'), where('createdAt', '>=', new Date(Date.now() - 86400000 * 7).toISOString()));
-        const newSnap = await getDocs(newStudentsQuery);
-        for (const docSnap of newSnap.docs) {
-          const uid = docSnap.id;
-          const progRef = doc(db, 'user_progress', uid);
-          const progSnap = await getDoc(progRef);
-          if (!progSnap.exists()) {
-            await setDoc(progRef, sanitizeForFirestore({
-              completedLessonIds: [],
-              unlockedLessonIds: [],
-              submissions: [],
-              xp: 0,
-              streakDays: 1,
-              lastActiveDate: new Date().toISOString().split('T')[0],
-              tabSwitchCount: 0,
-              focusLossCount: 0,
-              testExitAttempts: 0,
-              proctorStatus: 'CLEAN',
-              proctorNotes: '',
-              updatedAt: new Date().toISOString()
-            }), { merge: true });
-          }
-        }
-      } catch (e) { /* non-fatal initialization */ }
-
       const data = await fetchAllStudentsFromFirestore(
         courses,
         isInstructor ? currentUser?.uid : undefined,
@@ -1205,6 +1180,20 @@ solve()`
     return legacyAssignments.length > 0 ? [legacyAssignments[legacyAssignments.length - 1]] : [];
   };
 
+  const studentFilterOptions = useMemo(() => {
+    const getValues = (field: 'dept' | 'section' | 'year') => Array.from(new Set(
+      students
+        .map(student => student[field]?.trim())
+        .filter((value): value is string => Boolean(value))
+    )).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+
+    return {
+      departments: getValues('dept'),
+      sections: getValues('section'),
+      years: getValues('year')
+    };
+  }, [students]);
+
   // Filtered lists
   const filteredStudents = useMemo(() => {
     const filtered = students.filter(s => {
@@ -1213,6 +1202,10 @@ solve()`
       s.email.toLowerCase().includes(studentSearch.toLowerCase()) ||
       (s.regNo || '').toLowerCase().includes(studentSearch.toLowerCase());
     if (!matchesSearch) return false;
+
+    if (studentDeptFilter !== 'ALL' && (s.dept || '').trim() !== studentDeptFilter) return false;
+    if (studentSectionFilter !== 'ALL' && (s.section || '').trim() !== studentSectionFilter) return false;
+    if (studentYearFilter !== 'ALL' && (s.year || '').trim() !== studentYearFilter) return false;
 
     // Instructor or Admin selected course filter
     if (selectedCourseFilter !== 'ALL') {
@@ -1303,7 +1296,7 @@ solve()`
       };
       return getProgress(b) - getProgress(a);
     });
-  }, [students, studentSearch, selectedCourseFilter, selectedInstructorFilter, progressFilter, studentSort, proctorFilter, isInstructor, courses, currentUser, currentInstructorEmail, assignedCourseIds]);
+  }, [students, studentSearch, studentDeptFilter, studentSectionFilter, studentYearFilter, selectedCourseFilter, selectedInstructorFilter, progressFilter, studentSort, proctorFilter, isInstructor, courses, currentUser, currentInstructorEmail, assignedCourseIds]);
 
   const filteredSubmissions = useMemo(() => submissions.filter(sub => {
     // If instructor, only show submissions for assigned courses
@@ -2888,6 +2881,42 @@ solve()`
                         className="pl-8 pr-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:border-bitwise-500 w-52"
                       />
                     </div>
+
+                    <select
+                      value={studentDeptFilter}
+                      onChange={e => setStudentDeptFilter(e.target.value)}
+                      className="px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 bg-white outline-none focus:border-bitwise-500 cursor-pointer"
+                      title="Filter students by department"
+                    >
+                      <option value="ALL">All Departments</option>
+                      {studentFilterOptions.departments.map(dept => (
+                        <option key={dept} value={dept}>{dept}</option>
+                      ))}
+                    </select>
+
+                    <select
+                      value={studentSectionFilter}
+                      onChange={e => setStudentSectionFilter(e.target.value)}
+                      className="px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 bg-white outline-none focus:border-bitwise-500 cursor-pointer"
+                      title="Filter students by section"
+                    >
+                      <option value="ALL">All Sections</option>
+                      {studentFilterOptions.sections.map(section => (
+                        <option key={section} value={section}>{section}</option>
+                      ))}
+                    </select>
+
+                    <select
+                      value={studentYearFilter}
+                      onChange={e => setStudentYearFilter(e.target.value)}
+                      className="px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 bg-white outline-none focus:border-bitwise-500 cursor-pointer"
+                      title="Filter students by year"
+                    >
+                      <option value="ALL">All Years</option>
+                      {studentFilterOptions.years.map(year => (
+                        <option key={year} value={year}>{year}</option>
+                      ))}
+                    </select>
 
                     {!isInstructor && (
                       <select

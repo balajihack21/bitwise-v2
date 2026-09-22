@@ -1370,6 +1370,20 @@ export const fetchAllStudentsFromFirestore = async (customCatalog?: Course[], in
     const usersQuery = query(collection(db, 'users'), where('role', '==', 'student'));
     const usersSnap = await getDocs(usersQuery);
     const userDocs = usersSnap.docs;
+    // Read all progress records once instead of issuing one network request per student.
+    const progressSnap = await getDocs(collection(db, 'user_progress'));
+    const progressByUid = new Map<string, UserProgress>();
+    progressSnap.forEach(progressDoc => {
+      progressByUid.set(progressDoc.id, progressDoc.data() as UserProgress);
+    });
+    const studentsByEmail = new Map<string, any[]>();
+    userDocs.forEach(userDoc => {
+      const email = String(userDoc.data()?.email || '').trim().toLowerCase();
+      if (!email) return;
+      const matches = studentsByEmail.get(email) || [];
+      matches.push(userDoc);
+      studentsByEmail.set(email, matches);
+    });
 
     for (const uDoc of userDocs) {
       const uData = uDoc.data();
@@ -1438,17 +1452,14 @@ export const fetchAllStudentsFromFirestore = async (customCatalog?: Course[], in
       let proctorReviewedBy = '';
 
       try {
-        const progSnap = await getDoc(doc(db, 'user_progress', uid));
-        let p = progSnap.exists() ? (progSnap.data() as UserProgress) : null;
+        let p = progressByUid.get(uid) || null;
 
         // Duplicate student handling: merge progress records from same email so proctor data and course progress stay together
         try {
-          const otherUserQuery = query(collection(db, 'users'), where('email', '==', uData.email || ''), where('uid', '!=', uid));
-          const otherSnap = await getDocs(otherUserQuery);
-          for (const otherDoc of otherSnap.docs) {
-            const otherProgSnap = await getDoc(doc(db, 'user_progress', otherDoc.id));
-            if (otherProgSnap.exists()) {
-              const otherP = otherProgSnap.data() as UserProgress;
+          const sameEmailDocs = studentsByEmail.get(String(uData.email || '').trim().toLowerCase()) || [];
+          for (const otherDoc of sameEmailDocs) {
+            if (otherDoc.id !== uid && progressByUid.has(otherDoc.id)) {
+              const otherP = progressByUid.get(otherDoc.id)!;
               const mergedProgress = {
                 ...(p || {}),
                 ...(otherP || {}),
@@ -2240,7 +2251,7 @@ export const fetchInstructorsList = async (): Promise<InstructorAccount[]> => {
 
   // 3. From Firestore users where role === 'instructor'
   try {
-    const uSnap = await getDocs(collection(db, 'users'));
+    const uSnap = await getDocs(query(collection(db, 'users'), where('role', '==', 'instructor')));
     uSnap.forEach(d => {
       const data = d.data();
       if (data.role === 'instructor' && data.email) {
