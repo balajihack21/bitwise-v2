@@ -327,7 +327,8 @@ export const recordCompletion = (
   userOrName: string | User = 'guest',
   lessonId: string,
   course: Course,
-  earnedXp: number = 50
+  earnedXp: number = 50,
+  persist: boolean = true
 ): { updatedProgress: UserProgress; newlyUnlockedLesson: Lesson | null } => {
   const username = typeof userOrName === 'string' ? userOrName : (userOrName?.username || 'guest');
   const uid = typeof userOrName === 'object' ? userOrName?.uid : undefined;
@@ -354,9 +355,11 @@ export const recordCompletion = (
     lastActiveDate: new Date().toISOString().split('T')[0]
   };
 
-  saveUserProgress(username, updatedProgress);
-  if (uid) {
-    saveUserProgressToFirestore(uid, updatedProgress).catch(() => {});
+  if (persist) {
+    saveUserProgress(username, updatedProgress);
+    if (uid) {
+      saveUserProgressToFirestore(uid, updatedProgress).catch(() => {});
+    }
   }
 
   return {
@@ -374,7 +377,9 @@ export const submitCreativeChallenge = (
   const username = typeof userOrName === 'string' ? userOrName : (userOrName?.username || 'guest');
   const uid = typeof userOrName === 'object' ? userOrName?.uid : undefined;
   const currentProgress = loadUserProgress(username);
-  const completion = recordCompletion(userOrName, lesson.id, course, lesson.challenge?.points || 10);
+  // Persist once after adding the creative answer so the completion write cannot
+  // race with a second write that omits creativeSubmissions.
+  const completion = recordCompletion(userOrName, lesson.id, course, lesson.challenge?.points || 10, false);
   const submission: CreativeChallengeSubmission = {
     id: `creative-${lesson.id}-${Date.now()}`,
     lessonId: lesson.id,
@@ -473,9 +478,28 @@ export const recordProctoringInfraction = (
     tabSwitchCount: type === 'tab_switch' ? (currentProgress.tabSwitchCount || 0) + 1 : (currentProgress.tabSwitchCount || 0),
     focusLossCount: type === 'focus_loss' || type === 'tab_switch' ? (currentProgress.focusLossCount || 0) + 1 : (currentProgress.focusLossCount || 0),
     testExitAttempts: type === 'exit_attempt' ? (currentProgress.testExitAttempts || 0) + 1 : (currentProgress.testExitAttempts || 0),
+    ...(type === 'tab_switch' || type === 'focus_loss'
+      ? { proctorReviewedAt: '', proctorReviewedBy: '' }
+      : {}),
   };
 
   saveUserProgress(username, updatedProgress);
+  if (type === 'tab_switch' || type === 'focus_loss') {
+    try {
+      const rawReviews = localStorage.getItem('bitwise_proctor_reviews');
+      if (rawReviews) {
+        const reviews = JSON.parse(rawReviews);
+        delete reviews[username];
+        if (uid) delete reviews[uid];
+        if (typeof userOrName === 'object' && userOrName?.email) {
+          delete reviews[userOrName.email];
+        }
+        localStorage.setItem('bitwise_proctor_reviews', JSON.stringify(reviews));
+      }
+    } catch (e) {
+      console.warn('Failed to clear stale proctor review override:', e);
+    }
+  }
   if (uid) {
     saveUserProgressToFirestore(uid, updatedProgress).catch(() => {});
   }
@@ -512,12 +536,16 @@ export const resetUserCourseProgress = (
   const remainingSubmissions = (currentProgress.submissions || []).filter(
     s => s.courseId !== courseId && !courseLessonIds.includes(s.problemId)
   );
+  const remainingCreativeSubmissions = (currentProgress.creativeSubmissions || []).filter(
+    submission => submission.courseId !== courseId && !courseLessonIds.includes(submission.lessonId)
+  );
 
   const updatedProgress: UserProgress = {
     ...currentProgress,
     completedLessonIds: remainingCompleted,
     unlockedLessonIds: remainingUnlocked,
     submissions: remainingSubmissions,
+    creativeSubmissions: remainingCreativeSubmissions,
     lastActiveDate: new Date().toISOString().split('T')[0]
   };
 

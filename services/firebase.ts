@@ -1031,11 +1031,62 @@ export const loadUserProgressFromFirestore = async (userId: string): Promise<Use
     } catch (e) { /* ignore */ }
 
     const canonicalUid = await resolveCanonicalStudentUid(userId, activeUser?.email, activeUser?.regNo);
-    const targetUid = canonicalUid || userId;
-    const progressDocRef = doc(db, 'user_progress', targetUid);
-    const snap = await getDoc(progressDocRef);
-    if (snap.exists()) {
-      return snap.data() as UserProgress;
+    const normalizedEmail = String(activeUser?.email || '').trim().toLowerCase();
+    const normalizedRegNo = String(activeUser?.regNo || '').trim();
+    let matchingUserIds: string[] = [];
+    try {
+      const usersSnap = await getDocs(collection(db, 'users'));
+      matchingUserIds = usersSnap.docs
+        .filter(userDoc => {
+          const data = userDoc.data();
+          const sameUid = userDoc.id === userId || userDoc.id === canonicalUid;
+          const sameEmail = normalizedEmail &&
+            String(data.email || '').trim().toLowerCase() === normalizedEmail;
+          const sameRegNo = normalizedRegNo &&
+            String(data.regNo || '').trim() === normalizedRegNo;
+          return sameUid || sameEmail || sameRegNo;
+        })
+        .map(userDoc => userDoc.id);
+    } catch (usersError) {
+      console.warn('Could not enumerate student identities while loading progress:', usersError);
+    }
+
+    const progressIds = Array.from(new Set([
+      userId,
+      canonicalUid,
+      ...matchingUserIds
+    ].filter(Boolean)));
+    const progressSnapshots = await Promise.all(
+      progressIds.map(progressId => getDoc(doc(db, 'user_progress', progressId)))
+    );
+    const progressRecords = progressSnapshots
+      .filter(snapshot => snapshot.exists())
+      .map(snapshot => snapshot.data() as UserProgress);
+
+    if (progressRecords.length > 0) {
+      const merged: UserProgress = {
+        ...progressRecords[0],
+        completedLessonIds: Array.from(new Set(progressRecords.flatMap(record => record.completedLessonIds || []))),
+        unlockedLessonIds: Array.from(new Set(progressRecords.flatMap(record => record.unlockedLessonIds || []))),
+        submissions: Array.from(new Map(
+          progressRecords.flatMap(record => record.submissions || []).map(submission => [
+            submission.id || JSON.stringify(submission),
+            submission
+          ])
+        ).values()),
+        creativeSubmissions: Array.from(new Map(
+          progressRecords.flatMap(record => record.creativeSubmissions || []).map(submission => [
+            submission.id || JSON.stringify(submission),
+            submission
+          ])
+        ).values()),
+        xp: Math.max(...progressRecords.map(record => record.xp || 0)),
+        streakDays: Math.max(...progressRecords.map(record => record.streakDays || 1)),
+        tabSwitchCount: Math.max(...progressRecords.map(record => record.tabSwitchCount || 0)),
+        focusLossCount: Math.max(...progressRecords.map(record => record.focusLossCount || 0)),
+        testExitAttempts: Math.max(...progressRecords.map(record => record.testExitAttempts || 0))
+      };
+      return merged;
     }
   } catch (err) {
     console.error('Failed to load progress from Firestore:', err);
@@ -1403,7 +1454,8 @@ export const fetchAllStudentsFromFirestore = async (customCatalog?: Course[], in
         const hasExplicitCourseMatch = (uData.courseInstructorAssignments || []).some((a: any) => {
           if (a.instructorId !== instructorUid) return false;
           if (!Array.isArray(instructorCourseIds) || instructorCourseIds.length === 0) return true;
-          return Array.isArray(a.courseId) ? a.courseId.includes(a.courseId) : instructorCourseIds.includes(a.courseId);
+          const assignmentCourseIds = Array.isArray(a.courseId) ? a.courseId.filter(Boolean) : [a.courseId].filter(Boolean);
+          return assignmentCourseIds.some((courseId: string) => instructorCourseIds.includes(courseId));
         });
 
         const hasCourseOnlyFallback =
@@ -1418,10 +1470,12 @@ export const fetchAllStudentsFromFirestore = async (customCatalog?: Course[], in
       }
       if (instructorCourseIds && instructorCourseIds.length > 0) {
         const studentAssignedCourseIds = new Set<string>((uData.assignedCourseIds || []).filter(Boolean));
-        const explicitInstructorCourses = new Set<string>((uData.courseInstructorAssignments || [])
-          .filter((a: any) => a.instructorId === instructorUid)
-          .map((a: any) => a.courseId)
-          .filter(Boolean));
+        const explicitInstructorCourses = new Set<string>(
+          (uData.courseInstructorAssignments || [])
+            .filter((a: any) => a.instructorId === instructorUid)
+            .flatMap((a: any) => Array.isArray(a.courseId) ? a.courseId.filter(Boolean) : [a.courseId].filter(Boolean))
+            .filter((courseId: string | undefined): courseId is string => Boolean(courseId))
+        );
 
         const okayForInstructor =
           [...studentAssignedCourseIds].some((cid: string) => instructorCourseIds.includes(cid)) &&
@@ -1529,7 +1583,6 @@ export const fetchAllStudentsFromFirestore = async (customCatalog?: Course[], in
           if (r) {
             if (r.proctorStatus) proctorStatus = r.proctorStatus;
             if (r.proctorNotes !== undefined) proctorNotes = r.proctorNotes;
-            if (r.tabSwitchCount !== undefined) tabSwitchCount = r.tabSwitchCount;
             if (r.proctorReviewedAt) proctorReviewedAt = r.proctorReviewedAt;
             if (r.proctorReviewedBy) proctorReviewedBy = r.proctorReviewedBy;
           }
@@ -1642,7 +1695,6 @@ export const fetchAllStudentsFromFirestore = async (customCatalog?: Course[], in
                 if (r) {
                   if (r.proctorStatus) proctorStatus = r.proctorStatus;
                   if (r.proctorNotes !== undefined) proctorNotes = r.proctorNotes;
-                  if (r.tabSwitchCount !== undefined) tabSwitchCount = r.tabSwitchCount;
                   if (r.proctorReviewedAt) proctorReviewedAt = r.proctorReviewedAt;
                   if (r.proctorReviewedBy) proctorReviewedBy = r.proctorReviewedBy;
                 }
@@ -1806,7 +1858,6 @@ export const updateStudentProctoringReview = async (
     const reviewData = {
       proctorStatus: data.proctorStatus,
       proctorNotes: data.proctorNotes || '',
-      ...(data.tabSwitchCount !== undefined ? { tabSwitchCount: data.tabSwitchCount } : {}),
       proctorReviewedAt: timestamp,
       proctorReviewedBy: data.reviewedBy || 'Admin'
     };
@@ -1875,7 +1926,10 @@ export const resetStudentCourseProgressInFirestore = async (
   uid: string,
   studentName: string,
   courseId: string,
-  course: Course
+  course: Course,
+  studentEmail?: string,
+  studentRegNo?: string,
+  moduleId?: string
 ): Promise<{ 
   success: boolean; 
   message: string; 
@@ -1884,23 +1938,46 @@ export const resetStudentCourseProgressInFirestore = async (
 }> => {
   // Extract all lesson IDs belonging to this course
   const courseLessonIds: string[] = [];
-  course.modules?.forEach(m => {
-    m.lessons?.forEach(l => courseLessonIds.push(l.id));
+  course.modules?.forEach(module => {
+    if (!moduleId || module.id === moduleId) {
+      module.lessons?.forEach(lesson => courseLessonIds.push(lesson.id));
+    }
   });
 
   let remainingCompleted: string[] = [];
   let remainingSubmissions: SubmissionRecord[] = [];
 
-  // 1. Update Firestore if possible
+  // 1. Update every progress record belonging to this student identity.
+  // Admin views merge duplicate seed/auth records, so resetting only one UID
+  // would allow the old creative submission to reappear after reload.
   try {
-    const progressDocRef = doc(db, 'user_progress', uid);
-    const snap = await getDoc(progressDocRef);
-    if (snap.exists()) {
-      const p = snap.data() as UserProgress;
+    const normalizedEmail = String(studentEmail || '').trim().toLowerCase();
+    const normalizedRegNo = String(studentRegNo || '').trim();
+    const progressIds = new Set<string>([uid]);
+    if (normalizedEmail || normalizedRegNo) {
+      const usersSnap = await getDocs(collection(db, 'users'));
+      usersSnap.docs.forEach(userDoc => {
+        const data = userDoc.data();
+        const sameEmail = normalizedEmail &&
+          String(data.email || '').trim().toLowerCase() === normalizedEmail;
+        const sameRegNo = normalizedRegNo &&
+          String(data.regNo || '').trim() === normalizedRegNo;
+        if (sameEmail || sameRegNo) progressIds.add(userDoc.id);
+      });
+    }
+
+    for (const progressId of progressIds) {
+      const progressDocRef = doc(db, 'user_progress', progressId);
+      const snap = await getDoc(progressDocRef);
+      if (snap.exists()) {
+        const p = snap.data() as UserProgress;
       remainingCompleted = (p.completedLessonIds || []).filter(id => !courseLessonIds.includes(id));
       const remainingUnlocked = (p.unlockedLessonIds || []).filter(id => !courseLessonIds.includes(id));
       remainingSubmissions = (p.submissions || []).filter(
-        s => s.courseId !== courseId && !courseLessonIds.includes(s.problemId)
+        s => s.courseId !== courseId || !courseLessonIds.includes(s.problemId)
+      );
+      const remainingCreativeSubmissions = (p.creativeSubmissions || []).filter(
+        submission => submission.courseId !== courseId || !courseLessonIds.includes(submission.lessonId)
       );
 
       await setDoc(progressDocRef, sanitizeForFirestore({
@@ -1908,8 +1985,10 @@ export const resetStudentCourseProgressInFirestore = async (
         completedLessonIds: remainingCompleted,
         unlockedLessonIds: remainingUnlocked,
         submissions: remainingSubmissions,
+        creativeSubmissions: remainingCreativeSubmissions,
         updatedAt: new Date().toISOString()
       }), { merge: true });
+      }
     }
   } catch (err) {
     console.warn('Could not reset course progress in Firestore:', err);
@@ -1924,6 +2003,8 @@ export const resetStudentCourseProgressInFirestore = async (
     );
     const subSnap = await getDocs(subQuery);
     for (const d of subSnap.docs) {
+      const submission = d.data();
+      if (!courseLessonIds.includes(String(submission.problemId || ''))) continue;
       await deleteDoc(d.ref);
     }
   } catch (e) {
@@ -1944,7 +2025,10 @@ export const resetStudentCourseProgressInFirestore = async (
         remainingCompleted = (parsed.completedLessonIds || []).filter(id => !courseLessonIds.includes(id));
         const remainingUnlocked = (parsed.unlockedLessonIds || []).filter(id => !courseLessonIds.includes(id));
         remainingSubmissions = (parsed.submissions || []).filter(
-          s => s.courseId !== courseId && !courseLessonIds.includes(s.problemId)
+          s => s.courseId !== courseId || !courseLessonIds.includes(s.problemId)
+        );
+        const remainingCreativeSubmissions = (parsed.creativeSubmissions || []).filter(
+          submission => submission.courseId !== courseId || !courseLessonIds.includes(submission.lessonId)
         );
 
         const updated: UserProgress = {
@@ -1952,6 +2036,7 @@ export const resetStudentCourseProgressInFirestore = async (
           completedLessonIds: remainingCompleted,
           unlockedLessonIds: remainingUnlocked,
           submissions: remainingSubmissions,
+          creativeSubmissions: remainingCreativeSubmissions,
           lastActiveDate: new Date().toISOString().split('T')[0]
         };
         localStorage.setItem(key, JSON.stringify(updated));

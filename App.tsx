@@ -62,6 +62,37 @@ const App: React.FC = () => {
   const [activeCourseId, setActiveCourseId] = useState<string | undefined>(undefined);
   const [activeLessonId, setActiveLessonId] = useState<string | undefined>(undefined);
 
+  // Apply browser-level inspection safeguards to student sessions only.
+  useEffect(() => {
+    if (user?.role !== 'student') return;
+
+    const blockInspection = (event: Event) => {
+      event.preventDefault();
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const key = event.key.toLowerCase();
+      const modifier = event.ctrlKey || event.metaKey;
+      const blocked =
+        event.key === 'F12' ||
+        (modifier && event.shiftKey && ['i', 'j', 'c'].includes(key)) ||
+        (modifier && key === 'u');
+
+      if (blocked) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+
+    document.addEventListener('contextmenu', blockInspection);
+    document.addEventListener('keydown', handleKeyDown, true);
+
+    return () => {
+      document.removeEventListener('contextmenu', blockInspection);
+      document.removeEventListener('keydown', handleKeyDown, true);
+    };
+  }, [user?.role]);
+
   // Initialize course data from localStorage or fallback with version check
   const [courses, setCourses] = useState<Course[]>(() => {
     const CURRENT_SCHEMA_VER = 'v4_full_dsa_testcases_suite';

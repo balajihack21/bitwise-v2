@@ -149,12 +149,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     student: StudentOverview | null;
     courseId: string;
     courseTitle: string;
+    moduleId: string;
+    moduleTitle: string;
     completedCount: number;
   }>({
     isOpen: false,
     student: null,
     courseId: '',
     courseTitle: '',
+    moduleId: '',
+    moduleTitle: '',
     completedCount: 0
   });
   const [isResettingCourse, setIsResettingCourse] = useState<boolean>(false);
@@ -171,6 +175,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     student: StudentOverview,
     courseId: string,
     courseTitle: string,
+    moduleId: string,
+    moduleTitle: string,
     completedCount: number = 0
   ) => {
     setResetConfirmState({
@@ -178,6 +184,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       student,
       courseId,
       courseTitle,
+      moduleId,
+      moduleTitle,
       completedCount
     });
   };
@@ -185,7 +193,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const handleConfirmResetCourseProgress = async () => {
     if (!resetConfirmState.student || !resetConfirmState.courseId) return;
 
-    const { student, courseId, courseTitle } = resetConfirmState;
+    const { student, courseId, courseTitle, moduleId, moduleTitle } = resetConfirmState;
     setIsResettingCourse(true);
 
     try {
@@ -194,36 +202,45 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         throw new Error('Course not found');
       }
 
-      // Collect all lesson IDs for this course
-      const courseLessonIds: string[] = [];
-      targetCourse.modules?.forEach(m => {
-        m.lessons?.forEach(l => courseLessonIds.push(l.id));
-      });
+      const targetModule = targetCourse.modules?.find(module => module.id === moduleId);
+      if (!targetModule) {
+        throw new Error('Unit not found');
+      }
+      const moduleLessonIds = targetModule.lessons?.map(lesson => lesson.id) || [];
 
       // Execute Firebase & LocalStorage reset
       await resetStudentCourseProgressInFirestore(
         student.uid,
         student.displayName,
         courseId,
-        targetCourse
+        targetCourse,
+        student.email,
+        student.regNo
+        ,moduleId
       );
 
       // Optimistically update students state
       const updateStudentData = (s: StudentOverview): StudentOverview => {
-        const remainingCompleted = (s.completedLessonIds || []).filter(id => !courseLessonIds.includes(id));
+        const remainingCompleted = (s.completedLessonIds || []).filter(id => !moduleLessonIds.includes(id));
         const remainingSubs = (s.submissions || []).filter(
-          sub => sub.courseId !== courseId && !courseLessonIds.includes(sub.problemId)
+          sub => sub.courseId !== courseId || !moduleLessonIds.includes(sub.problemId)
+        );
+        const remainingCreativeSubs = (s.creativeSubmissions || []).filter(
+          submission => submission.courseId !== courseId || !moduleLessonIds.includes(submission.lessonId)
         );
 
         // Update enrolledCourses list
         const updatedEnrolledCourses = (s.enrolledCourses || []).map(cp => {
           if (cp.courseId === courseId) {
+            const courseLessons = targetCourse.modules?.flatMap(module => module.lessons || []) || [];
+            const completedLessons = courseLessons.filter(lesson => remainingCompleted.includes(lesson.id)).length;
+            const problemLessons = courseLessons.filter(lesson => lesson.type === 'problem');
             return {
               ...cp,
-              completedLessons: 0,
-              problemsSolved: 0,
-              progressPercentage: 0,
-              isCompleted: false
+              completedLessons,
+              problemsSolved: problemLessons.filter(lesson => remainingCompleted.includes(lesson.id)).length,
+              progressPercentage: courseLessons.length > 0 ? Math.round((completedLessons / courseLessons.length) * 100) : 0,
+              isCompleted: completedLessons === courseLessons.length && courseLessons.length > 0
             };
           }
           return cp;
@@ -235,6 +252,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
           completedLessonsCount: remainingCompleted.length,
           submissions: remainingSubs,
           submissionsCount: remainingSubs.length,
+          creativeSubmissions: remainingCreativeSubs,
           enrolledCourses: updatedEnrolledCourses
         };
       };
@@ -245,7 +263,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         setSelectedStudentForDetails(prev => prev ? updateStudentData(prev) : null);
       }
 
-      setCourseResetNotification(`✓ Progress for "${courseTitle}" for student ${student.displayName} has been reset to 0%.`);
+      setCourseResetNotification(`✓ Progress for "${moduleTitle}" for student ${student.displayName} has been reset.`);
       setTimeout(() => {
         setCourseResetNotification(null);
       }, 4500);
@@ -255,6 +273,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         student: null,
         courseId: '',
         courseTitle: '',
+        moduleId: '',
+        moduleTitle: '',
         completedCount: 0
       });
     } catch (err: any) {
@@ -1263,8 +1283,9 @@ solve()`
         (s.enrolledCourses || []).some((cp: any) => {
           if (!assignedCourseIds.includes(cp.courseId)) return false;
           const course = courses.find(item => item.id === cp.courseId);
+          const normalizedCurrentEmail = String(currentInstructorEmail || '').trim().toLowerCase();
           return (course?.assignedInstructors || []).some(instructor =>
-            instructor.uid === currentInstId || instructor.email.toLowerCase() === currentInstructorEmail
+            instructor.uid === currentInstId || String(instructor.email || '').trim().toLowerCase() === normalizedCurrentEmail
           );
         });
 
@@ -3164,19 +3185,6 @@ solve()`
                                               }`}>
                                                 {cp.progressPercentage}%
                                               </span>
-                                              {(cp.completedLessons > 0 || cp.problemsSolved > 0) && (
-                                                <button
-                                                  type="button"
-                                                  onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    initiateResetCourseProgress(student, cp.courseId, cp.courseTitle, cp.completedLessons);
-                                                  }}
-                                                  title={`Reset ${cp.courseTitle} progress for ${student.displayName} to 0%`}
-                                                  className="w-5 h-5 rounded flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-                                                >
-                                                  <i className="fa-solid fa-rotate-left text-[9px]"></i>
-                                                </button>
-                                              )}
                                             </div>
                                           </div>
                                           {/* Progress Bar */}
@@ -4019,7 +4027,7 @@ solve()`
                               </div>
                             </div>
 
-                            {/* Course Actions: Syllabus & Reset Progress */}
+                            {/* Course Actions: Syllabus */}
                             <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2">
                               {fullCourse && fullCourse.modules ? (
                                 <button
@@ -4033,29 +4041,6 @@ solve()`
                                 <div />
                               )}
 
-                              <button
-                                type="button"
-                                onClick={() => initiateResetCourseProgress(
-                                  selectedStudentForDetails,
-                                  cp.courseId,
-                                  cp.courseTitle,
-                                  cp.completedLessons
-                                )}
-                                disabled={cp.completedLessons === 0 && cp.problemsSolved === 0}
-                                className={`px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-                                  cp.completedLessons === 0 && cp.problemsSolved === 0
-                                    ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60'
-                                    : 'bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 shadow-2xs hover:shadow-xs'
-                                }`}
-                                title={
-                                  cp.completedLessons === 0 && cp.problemsSolved === 0
-                                    ? 'Course progress is already at 0%'
-                                    : `Reset progress for ${cp.courseTitle} to 0%`
-                                }
-                              >
-                                <i className="fa-solid fa-rotate-left text-[10px]"></i>
-                                <span>Reset Course Progress</span>
-                              </button>
                             </div>
 
                             {canViewInternalMarks && (
@@ -4189,6 +4174,40 @@ solve()`
                                       <div className="font-bold text-slate-700 mb-1 text-[11px] flex items-center justify-between gap-2">
                                         <span>{mod.title}</span>
                                         <div className="flex items-center gap-1">
+                                          {(() => {
+                                            const moduleLessonIds = mod.lessons.map(lesson => lesson.id);
+                                            const moduleCompletedCount = moduleLessonIds.filter(id => selectedStudentForDetails.completedLessonIds?.includes(id)).length;
+                                            const hasModuleCreativeSubmission = selectedStudentForDetails.creativeSubmissions?.some(submission =>
+                                              submission.courseId === cp.courseId && moduleLessonIds.includes(submission.lessonId)
+                                            );
+                                            const hasModuleSubmission = selectedStudentForDetails.submissions?.some(submission =>
+                                              submission.courseId === cp.courseId && moduleLessonIds.includes(submission.problemId)
+                                            );
+                                            const canReset = moduleCompletedCount > 0 || hasModuleCreativeSubmission || hasModuleSubmission;
+                                            return (
+                                              <button
+                                                type="button"
+                                                disabled={!canReset}
+                                                onClick={() => initiateResetCourseProgress(
+                                                  selectedStudentForDetails,
+                                                  cp.courseId,
+                                                  cp.courseTitle,
+                                                  mod.id,
+                                                  mod.title,
+                                                  moduleCompletedCount
+                                                )}
+                                                className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-bold ${
+                                                  canReset
+                                                    ? 'bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 cursor-pointer'
+                                                    : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
+                                                }`}
+                                                title={`Reset ${mod.title} progress`}
+                                              >
+                                                <i className="fa-solid fa-rotate-left text-[9px]"></i>
+                                                Reset Unit
+                                              </button>
+                                            );
+                                          })()}
                                           {selectedStudentForDetails.moduleDeadlineOverrides?.[cp.courseId]?.[mod.id] && (
                                             <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-700 px-1.5 py-0.5 font-bold uppercase tracking-wide">
                                               Extended
@@ -4421,31 +4440,31 @@ solve()`
                   <i className="fa-solid fa-rotate-left"></i>
                 </div>
                 <h3 className="text-lg font-bold text-slate-900 mb-2">
-                  Reset Course Progress?
+                  Reset Unit Progress?
                 </h3>
                 <p className="text-sm text-slate-600 mb-4 leading-relaxed">
-                  Are you sure you want to reset <span className="font-bold text-slate-900">{resetConfirmState.student.displayName}</span>'s progress for <span className="font-bold text-bitwise-700">{resetConfirmState.courseTitle}</span>?
+                  Are you sure you want to reset <span className="font-bold text-slate-900">{resetConfirmState.student.displayName}</span>'s progress for <span className="font-bold text-bitwise-700">{resetConfirmState.moduleTitle}</span>?
                 </p>
 
                 <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 mb-5 space-y-2 text-xs text-slate-600">
                   <div className="flex items-center gap-2 font-medium">
                     <i className="fa-solid fa-circle-xmark text-red-500 shrink-0"></i>
-                    <span>Resets completed lessons ({resetConfirmState.completedCount}) in this course back to 0</span>
+                    <span>Resets completed lessons ({resetConfirmState.completedCount}) in this Unit</span>
                   </div>
                   <div className="flex items-center gap-2 font-medium">
                     <i className="fa-solid fa-circle-xmark text-red-500 shrink-0"></i>
-                    <span>Clears challenge submissions for this course</span>
+                    <span>Clears challenge submissions for this Unit</span>
                   </div>
                   <div className="flex items-center gap-2 font-medium">
                     <i className="fa-solid fa-circle-xmark text-red-500 shrink-0"></i>
-                    <span>Sets course progress back to 0%</span>
+                    <span>Leaves other Units unchanged</span>
                   </div>
                 </div>
 
                 <div className="flex items-center justify-end gap-3">
                   <button
                     type="button"
-                    onClick={() => setResetConfirmState({ isOpen: false, student: null, courseId: '', courseTitle: '', completedCount: 0 })}
+                    onClick={() => setResetConfirmState({ isOpen: false, student: null, courseId: '', courseTitle: '', moduleId: '', moduleTitle: '', completedCount: 0 })}
                     disabled={isResettingCourse}
                     className="px-4 py-2.5 rounded-xl border border-slate-300 text-slate-700 font-bold text-xs hover:bg-slate-100 transition-colors cursor-pointer"
                   >
