@@ -51,7 +51,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const isInstructor = currentUser?.role === 'instructor';
   const canManageCourseTests = currentUser?.role === 'instructor' || currentUser?.role === 'admin';
   const canViewInternalMarks = currentUser?.role === 'instructor' || currentUser?.role === 'admin';
-  const [activeTab, setActiveTab] = useState<'courses' | 'instructors' | 'students' | 'submissions' | 'firebase' | 'coding-tests' | 'practice-problems'>('courses');
+  const [activeTab, setActiveTab] = useState<'courses' | 'instructors' | 'students' | 'instructor-progress' | 'submissions' | 'firebase' | 'coding-tests' | 'practice-problems'>('courses');
   const [practiceCourseId, setPracticeCourseId] = useState('');
   const [practiceTopic, setPracticeTopic] = useState('');
   const [practiceTitle, setPracticeTitle] = useState('');
@@ -288,7 +288,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Load students & submissions when switching tabs
   useEffect(() => {
     console.log('DEBUG LOAD: activeTab=', activeTab, 'isInstructor=', isInstructor, 'currentUser.uid=', currentUser?.uid, 'assignedCourseIds=', assignedCourseIds);
-    if (activeTab === 'students') {
+    if (activeTab === 'students' || activeTab === 'instructor-progress') {
       loadStudents();
     } else if (activeTab === 'submissions') {
       loadSubmissions();
@@ -311,7 +311,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     newStatus: ProctorStatus,
     overrideSwitchCount?: number
   ) => {
-    const updatedSwitchCount = overrideSwitchCount !== undefined ? overrideSwitchCount : (student.tabSwitchCount || 0);
+    const updatedSwitchCount = newStatus === 'CLEAN'
+      ? 0
+      : (overrideSwitchCount !== undefined ? overrideSwitchCount : (student.tabSwitchCount || 0));
     const timestamp = new Date().toLocaleTimeString();
 
     // Optimistically update local state
@@ -347,7 +349,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         proctorStatus: newStatus,
         tabSwitchCount: updatedSwitchCount,
         proctorNotes: student.proctorNotes,
-        reviewedBy: 'Admin'
+        reviewedBy: 'Admin',
+        email: student.email,
+        regNo: student.regNo
       });
     } catch (e) {
       console.warn('Could not update proctor status:', e);
@@ -772,7 +776,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       const data = await fetchAllStudentsFromFirestore(
         courses,
         isInstructor ? currentUser?.uid : undefined,
-        isInstructor ? assignedCourseIds : undefined
+        isInstructor ? assignedCourseIds : undefined,
+        !isInstructor
       );
       // If no Firestore records yet, provide mock preview
       if (data.length === 0) {
@@ -1321,6 +1326,11 @@ solve()`
     });
   }, [students, studentSearch, studentDeptFilter, studentSectionFilter, studentYearFilter, selectedCourseFilter, selectedInstructorFilter, progressFilter, studentSort, proctorFilter, isInstructor, courses, currentUser, currentInstructorEmail, assignedCourseIds]);
 
+  const instructorProgress = useMemo(
+    () => students.filter(student => student.role === 'instructor'),
+    [students]
+  );
+
   const filteredSubmissions = useMemo(() => submissions.filter(sub => {
     // If instructor, only show submissions for assigned courses
     if (isInstructor && sub.courseId && !assignedCourseIds.includes(sub.courseId)) {
@@ -1479,6 +1489,19 @@ solve()`
               }`}
             >
               <i className="fa-solid fa-chalkboard-user"></i> Instructors & Assignments
+            </button>
+          )}
+
+          {!isInstructor && (
+            <button
+              onClick={() => { setActiveTab('instructor-progress'); setEditingCourse(null); }}
+              className={`flex-1 py-2.5 px-4 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2 ${
+                activeTab === 'instructor-progress'
+                  ? 'bg-violet-600 text-white shadow-sm'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <i className="fa-solid fa-chart-line"></i> Instructor Progress
             </button>
           )}
 
@@ -2626,6 +2649,89 @@ solve()`
               courses={courses}
               onUpdateCourses={onUpdateCourses}
             />
+          )}
+
+          {/* TAB: INSTRUCTOR PROGRESS (ADMIN ONLY) */}
+          {activeTab === 'instructor-progress' && !isInstructor && (
+            <div className="space-y-6">
+              <div className="p-4 bg-violet-50 border border-violet-200 rounded-2xl">
+                <h2 className="text-base font-bold text-violet-950 flex items-center gap-2">
+                  <i className="fa-solid fa-chart-line text-violet-600"></i>
+                  Instructor Progress
+                </h2>
+                <p className="text-xs text-violet-800 mt-1">
+                  Review course completion, coding activity, creative challenge submissions, and proctoring activity for every instructor.
+                </p>
+              </div>
+
+              {instructorProgress.length === 0 ? (
+                <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center text-sm text-slate-500">
+                  No instructor progress records found.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                  {instructorProgress.map(instructor => (
+                    <div key={instructor.uid} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+                      <div className="flex items-start justify-between gap-3 mb-4">
+                        <div>
+                          <h3 className="font-bold text-slate-900">{instructor.displayName}</h3>
+                          <p className="text-xs text-slate-500">{instructor.email}</p>
+                        </div>
+                        <span className="px-2 py-1 rounded-full bg-violet-100 text-violet-700 border border-violet-200 text-[10px] font-bold uppercase">
+                          Instructor
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+                        <div className="rounded-lg bg-slate-50 border border-slate-200 p-2">
+                          <div className="text-[10px] text-slate-500">Lessons</div>
+                          <div className="text-lg font-black text-slate-900">{instructor.completedLessonsCount}</div>
+                        </div>
+                        <div className="rounded-lg bg-slate-50 border border-slate-200 p-2">
+                          <div className="text-[10px] text-slate-500">Code</div>
+                          <div className="text-lg font-black text-slate-900">{instructor.submissionsCount}</div>
+                        </div>
+                        <div className="rounded-lg bg-slate-50 border border-slate-200 p-2">
+                          <div className="text-[10px] text-slate-500">Creative</div>
+                          <div className="text-lg font-black text-slate-900">{instructor.creativeSubmissions?.length || 0}</div>
+                        </div>
+                        <div className="rounded-lg bg-slate-50 border border-slate-200 p-2">
+                          <div className="text-[10px] text-slate-500">Tab switches</div>
+                          <div className="text-lg font-black text-slate-900">{instructor.tabSwitchCount || 0}</div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        {instructor.enrolledCourses
+                          .filter(courseProgress => courseProgress.isEnrolled)
+                          .map(courseProgress => (
+                            <div key={courseProgress.courseId} className="rounded-lg border border-slate-200 p-3">
+                              <div className="flex items-center justify-between gap-2 mb-1">
+                                <span className="text-xs font-bold text-slate-800 truncate">{courseProgress.courseTitle}</span>
+                                <span className="text-xs font-bold text-violet-700">{courseProgress.progressPercentage}%</span>
+                              </div>
+                              <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                <div className="h-full bg-violet-500 rounded-full" style={{ width: `${courseProgress.progressPercentage}%` }} />
+                              </div>
+                              <div className="mt-1 text-[10px] text-slate-500">
+                                {courseProgress.completedLessons} of {courseProgress.totalLessons} lessons · {courseProgress.problemsSolved} challenges
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => openStudentDetails(instructor)}
+                        className="mt-4 w-full px-3 py-2 rounded-lg bg-violet-50 text-violet-700 border border-violet-200 hover:bg-violet-100 text-xs font-bold"
+                      >
+                        View Detailed Progress
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
 
           {/* TAB 2: DETAILED STUDENT PROGRESS TRACKER */}

@@ -1299,7 +1299,12 @@ export const setStudentModuleDeadlineOverride = async (
   }
 };
 
-export const fetchAllStudentsFromFirestore = async (customCatalog?: Course[], instructorUid?: string, instructorCourseIds?: string[]): Promise<StudentOverview[]> => {
+export const fetchAllStudentsFromFirestore = async (
+  customCatalog?: Course[],
+  instructorUid?: string,
+  instructorCourseIds?: string[],
+  includeInstructors: boolean = false
+): Promise<StudentOverview[]> => {
   const studentsMap = new Map<string, StudentOverview>();
   const instructorCatalog = await fetchInstructorsList().catch(() => [] as InstructorAccount[]);
 
@@ -1418,8 +1423,9 @@ export const fetchAllStudentsFromFirestore = async (customCatalog?: Course[], in
 
   try {
     // 1. Get all users from Firestore
-    const usersQuery = query(collection(db, 'users'), where('role', '==', 'student'));
-    const usersSnap = await getDocs(usersQuery);
+    const usersSnap = includeInstructors
+      ? await getDocs(collection(db, 'users'))
+      : await getDocs(query(collection(db, 'users'), where('role', '==', 'student')));
     const userDocs = usersSnap.docs;
     // Read all progress records once instead of issuing one network request per student.
     const progressSnap = await getDocs(collection(db, 'user_progress'));
@@ -1438,6 +1444,9 @@ export const fetchAllStudentsFromFirestore = async (customCatalog?: Course[], in
 
     for (const uDoc of userDocs) {
       const uData = uDoc.data();
+      if (uData.role !== 'student' && !(includeInstructors && uData.role === 'instructor')) {
+        continue;
+      }
       const uid = uDoc.id;
       const canonicalStudentUid = await resolveCanonicalStudentUid(userDocs, uid, uData);
       if (canonicalStudentUid !== uid) continue;
@@ -1813,20 +1822,38 @@ export const updateStudentProctoringReview = async (
     proctorNotes?: string;
     tabSwitchCount?: number;
     reviewedBy?: string;
+    email?: string;
+    regNo?: string;
   }
 ): Promise<void> => {
   const timestamp = new Date().toLocaleString();
 
-  // 1. Update in Firestore user_progress
+  // Reset all duplicate progress records for the same student identity so an
+  // older seed/auth record cannot restore the previous alert count.
   try {
-    const docRef = doc(db, 'user_progress', uid);
-    await setDoc(docRef, {
+    const progressIds = new Set<string>([uid]);
+    const normalizedEmail = String(data.email || '').trim().toLowerCase();
+    const normalizedRegNo = String(data.regNo || '').trim();
+    if (normalizedEmail || normalizedRegNo) {
+      const usersSnap = await getDocs(collection(db, 'users'));
+      usersSnap.docs.forEach(userDoc => {
+        const userData = userDoc.data();
+        const sameEmail = normalizedEmail && String(userData.email || '').trim().toLowerCase() === normalizedEmail;
+        const sameRegNo = normalizedRegNo && String(userData.regNo || '').trim() === normalizedRegNo;
+        if (sameEmail || sameRegNo) progressIds.add(userDoc.id);
+      });
+    }
+
+    const reviewPayload = {
       proctorStatus: data.proctorStatus,
       proctorNotes: data.proctorNotes || '',
       ...(data.tabSwitchCount !== undefined ? { tabSwitchCount: data.tabSwitchCount } : {}),
       proctorReviewedAt: timestamp,
       proctorReviewedBy: data.reviewedBy || 'Admin'
-    }, { merge: true });
+    };
+    for (const progressId of progressIds) {
+      await setDoc(doc(db, 'user_progress', progressId), reviewPayload, { merge: true });
+    }
   } catch (e) {
     console.warn('Could not update proctor review in Firestore:', e);
   }

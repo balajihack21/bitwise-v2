@@ -20,6 +20,18 @@ const ProgressDashboard: React.FC<ProgressDashboardProps> = ({
   onNavigateToCertificates
 }) => {
   const [instructorMap, setInstructorMap] = useState<Record<string, string>>({});
+  const [selectedCourseForUnits, setSelectedCourseForUnits] = useState<Course | null>(null);
+
+  const visibleCourses = useMemo(() => {
+    if (!user || user.role === 'student' && (!user.assignedCourseIds || user.assignedCourseIds.length === 0)) {
+      return courses;
+    }
+    if (user.role === 'student' || user.role === 'instructor') {
+      const assignedIds = new Set(user.assignedCourseIds || []);
+      return assignedIds.size > 0 ? courses.filter(course => assignedIds.has(course.id)) : courses;
+    }
+    return courses;
+  }, [courses, user]);
 
   useEffect(() => {
     let cancelled = false;
@@ -90,7 +102,7 @@ const ProgressDashboard: React.FC<ProgressDashboardProps> = ({
   let totalLessons = 0;
   let totalCompletedLessons = 0;
 
-  courses.forEach(c => {
+  visibleCourses.forEach(c => {
     const cp = getCourseProgress(c, progress);
     totalProblems += cp.totalProblems;
     totalSolvedProblems += cp.problemsSolved;
@@ -265,7 +277,7 @@ const ProgressDashboard: React.FC<ProgressDashboardProps> = ({
         </h2>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {courses.map(course => {
+          {visibleCourses.map(course => {
             const cp = getCourseProgress(course, progress);
             return (
               <div 
@@ -339,6 +351,15 @@ const ProgressDashboard: React.FC<ProgressDashboardProps> = ({
                     {cp.percentage > 0 && !cp.isComplete ? 'Continue Learning' : 'Explore Challenges'} <i className="fa-solid fa-arrow-right text-[10px]"></i>
                   </button>
 
+                  <div className="flex items-center gap-3">
+                    <button
+                    type="button"
+                    onClick={() => setSelectedCourseForUnits(course)}
+                    className="text-xs text-slate-600 hover:text-slate-900 font-bold flex items-center gap-1"
+                  >
+                    <i className="fa-solid fa-list-check"></i>
+                    View Units
+                  </button>
                   {cp.isComplete && (
                     <button
                       onClick={onNavigateToCertificates}
@@ -347,11 +368,137 @@ const ProgressDashboard: React.FC<ProgressDashboardProps> = ({
                       <i className="fa-solid fa-certificate"></i> View Certificate
                     </button>
                   )}
+                  </div>
                 </div>
+
               </div>
             );
           })}
         </div>
+      </div>
+
+      {selectedCourseForUnits && (
+        <div
+          className="fixed inset-0 z-50 bg-slate-950/45 backdrop-blur-sm flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${selectedCourseForUnits.title} units`}
+          onClick={() => setSelectedCourseForUnits(null)}
+        >
+          <div
+            className="w-full max-w-2xl max-h-[82vh] overflow-hidden rounded-2xl bg-white border border-slate-200 shadow-2xl"
+            onClick={event => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4 p-5 border-b border-slate-200 bg-slate-50">
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-bitwise-600">Unit checklist</div>
+                <h2 className="text-lg font-bold text-slate-900 mt-1">{selectedCourseForUnits.title}</h2>
+                <p className="text-xs text-slate-500 mt-1">Review lesson completion and creative challenge submissions.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedCourseForUnits(null)}
+                className="w-8 h-8 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-white flex items-center justify-center"
+                aria-label="Close unit checklist"
+              >
+                <i className="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+            <div className="p-5 space-y-3 overflow-y-auto max-h-[65vh]">
+              {selectedCourseForUnits.modules.map(module => {
+                const completedLessons = module.lessons.filter(lesson => progress.completedLessonIds.includes(lesson.id)).length;
+                return (
+                  <div key={module.id} className="rounded-xl border border-slate-200 bg-white p-4">
+                  <div className="flex items-center justify-between gap-3 mb-3">
+                    <span className="text-sm font-bold text-slate-800">{module.title}</span>
+                    <span className="shrink-0 px-2 py-1 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold">
+                      {completedLessons}/{module.lessons.length} completed
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {module.lessons.map(lesson => {
+                      const completed = progress.completedLessonIds.includes(lesson.id);
+                      const creative = progress.creativeSubmissions?.find(submission => submission.lessonId === lesson.id);
+                      return (
+                        <div key={lesson.id} className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-xs">
+                          <span className={`min-w-0 truncate ${completed ? 'text-slate-800 font-semibold' : 'text-slate-500'}`}>
+                            {lesson.title}
+                          </span>
+                          <span className={`shrink-0 px-2 py-1 rounded font-bold ${
+                            completed ? 'bg-emerald-100 text-emerald-700' : 'bg-white text-slate-400 border border-slate-200'
+                          }`}>
+                            {creative ? `${creative.challengeType} submitted` : completed ? 'Completed' : 'Pending'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex justify-end p-4 border-t border-slate-200 bg-slate-50">
+              <button
+                type="button"
+                onClick={() => setSelectedCourseForUnits(null)}
+                className="px-4 py-2 rounded-lg bg-slate-900 text-white text-xs font-bold hover:bg-slate-800"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Algorithm, pseudo-code, and flowchart submissions */}
+      <div className="mb-10">
+        <h2 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+          <i className="fa-solid fa-diagram-project text-cyan-600"></i> Creative Challenge Submissions
+        </h2>
+        {(!progress.creativeSubmissions || progress.creativeSubmissions.length === 0) ? (
+          <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-slate-400 text-sm">
+            No algorithm, pseudo-code, or flowchart submissions recorded yet.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {progress.creativeSubmissions.map(submission => (
+              <div key={submission.id} className="bg-white rounded-2xl border border-cyan-200 shadow-sm overflow-hidden">
+                <div className="p-4 bg-cyan-50/60 border-b border-cyan-100 flex items-start justify-between gap-3">
+                  <div>
+                  <h3 className="text-sm font-bold text-slate-900">{submission.lessonTitle}</h3>
+                  <p className="text-[10px] text-slate-500 uppercase mt-1">
+                    {submission.challengeType} · {new Date(submission.submittedAt).toLocaleString()}
+                  </p>
+                  </div>
+                  <span className="shrink-0 px-2 py-1 rounded-full bg-amber-100 text-amber-800 border border-amber-200 text-[10px] font-bold">
+                  {submission.status} · {submission.points} pts
+                  </span>
+                </div>
+                {submission.answerText ? (
+                  <pre className="m-3 p-3 rounded-lg bg-slate-950 text-emerald-300 text-xs whitespace-pre-wrap font-mono overflow-x-auto">
+                  {submission.answerText}
+                  </pre>
+                ) : (
+                  <div className="p-3 space-y-1.5">
+                  {(submission.flowNodes || []).map((node, index) => (
+                    <div key={node.id || `${submission.id}-${index}`} className="flex items-start gap-2 text-xs">
+                      <span className="w-5 h-5 shrink-0 rounded-full bg-cyan-100 text-cyan-700 flex items-center justify-center font-bold">{index + 1}</span>
+                      <span className="font-bold text-slate-600">{node.type}</span>
+                      <span className="text-slate-800">{node.text || '(empty step)'}</span>
+                    </div>
+                  ))}
+                  </div>
+                )}
+                {(submission.instructorScore !== undefined || submission.instructorFeedback) && (
+                  <div className="mx-3 mb-3 rounded-lg bg-violet-50 border border-violet-200 p-3 text-xs text-violet-900">
+                  <div className="font-bold">Instructor review: {submission.instructorScore ?? 'Pending'} points</div>
+                  {submission.instructorFeedback && <div className="mt-1">{submission.instructorFeedback}</div>}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Recent Submissions Log */}

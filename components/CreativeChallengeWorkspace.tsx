@@ -181,11 +181,20 @@ const CreativeChallengeWorkspace: React.FC<CreativeChallengeWorkspaceProps> = ({
     setFlowNodes(nodes => nodes.map(node => node.id === id ? { ...node, ...changes } : node));
   };
 
+  const hasFlowchartAnswer = flowNodes.some(node => {
+    const text = node.text.trim();
+    if (!text) return false;
+    return !(node.type === 'Start / End' && (text === 'Start' || text === 'End'));
+  });
+  const hasAnswer = isFlowchart ? hasFlowchartAnswer : pseudoCode.trim().length > 0;
+
   const handleSubmit = () => {
-    const hasAnswer = isFlowchart
-      ? flowNodes.some(node => node.text.trim())
-      : pseudoCode.trim().length > 0;
-    if (!hasAnswer) return;
+    if (!hasAnswer) {
+      window.alert(isFlowchart
+        ? 'Please describe at least one flowchart step before submitting.'
+        : 'Please enter your answer before submitting.');
+      return;
+    }
     if (!window.confirm('Submit this challenge for review? You can no longer edit this draft after submitting.')) return;
 
     const { updatedProgress } = submitCreativeChallenge(user || 'guest', lesson, course, {
@@ -332,7 +341,7 @@ const CreativeChallengeWorkspace: React.FC<CreativeChallengeWorkspaceProps> = ({
 
         <div className="flex items-center justify-between">
           <span className="text-xs text-slate-500">{submitted ? 'This challenge has been submitted for review.' : 'Your draft is saved automatically on this browser.'}</span>
-          <button type="button" onClick={handleSubmit} disabled={submitted || isSplitScreenMode} className="px-5 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-bold disabled:opacity-50"><i className="fa-solid fa-paper-plane mr-1.5"></i>{submitted ? 'Submitted' : 'Submit Challenge'}</button>
+          <button type="button" onClick={handleSubmit} disabled={submitted || isSplitScreenMode || !hasAnswer} title={!hasAnswer ? 'Fill in at least one flowchart step before submitting' : undefined} className="px-5 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-bold disabled:opacity-50"><i className="fa-solid fa-paper-plane mr-1.5"></i>{submitted ? 'Submitted' : 'Submit Challenge'}</button>
         </div>
       </div>
     </div>
