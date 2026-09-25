@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ViewState, User, UserProgress } from '../types';
 
 interface HeaderProps {
@@ -20,6 +20,28 @@ const Header: React.FC<HeaderProps> = ({
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(Boolean(document.fullscreenElement));
+  const [fullscreenError, setFullscreenError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const updateFullscreenState = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener('fullscreenchange', updateFullscreenState);
+    return () => document.removeEventListener('fullscreenchange', updateFullscreenState);
+  }, []);
+
+  const enterStudentFullscreen = async () => {
+    setFullscreenError(null);
+    if (document.fullscreenElement) return;
+    try {
+      if (document.documentElement.requestFullscreen) {
+        await document.documentElement.requestFullscreen();
+      } else {
+        setFullscreenError('Fullscreen is not supported by this browser.');
+      }
+    } catch {
+      setFullscreenError('Fullscreen could not be enabled. Allow fullscreen in your browser and try again.');
+    }
+  };
 
   // Filter Nav items based on role
   const navItems = [
@@ -112,6 +134,20 @@ const Header: React.FC<HeaderProps> = ({
                   <span>{progress.streakDays || 1}d</span>
                 </div>
               </div>
+            )}
+
+            {user?.role === 'student' && (
+              <button
+                type="button"
+                onClick={enterStudentFullscreen}
+                disabled={isFullscreen}
+                className="px-2.5 py-1.5 rounded-lg border border-slate-300 text-slate-600 hover:text-slate-900 hover:bg-slate-100 text-xs font-semibold flex items-center gap-1.5"
+                title={isFullscreen ? 'Fullscreen is active' : 'Enter fullscreen to hide browser controls'}
+                aria-label={isFullscreen ? 'Fullscreen is active' : 'Enter fullscreen'}
+              >
+                <i className={`fa-solid ${isFullscreen ? 'fa-lock' : 'fa-expand'}`}></i>
+                <span>{isFullscreen ? 'Fullscreen active' : 'Enter full screen'}</span>
+              </button>
             )}
             
             <div className="pl-3 border-l border-slate-200 flex items-center gap-2.5">
@@ -210,6 +246,17 @@ const Header: React.FC<HeaderProps> = ({
                       <span className="text-amber-700 font-semibold">{progress.streakDays}d</span>
                     </div>
                   </div>
+                  {user.role === 'student' && (
+                    <button
+                      type="button"
+                      onClick={enterStudentFullscreen}
+                      disabled={isFullscreen}
+                      className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 text-xs font-bold flex items-center justify-center gap-2"
+                    >
+                      <i className={`fa-solid ${isFullscreen ? 'fa-lock' : 'fa-expand'}`}></i>
+                      {isFullscreen ? 'Fullscreen active' : 'Enter fullscreen'}
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -259,6 +306,49 @@ const Header: React.FC<HeaderProps> = ({
           </div>
         )}
       </header>
+
+      {fullscreenError && user?.role === 'student' && (
+        <div role="status" className="fixed bottom-4 right-4 z-50 max-w-sm text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3 shadow-lg">
+          {fullscreenError}
+        </div>
+      )}
+
+      {user?.role === 'student' && !isFullscreen && (
+        <div
+          className="fixed inset-0 z-[100] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="fullscreen-required-title"
+        >
+          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-7 text-center shadow-2xl">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-bitwise-50 text-bitwise-700 text-xl">
+              <i className="fa-solid fa-expand"></i>
+            </div>
+            <h2 id="fullscreen-required-title" className="text-lg font-bold text-slate-900">
+              Fullscreen is required
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed text-slate-600">
+              Enter fullscreen to continue using the student dashboard. If you exit fullscreen, this screen will appear until you enter it again.
+            </p>
+            {fullscreenError && (
+              <p role="alert" className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">
+                {fullscreenError}
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={enterStudentFullscreen}
+              className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-bitwise-600 px-5 py-3 text-sm font-bold text-white shadow-sm hover:bg-bitwise-700"
+            >
+              <i className="fa-solid fa-expand"></i>
+              Enter fullscreen to continue
+            </button>
+            <p className="mt-3 text-[11px] text-slate-400">
+              Your browser may always allow you to exit fullscreen.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* ============================================================== */}
       {/* MODAL: PROPER LOGOUT CONFIRMATION                              */}
