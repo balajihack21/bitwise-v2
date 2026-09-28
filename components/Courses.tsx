@@ -96,38 +96,6 @@ const Courses: React.FC<CoursesProps> = ({
 
   const [lockedNotice, setLockedNotice] = useState<string | null>(null);
   const [isMobileUnitSidebarOpen, setIsMobileUnitSidebarOpen] = useState(false);
-  const [topicSearch, setTopicSearch] = useState('');
-
-  const filteredModules = useMemo(() => {
-    if (!selectedCourse) return [];
-    const query = topicSearch.trim().toLowerCase();
-    if (!query) return selectedCourse.modules;
-    return selectedCourse.modules
-      .flatMap(module => {
-        if (module.title.toLowerCase().includes(query)) return [module];
-        const matchingLessons = module.lessons.filter(lesson =>
-          lesson.title.toLowerCase().includes(query) ||
-          lesson.type.toLowerCase().includes(query)
-        );
-        return matchingLessons.length > 0 ? [{ ...module, lessons: matchingLessons }] : [];
-      });
-  }, [selectedCourse, topicSearch]);
-
-  useEffect(() => {
-    if (!isMobileUnitSidebarOpen) return;
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setIsMobileUnitSidebarOpen(false);
-    };
-    document.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [isMobileUnitSidebarOpen]);
 
   const getCourseCodingTests = (course: Course) => {
     const schedule = course.codingTestSchedule || user?.scheduledCodingTests?.[course.id] || {};
@@ -274,7 +242,6 @@ const Courses: React.FC<CoursesProps> = ({
 
   const handleCourseClick = (course: Course) => {
     setSelectedCourse(course);
-    setTopicSearch('');
     const isInstructor = isInstructorForCourse(user, course);
 
     let targetLesson: Lesson | null = null;
@@ -358,7 +325,6 @@ const Courses: React.FC<CoursesProps> = ({
     setSelectedLesson(null);
     setLockedNotice(null);
     setIsMobileUnitSidebarOpen(false);
-    setTopicSearch('');
   };
 
   // Instructor quick actions for testing course completion
@@ -495,7 +461,7 @@ const Courses: React.FC<CoursesProps> = ({
             />
           )}
           {/* Sidebar: Modules & Sequential Lessons */}
-          <div role={isMobileUnitSidebarOpen ? 'dialog' : undefined} aria-modal={isMobileUnitSidebarOpen ? true : undefined} aria-label="Units and topics" className={`fixed inset-y-0 left-0 z-50 w-[min(88vw,22rem)] bg-white border-r border-slate-200 overflow-hidden flex flex-col shadow-2xl transition-transform duration-200 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] lg:relative lg:inset-auto lg:z-auto lg:w-auto lg:col-span-1 lg:rounded-2xl lg:border lg:shadow-sm lg:translate-x-0 lg:pt-0 lg:pb-0 ${
+          <div className={`fixed inset-y-0 left-0 z-50 w-[min(88vw,22rem)] bg-white border-r border-slate-200 overflow-hidden flex flex-col shadow-2xl transition-transform duration-200 lg:relative lg:inset-auto lg:z-auto lg:w-auto lg:col-span-1 lg:rounded-2xl lg:border lg:shadow-sm lg:translate-x-0 ${
             isMobileUnitSidebarOpen ? 'translate-x-0' : '-translate-x-full'
           }`}>
             <div className="p-4 border-b border-slate-100 bg-slate-50/70">
@@ -516,31 +482,6 @@ const Courses: React.FC<CoursesProps> = ({
                 </button>
               </div>
               <h2 className="font-bold text-slate-900 text-sm">{selectedCourse.title}</h2>
-              <div className="mt-3">
-                <div className="flex items-center justify-between text-[10px] font-semibold text-slate-500 mb-1">
-                  <span>Course progress</span>
-                  <span>{courseStats.completed}/{courseStats.total} lessons · {courseStats.percentage}%</span>
-                </div>
-                <div className="h-1.5 rounded-full bg-slate-200 overflow-hidden">
-                  <div className="h-full rounded-full bg-gradient-to-r from-bitwise-500 to-emerald-500 transition-all" style={{ width: `${courseStats.percentage}%` }} />
-                </div>
-              </div>
-              <label className="mt-3 flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 focus-within:border-bitwise-400 focus-within:ring-2 focus-within:ring-bitwise-100">
-                <i className="fa-solid fa-magnifying-glass text-xs text-slate-400"></i>
-                <input
-                  type="search"
-                  value={topicSearch}
-                  onChange={event => setTopicSearch(event.target.value)}
-                  placeholder="Find a topic or Unit"
-                  className="w-full bg-transparent text-xs text-slate-800 outline-none placeholder:text-slate-400"
-                  aria-label="Search Units and topics"
-                />
-                {topicSearch && (
-                  <button type="button" onClick={() => setTopicSearch('')} className="text-slate-400 hover:text-slate-700" aria-label="Clear topic search">
-                    <i className="fa-solid fa-xmark"></i>
-                  </button>
-                )}
-              </label>
               {(() => {
                 const extendedModule = getExtendedModule(selectedCourse);
                 const isCurrentModuleExtended = !!extendedModule && !!selectedLesson && extendedModule.lessons.some(l => l.id === selectedLesson.id);
@@ -554,8 +495,8 @@ const Courses: React.FC<CoursesProps> = ({
               })()}
             </div>
 
-            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain divide-y divide-slate-100">
-              {filteredModules.filter((module) => {
+            <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
+              {selectedCourse.modules.filter((module) => {
                 const effectiveDeadline = getEffectiveModuleDeadline(user, selectedCourse, module.id);
                 const hasStudentOverride = !!user?.moduleDeadlineOverrides?.[selectedCourse.id]?.[module.id];
                 const isDeadlinePassed = getModuleScheduleState(user, selectedCourse, module.id) === 'expired';
@@ -567,11 +508,8 @@ const Courses: React.FC<CoursesProps> = ({
                 return true;
               }).map((module) => (
                 <div key={module.id} className="py-2">
-                  <div className="px-4 py-2 text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center justify-between gap-2">
+                  <div className="px-4 py-2 text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between gap-2">
                     <span>{module.title}</span>
-                    <span className="text-[9px] normal-case tracking-normal font-semibold text-slate-400">
-                      {module.lessons.filter(lesson => progress.completedLessonIds.includes(lesson.id)).length}/{module.lessons.length}
-                    </span>
                     {(() => {
                       const effectiveDeadline = getEffectiveModuleDeadline(user, selectedCourse, module.id);
                       const hasStudentOverride = !!user?.moduleDeadlineOverrides?.[selectedCourse.id]?.[module.id];
@@ -598,11 +536,6 @@ const Courses: React.FC<CoursesProps> = ({
                   </div>
                   <div className="space-y-0.5">
                     {module.lessons.filter((lesson) => {
-                        const matchesQuery = !topicSearch.trim() ||
-                          module.title.toLowerCase().includes(topicSearch.trim().toLowerCase()) ||
-                          lesson.title.toLowerCase().includes(topicSearch.trim().toLowerCase()) ||
-                          lesson.type.toLowerCase().includes(topicSearch.trim().toLowerCase());
-                        if (!matchesQuery) return false;
                         const effectiveDeadline = getEffectiveModuleDeadline(user, selectedCourse, module.id);
                         const isDeadlinePassed = getModuleScheduleState(user, selectedCourse, module.id) === 'expired';
                         if (isDeadlinePassed) return true; // keep all lessons visible in a passed module, but lock incomplete ones
@@ -623,7 +556,7 @@ const Courses: React.FC<CoursesProps> = ({
                           key={lesson.id}
                           onClick={() => !isDisabled && handleSelectLesson(lesson)}
                           disabled={isDisabled}
-                          className={`w-full min-h-12 text-left px-4 py-3 text-xs flex items-center justify-between transition-colors relative ${
+                          className={`w-full text-left px-4 py-3 text-xs flex items-center justify-between transition-colors relative ${
                             isSelected
                               ? 'bg-bitwise-50 text-bitwise-700 font-bold border-l-4 border-bitwise-600'
                               : isDisabled
@@ -701,13 +634,6 @@ const Courses: React.FC<CoursesProps> = ({
                   </div>
                 </div>
               ))}
-              {filteredModules.length === 0 && (
-                <div className="px-5 py-10 text-center">
-                  <i className="fa-solid fa-magnifying-glass text-2xl text-slate-300"></i>
-                  <p className="mt-3 text-xs font-semibold text-slate-600">No matching topics</p>
-                  <p className="mt-1 text-[11px] text-slate-400">Try another Unit or topic name.</p>
-                </div>
-              )}
             </div>
           </div>
 
@@ -723,7 +649,7 @@ const Courses: React.FC<CoursesProps> = ({
               <button
                 type="button"
                 onClick={() => setIsMobileUnitSidebarOpen(true)}
-                className="shrink-0 inline-flex items-center gap-2 rounded-xl bg-bitwise-600 px-3 py-2.5 text-xs font-bold text-white shadow-sm"
+                className="shrink-0 inline-flex items-center gap-2 rounded-xl bg-bitwise-600 px-3 py-2 text-xs font-bold text-white shadow-sm"
               >
                 <i className="fa-solid fa-list"></i>
                 Units & Topics
@@ -771,7 +697,7 @@ const Courses: React.FC<CoursesProps> = ({
                 />
               ) : (
                 /* Article / Conceptual Lesson Layout */
-                <div className="flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 lg:p-8 flex flex-col justify-between">
+                <div className="flex-1 overflow-y-auto p-8 flex flex-col justify-between">
                   <div className="max-w-3xl mx-auto w-full">
                     <div className="mb-6 pb-6 border-b border-slate-100 flex items-start justify-between">
                       <div>
@@ -785,7 +711,7 @@ const Courses: React.FC<CoursesProps> = ({
                             </span>
                           )}
                         </div>
-                        <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight mb-2">
+                        <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight mb-2">
                           {selectedLesson.title}
                         </h1>
                         <div className="flex items-center text-slate-500 text-xs">
