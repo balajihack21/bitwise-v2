@@ -95,6 +95,7 @@ const Courses: React.FC<CoursesProps> = ({
   });
 
   const [lockedNotice, setLockedNotice] = useState<string | null>(null);
+  const [isMobileUnitSidebarOpen, setIsMobileUnitSidebarOpen] = useState(false);
 
   const getCourseCodingTests = (course: Course) => {
     const schedule = course.codingTestSchedule || user?.scheduledCodingTests?.[course.id] || {};
@@ -316,12 +317,14 @@ const Courses: React.FC<CoursesProps> = ({
 
     setLockedNotice(null);
     setSelectedLesson(lesson);
+    setIsMobileUnitSidebarOpen(false);
   };
 
   const handleBack = () => {
     setSelectedCourse(null);
     setSelectedLesson(null);
     setLockedNotice(null);
+    setIsMobileUnitSidebarOpen(false);
   };
 
   // Instructor quick actions for testing course completion
@@ -448,9 +451,19 @@ const Courses: React.FC<CoursesProps> = ({
         })()}
 
         {/* Main Grid: Sidebar + Lesson/Problem Area */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-[84vh] min-h-[600px]">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 lg:gap-6 min-h-[70vh] lg:h-[84vh] lg:min-h-[600px]">
+          {isMobileUnitSidebarOpen && (
+            <button
+              type="button"
+              aria-label="Close units and topics"
+              className="fixed inset-0 z-40 bg-slate-950/50 lg:hidden"
+              onClick={() => setIsMobileUnitSidebarOpen(false)}
+            />
+          )}
           {/* Sidebar: Modules & Sequential Lessons */}
-          <div className="lg:col-span-1 bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col shadow-sm">
+          <div className={`fixed inset-y-0 left-0 z-50 w-[min(88vw,22rem)] bg-white border-r border-slate-200 overflow-hidden flex flex-col shadow-2xl transition-transform duration-200 lg:relative lg:inset-auto lg:z-auto lg:w-auto lg:col-span-1 lg:rounded-2xl lg:border lg:shadow-sm lg:translate-x-0 ${
+            isMobileUnitSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}>
             <div className="p-4 border-b border-slate-100 bg-slate-50/70">
               <div className="flex items-center justify-between mb-1">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-bitwise-600 bg-bitwise-50 px-2 py-0.5 rounded">
@@ -459,6 +472,14 @@ const Courses: React.FC<CoursesProps> = ({
                 <span className="text-xs font-semibold text-slate-500">
                   {courseStats.problemsSolved}/{courseStats.totalProblems} Solved
                 </span>
+                <button
+                  type="button"
+                  onClick={() => setIsMobileUnitSidebarOpen(false)}
+                  className="lg:hidden w-8 h-8 rounded-lg text-slate-500 hover:bg-slate-200 flex items-center justify-center"
+                  aria-label="Close units and topics"
+                >
+                  <i className="fa-solid fa-xmark"></i>
+                </button>
               </div>
               <h2 className="font-bold text-slate-900 text-sm">{selectedCourse.title}</h2>
               {(() => {
@@ -617,7 +638,23 @@ const Courses: React.FC<CoursesProps> = ({
           </div>
 
           {/* Main Content Area */}
-          <div className="lg:col-span-3 bg-white rounded-2xl border border-slate-200 flex flex-col overflow-hidden shadow-sm relative">
+          <div className="lg:col-span-3 min-w-0 bg-white rounded-2xl border border-slate-200 flex flex-col overflow-hidden shadow-sm relative">
+            <div className="lg:hidden flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 p-3">
+              <div className="min-w-0">
+                <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Current topic</div>
+                <div className="truncate text-xs font-bold text-slate-800">
+                  {selectedLesson?.title || 'Choose a topic'}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsMobileUnitSidebarOpen(true)}
+                className="shrink-0 inline-flex items-center gap-2 rounded-xl bg-bitwise-600 px-3 py-2 text-xs font-bold text-white shadow-sm"
+              >
+                <i className="fa-solid fa-list"></i>
+                Units & Topics
+              </button>
+            </div>
             {isProLocked ? (
               <div className="absolute inset-0 z-20 bg-slate-900/80 backdrop-blur-sm flex flex-col items-center justify-center p-8 text-center text-white">
                 <div className="w-16 h-16 bg-purple-500/20 text-purple-400 rounded-full flex items-center justify-center mb-6">
