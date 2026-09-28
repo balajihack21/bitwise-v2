@@ -22,6 +22,10 @@ const Header: React.FC<HeaderProps> = ({
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(Boolean(document.fullscreenElement));
   const [fullscreenError, setFullscreenError] = useState<string | null>(null);
+  const isIosDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const supportsDocumentFullscreen = !isIosDevice &&
+    Boolean(document.fullscreenEnabled && document.documentElement.requestFullscreen);
 
   useEffect(() => {
     const updateFullscreenState = () => setIsFullscreen(Boolean(document.fullscreenElement));
@@ -31,13 +35,10 @@ const Header: React.FC<HeaderProps> = ({
 
   const enterStudentFullscreen = async () => {
     setFullscreenError(null);
+    if (!supportsDocumentFullscreen) return;
     if (document.fullscreenElement) return;
     try {
-      if (document.documentElement.requestFullscreen) {
-        await document.documentElement.requestFullscreen();
-      } else {
-        setFullscreenError('Fullscreen is not supported by this browser.');
-      }
+      await document.documentElement.requestFullscreen();
     } catch {
       setFullscreenError('Fullscreen could not be enabled. Allow fullscreen in your browser and try again.');
     }
@@ -136,7 +137,7 @@ const Header: React.FC<HeaderProps> = ({
               </div>
             )}
 
-            {user?.role === 'student' && (
+            {user?.role === 'student' && supportsDocumentFullscreen && (
               <button
                 type="button"
                 onClick={enterStudentFullscreen}
@@ -246,7 +247,7 @@ const Header: React.FC<HeaderProps> = ({
                       <span className="text-amber-700 font-semibold">{progress.streakDays}d</span>
                     </div>
                   </div>
-                  {user.role === 'student' && (
+                  {user.role === 'student' && supportsDocumentFullscreen && (
                     <button
                       type="button"
                       onClick={enterStudentFullscreen}
@@ -313,7 +314,13 @@ const Header: React.FC<HeaderProps> = ({
         </div>
       )}
 
-      {user?.role === 'student' && !isFullscreen && (
+      {user?.role === 'student' && !supportsDocumentFullscreen && (
+        <div role="status" className="fixed bottom-4 right-4 z-50 max-w-sm text-xs text-slate-700 bg-white border border-slate-200 rounded-xl px-4 py-3 shadow-lg">
+          Fullscreen mode isn’t supported on this device. You can continue using the dashboard normally.
+        </div>
+      )}
+
+      {user?.role === 'student' && supportsDocumentFullscreen && !isFullscreen && (
         <div
           className="fixed inset-0 z-[100] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4"
           role="dialog"
