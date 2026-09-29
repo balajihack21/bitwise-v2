@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Course, Lesson, User, UserProgress } from '../types';
+import { Course, CreativeFlowNode, Lesson, User, UserProgress } from '../types';
 import { recordProctoringInfraction, submitCreativeChallenge } from '../services/progressService';
 
 interface CreativeChallengeWorkspaceProps {
@@ -11,7 +11,8 @@ interface CreativeChallengeWorkspaceProps {
   onClose?: () => void;
 }
 
-type FlowNode = { id: string; type: string; text: string };
+type FlowNode = CreativeFlowNode;
+type FlowBranch = 'yes' | 'no';
 
 const flowNodeTypes = ['Start / End', 'Process', 'Input / Output', 'Decision'];
 
@@ -30,7 +31,7 @@ const CreativeChallengeWorkspace: React.FC<CreativeChallengeWorkspaceProps> = ({
   const [flowNodes, setFlowNodes] = useState<FlowNode[]>([
     { id: 'node-1', type: 'Start / End', text: 'Start' },
     { id: 'node-2', type: 'Input / Output', text: '' },
-    { id: 'node-3', type: 'Decision', text: '' },
+    { id: 'node-3', type: 'Decision', text: '', branches: { yes: [{ id: 'node-3-yes-1', text: '' }], no: [{ id: 'node-3-no-1', text: '' }] } },
     { id: 'node-4', type: 'Start / End', text: 'End' }
   ]);
   const [savedAt, setSavedAt] = useState<string | null>(null);
@@ -164,7 +165,17 @@ const CreativeChallengeWorkspace: React.FC<CreativeChallengeWorkspaceProps> = ({
       if (!saved) return;
       const parsed = JSON.parse(saved);
       setPseudoCode(parsed.pseudoCode || '');
-      setFlowNodes(Array.isArray(parsed.flowNodes) ? parsed.flowNodes : defaultFlowNodes);
+      setFlowNodes(Array.isArray(parsed.flowNodes)
+        ? parsed.flowNodes.map((node: FlowNode) => node.type === 'Decision' && !node.branches
+          ? {
+            ...node,
+            branches: {
+              yes: [{ id: `${node.id}-yes-1`, text: '' }],
+              no: [{ id: `${node.id}-no-1`, text: '' }]
+            }
+          }
+          : node)
+        : defaultFlowNodes);
       setSavedAt(parsed.savedAt || null);
     } catch {
       // Ignore malformed local drafts and start with an empty challenge.
@@ -178,21 +189,83 @@ const CreativeChallengeWorkspace: React.FC<CreativeChallengeWorkspaceProps> = ({
   }, [pseudoCode, flowNodes, storageKey]);
 
   const updateNode = (id: string, changes: Partial<FlowNode>) => {
-    setFlowNodes(nodes => nodes.map(node => node.id === id ? { ...node, ...changes } : node));
+    setFlowNodes(nodes => nodes.map(node => {
+      if (node.id !== id) return node;
+      const nextNode = { ...node, ...changes };
+      if (changes.type === 'Decision' && !nextNode.branches) {
+        nextNode.branches = {
+          yes: [{ id: `${id}-yes-${Date.now()}`, text: '' }],
+          no: [{ id: `${id}-no-${Date.now()}`, text: '' }]
+        };
+      }
+      if (changes.type && changes.type !== 'Decision') {
+        delete nextNode.branches;
+      }
+      return nextNode;
+    }));
+  };
+
+  const updateBranchStep = (decisionId: string, branch: FlowBranch, stepId: string, text: string) => {
+    setFlowNodes(nodes => nodes.map(node => node.id !== decisionId ? node : {
+      ...node,
+      branches: {
+        yes: node.branches?.yes || [],
+        no: node.branches?.no || [],
+        [branch]: (node.branches?.[branch] || []).map(step => step.id === stepId ? { ...step, text } : step)
+      }
+    }));
+  };
+
+  const addBranchStep = (decisionId: string, branch: FlowBranch) => {
+    setFlowNodes(nodes => nodes.map(node => node.id !== decisionId ? node : {
+      ...node,
+      branches: {
+        yes: node.branches?.yes || [],
+        no: node.branches?.no || [],
+        [branch]: [...(node.branches?.[branch] || []), { id: `${decisionId}-${branch}-${Date.now()}`, text: '' }]
+      }
+    }));
+  };
+
+  const removeBranchStep = (decisionId: string, branch: FlowBranch, stepId: string) => {
+    setFlowNodes(nodes => nodes.map(node => node.id !== decisionId ? node : {
+      ...node,
+      branches: {
+        yes: node.branches?.yes || [],
+        no: node.branches?.no || [],
+        [branch]: (node.branches?.[branch] || []).filter(step => step.id !== stepId)
+      }
+    }));
   };
 
   const hasFlowchartAnswer = flowNodes.some(node => {
     const text = node.text.trim();
-    if (!text) return false;
-    return !(node.type === 'Start / End' && (text === 'Start' || text === 'End'));
+    const hasNodeText = text && !(node.type === 'Start / End' && (text === 'Start' || text === 'End'));
+    const hasBranchText = (node.branches?.yes || []).some(step => step.text.trim()) ||
+      (node.branches?.no || []).some(step => step.text.trim());
+    return Boolean(hasNodeText || hasBranchText);
   });
   const hasAnswer = isFlowchart ? hasFlowchartAnswer : pseudoCode.trim().length > 0;
+  const hasCompleteDecisionBranches = flowNodes
+    .filter(node => node.type === 'Decision')
+    .every(node =>
+      (node.branches?.yes || []).some(step => step.text.trim()) &&
+      (node.branches?.no || []).some(step => step.text.trim())
+    );
+  const flowchartNodeCount = flowNodes.reduce(
+    (count, node) => count + 1 + (node.branches?.yes.length || 0) + (node.branches?.no.length || 0),
+    0
+  );
 
   const handleSubmit = () => {
     if (!hasAnswer) {
       window.alert(isFlowchart
         ? 'Please describe at least one flowchart step before submitting.'
         : 'Please enter your answer before submitting.');
+      return;
+    }
+    if (isFlowchart && !hasCompleteDecisionBranches) {
+      window.alert('Add at least one step to both the Yes and No branches of each Decision node.');
       return;
     }
     if (!window.confirm('Submit this challenge for review? You can no longer edit this draft after submitting.')) return;
@@ -276,7 +349,7 @@ const CreativeChallengeWorkspace: React.FC<CreativeChallengeWorkspaceProps> = ({
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="font-bold text-slate-900">Build your flowchart</h2>
-                <p className="text-xs text-slate-500">Add nodes in execution order. Each arrow represents the next step.</p>
+                <p className="text-xs text-slate-500">Add nodes in execution order. Decision nodes split into Yes and No branches that merge back into the main flow.</p>
               </div>
               <button type="button" onClick={() => setFlowNodes(nodes => [...nodes, { id: `node-${Date.now()}`, type: 'Process', text: '' }])} disabled={submitted || isSplitScreenMode} className="px-3 py-2 rounded-lg bg-slate-900 text-white text-xs font-bold disabled:opacity-50"><i className="fa-solid fa-plus mr-1"></i>Add node</button>
             </div>
@@ -286,7 +359,7 @@ const CreativeChallengeWorkspace: React.FC<CreativeChallengeWorkspaceProps> = ({
                   <h3 className="text-sm font-bold text-slate-900">Flowchart preview</h3>
                   <p className="text-[11px] text-slate-500">Your steps are visualized in execution order.</p>
                 </div>
-                <span className="text-[10px] font-semibold text-slate-500">{flowNodes.length} nodes</span>
+                <span className="text-[10px] font-semibold text-slate-500">{flowchartNodeCount} nodes</span>
               </div>
               <div className="flex flex-col items-center overflow-x-auto pb-2">
                 {flowNodes.map((node, index) => {
@@ -300,6 +373,41 @@ const CreativeChallengeWorkspace: React.FC<CreativeChallengeWorkspaceProps> = ({
                           <div className="text-sm font-semibold break-words">{node.text.trim() || 'Describe this step'}</div>
                         </div>
                       </div>
+                      {node.type === 'Decision' && (
+                        <>
+                          <div className="h-7 flex flex-col items-center justify-center text-slate-400">
+                            <div className="h-4 border-l-2 border-dashed border-slate-300"></div>
+                            <i className="fa-solid fa-code-branch text-[10px]"></i>
+                          </div>
+                          <div className="grid w-full max-w-2xl grid-cols-1 gap-3 sm:grid-cols-2">
+                            {(['yes', 'no'] as const).map(branch => {
+                              const branchSteps = node.branches?.[branch] || [];
+                              const isYes = branch === 'yes';
+                              return (
+                                <div key={`${node.id}-${branch}`} className={`rounded-xl border p-3 ${isYes ? 'border-emerald-200 bg-emerald-50/60' : 'border-rose-200 bg-rose-50/60'}`}>
+                                  <div className={`mb-2 text-center text-[10px] font-black uppercase tracking-wider ${isYes ? 'text-emerald-700' : 'text-rose-700'}`}>
+                                    {isYes ? 'Yes' : 'No'}
+                                  </div>
+                                  <div className="space-y-2">
+                                    {branchSteps.length === 0 && <div className="rounded-lg border border-dashed border-slate-300 bg-white/70 p-3 text-center text-[10px] text-slate-400">Add a branch step</div>}
+                                    {branchSteps.map((step, stepIndex) => (
+                                      <React.Fragment key={step.id}>
+                                        {stepIndex > 0 && <div className="text-center text-slate-400"><i className="fa-solid fa-chevron-down text-[9px]"></i></div>}
+                                        <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-center text-xs font-semibold text-slate-800">
+                                          {step.text.trim() || 'Describe this step'}
+                                        </div>
+                                      </React.Fragment>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <div className="mt-2 rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-[9px] font-bold uppercase tracking-wide text-violet-700">
+                            Branches merge
+                          </div>
+                        </>
+                      )}
                       {index < flowNodes.length - 1 && (
                         <div className="h-9 flex flex-col items-center justify-center text-slate-400">
                           <div className="h-5 border-l-2 border-dashed border-slate-300"></div>
@@ -322,6 +430,58 @@ const CreativeChallengeWorkspace: React.FC<CreativeChallengeWorkspaceProps> = ({
                     <input value={node.text} disabled={submitted || isSplitScreenMode} onChange={event => updateNode(node.id, { text: event.target.value })} placeholder="Describe this step" className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-xs bg-white" />
                     <button type="button" disabled={submitted || isSplitScreenMode || flowNodes.length <= 2} onClick={() => setFlowNodes(nodes => nodes.filter(item => item.id !== node.id))} className="text-slate-400 hover:text-red-600 disabled:opacity-30" title="Remove node"><i className="fa-solid fa-trash"></i></button>
                   </div>
+                  {node.type === 'Decision' && (
+                    <div className="ml-9 grid grid-cols-1 gap-3 rounded-xl border border-amber-200 bg-amber-50/50 p-3 sm:grid-cols-2">
+                      {(['yes', 'no'] as const).map(branch => {
+                        const branchSteps = node.branches?.[branch] || [];
+                        const isYes = branch === 'yes';
+                        return (
+                          <div key={`${node.id}-editor-${branch}`} className="min-w-0 rounded-lg border border-white bg-white/80 p-3">
+                            <div className={`mb-2 flex items-center justify-between text-xs font-black uppercase tracking-wide ${isYes ? 'text-emerald-700' : 'text-rose-700'}`}>
+                              <span><i className={`fa-solid ${isYes ? 'fa-check' : 'fa-xmark'} mr-1`}></i>{isYes ? 'Yes branch' : 'No branch'}</span>
+                              <button
+                                type="button"
+                                disabled={submitted || isSplitScreenMode}
+                                onClick={() => addBranchStep(node.id, branch)}
+                                className="rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                              >
+                                <i className="fa-solid fa-plus mr-1"></i>Add step
+                              </button>
+                            </div>
+                            <div className="space-y-2">
+                              {branchSteps.map((step, stepIndex) => (
+                                <div key={step.id} className="flex min-w-0 items-center gap-2">
+                                  <span className="w-5 shrink-0 text-center text-[10px] font-bold text-slate-400">{stepIndex + 1}</span>
+                                  <input
+                                    value={step.text}
+                                    disabled={submitted || isSplitScreenMode}
+                                    onChange={event => updateBranchStep(node.id, branch, step.id, event.target.value)}
+                                    placeholder={`${isYes ? 'Yes' : 'No'} path step`}
+                                    className="min-w-0 flex-1 rounded-lg border border-slate-200 px-2.5 py-2 text-xs outline-none focus:border-cyan-500"
+                                  />
+                                  <button
+                                    type="button"
+                                    disabled={submitted || isSplitScreenMode}
+                                    onClick={() => removeBranchStep(node.id, branch, step.id)}
+                                    className="shrink-0 text-slate-400 hover:text-red-600 disabled:opacity-30"
+                                    title="Remove branch step"
+                                  >
+                                    <i className="fa-solid fa-trash text-[10px]"></i>
+                                  </button>
+                                </div>
+                              ))}
+                              {branchSteps.length === 0 && (
+                                <p className="py-2 text-center text-[10px] text-rose-600">Add at least one step for this branch.</p>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      <div className="text-center text-[10px] font-semibold text-violet-700 sm:col-span-2">
+                        <i className="fa-solid fa-code-merge mr-1"></i>Yes and No paths merge before the next main-flow node.
+                      </div>
+                    </div>
+                  )}
                   {index < flowNodes.length - 1 && <div className="text-center text-slate-400"><i className="fa-solid fa-arrow-down"></i></div>}
                 </React.Fragment>
               ))}
@@ -341,7 +501,7 @@ const CreativeChallengeWorkspace: React.FC<CreativeChallengeWorkspaceProps> = ({
 
         <div className="flex items-center justify-between">
           <span className="text-xs text-slate-500">{submitted ? 'This challenge has been submitted for review.' : 'Your draft is saved automatically on this browser.'}</span>
-          <button type="button" onClick={handleSubmit} disabled={submitted || isSplitScreenMode || !hasAnswer} title={!hasAnswer ? 'Fill in at least one flowchart step before submitting' : undefined} className="px-5 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-bold disabled:opacity-50"><i className="fa-solid fa-paper-plane mr-1.5"></i>{submitted ? 'Submitted' : 'Submit Challenge'}</button>
+          <button type="button" onClick={handleSubmit} disabled={submitted || isSplitScreenMode || !hasAnswer || !hasCompleteDecisionBranches} title={!hasAnswer ? 'Fill in at least one flowchart step before submitting' : !hasCompleteDecisionBranches ? 'Add at least one step to both paths for each Decision node' : undefined} className="px-5 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-bold disabled:opacity-50"><i className="fa-solid fa-paper-plane mr-1.5"></i>{submitted ? 'Submitted' : 'Submit Challenge'}</button>
         </div>
       </div>
     </div>

@@ -244,12 +244,27 @@ export interface CreativeChallengeSubmission {
   courseTitle?: string;
   challengeType: 'algorithm' | 'pseudocode' | 'flowchart';
   answerText?: string;
-  flowNodes?: { id: string; type: string; text: string }[];
+  flowNodes?: CreativeFlowNode[];
   points: number;
   submittedAt: string;
   status: 'SUBMITTED' | 'REVIEWED';
   instructorScore?: number;
   instructorFeedback?: string;
+}
+
+export interface CreativeFlowBranchStep {
+  id: string;
+  text: string;
+}
+
+export interface CreativeFlowNode {
+  id: string;
+  type: string;
+  text: string;
+  branches?: {
+    yes: CreativeFlowBranchStep[];
+    no: CreativeFlowBranchStep[];
+  };
 }
 
 export interface Judge0Config {

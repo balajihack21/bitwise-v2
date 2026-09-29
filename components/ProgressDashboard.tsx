@@ -481,11 +481,25 @@ const ProgressDashboard: React.FC<ProgressDashboardProps> = ({
                 ) : (
                   <div className="p-3 space-y-1.5">
                   {(submission.flowNodes || []).map((node, index) => (
-                    <div key={node.id || `${submission.id}-${index}`} className="flex items-start gap-2 text-xs">
-                      <span className="w-5 h-5 shrink-0 rounded-full bg-cyan-100 text-cyan-700 flex items-center justify-center font-bold">{index + 1}</span>
-                      <span className="font-bold text-slate-600">{node.type}</span>
-                      <span className="text-slate-800">{node.text || '(empty step)'}</span>
-                    </div>
+                    <React.Fragment key={node.id || `${submission.id}-${index}`}>
+                      <div className="flex items-start gap-2 text-xs">
+                        <span className="w-5 h-5 shrink-0 rounded-full bg-cyan-100 text-cyan-700 flex items-center justify-center font-bold">{index + 1}</span>
+                        <span className="font-bold text-slate-600">{node.type}</span>
+                        <span className="text-slate-800">{node.text || '(empty step)'}</span>
+                      </div>
+                      {node.type === 'Decision' && node.branches && (
+                        <div className="ml-7 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                          {(['yes', 'no'] as const).map(branch => (
+                            <div key={`${node.id}-${branch}`} className={`rounded-lg border p-2 ${branch === 'yes' ? 'border-emerald-200 bg-emerald-50' : 'border-rose-200 bg-rose-50'}`}>
+                              <div className="text-[10px] font-bold uppercase">{branch} path</div>
+                              {(node.branches?.[branch] || []).map(step => (
+                                <div key={step.id} className="mt-1 text-xs text-slate-700">{step.text || '(empty step)'}</div>
+                              ))}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </React.Fragment>
                   ))}
                   </div>
                 )}
