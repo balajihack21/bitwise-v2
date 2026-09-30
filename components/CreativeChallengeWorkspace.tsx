@@ -501,7 +501,7 @@ const CreativeChallengeWorkspace: React.FC<CreativeChallengeWorkspaceProps> = ({
 
         <div className="flex items-center justify-between">
           <span className="text-xs text-slate-500">{submitted ? 'This challenge has been submitted for review.' : 'Your draft is saved automatically on this browser.'}</span>
-          <button type="button" onClick={handleSubmit} disabled={submitted || isSplitScreenMode || !hasAnswer || !hasCompleteDecisionBranches} title={!hasAnswer ? 'Fill in at least one flowchart step before submitting' : !hasCompleteDecisionBranches ? 'Add at least one step to both paths for each Decision node' : undefined} className="px-5 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-bold disabled:opacity-50"><i className="fa-solid fa-paper-plane mr-1.5"></i>{submitted ? 'Submitted' : 'Submit Challenge'}</button>
+          <button type="button" onClick={handleSubmit} disabled={submitted || !hasAnswer || (isFlowchart && !hasCompleteDecisionBranches)} title={!hasAnswer ? (isFlowchart ? 'Fill in at least one flowchart step before submitting' : 'Enter your answer before submitting') : isFlowchart && !hasCompleteDecisionBranches ? 'Add at least one step to both paths for each Decision node' : undefined} className="px-5 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-bold disabled:opacity-50"><i className="fa-solid fa-paper-plane mr-1.5"></i>{submitted ? 'Submitted' : 'Submit Challenge'}</button>
         </div>
       </div>
     </div>
