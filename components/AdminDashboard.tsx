@@ -7,6 +7,7 @@ import { sanitizeForFirestore } from '../services/firebase';
 import {
   fetchAllStudentsFromFirestore,
   fetchAllSubmissionsFromFirestore,
+  requestCreativeChallengeRedo,
   saveCoursesToFirestore,
   resetAllFirebaseData,
   resetAllUserProgressInFirestore,
@@ -162,6 +163,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     completedCount: 0
   });
   const [isResettingCourse, setIsResettingCourse] = useState<boolean>(false);
+  const [requestingRedoLessonId, setRequestingRedoLessonId] = useState<string | null>(null);
   const [courseResetNotification, setCourseResetNotification] = useState<string | null>(null);
 
   // Student Seed Upload State
@@ -188,6 +190,58 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       moduleTitle,
       completedCount
     });
+  };
+
+  const handleRequestCreativeRedo = async (
+    student: StudentOverview,
+    courseId: string,
+    submission: NonNullable<StudentOverview['creativeSubmissions']>[number]
+  ) => {
+    if (!window.confirm(`Request "${submission.lessonTitle}" to be redone by ${student.displayName}?`)) return;
+    setRequestingRedoLessonId(submission.lessonId);
+    try {
+      const redoLessonIds = await requestCreativeChallengeRedo(
+        student.uid,
+        student.displayName,
+        student.username,
+        student.email,
+        student.regNo,
+        courseId,
+        submission.lessonId
+      );
+      const targetCourse = courses.find(course => course.id === courseId) || MOCK_COURSES.find(course => course.id === courseId);
+      const updateStudent = (record: StudentOverview): StudentOverview => {
+        const completedLessonIds = (record.completedLessonIds || []).filter(id => id !== submission.lessonId);
+        const enrolledCourses = (record.enrolledCourses || []).map(courseProgress => {
+          if (courseProgress.courseId !== courseId || !targetCourse) return courseProgress;
+          const courseLessons = targetCourse.modules.flatMap(module => module.lessons);
+          const completedCount = courseLessons.filter(lesson => completedLessonIds.includes(lesson.id)).length;
+          return {
+            ...courseProgress,
+            completedLessons: completedCount,
+            progressPercentage: courseLessons.length ? Math.round(completedCount / courseLessons.length * 100) : 0,
+            isCompleted: courseLessons.length > 0 && completedCount === courseLessons.length
+          };
+        });
+        return {
+          ...record,
+          completedLessonIds,
+          completedLessonsCount: completedLessonIds.length,
+          redoCreativeChallengeLessonIds: redoLessonIds,
+          enrolledCourses
+        };
+      };
+
+      setStudents(previous => previous.map(record => record.uid === student.uid ? updateStudent(record) : record));
+      setSelectedStudentForDetails(previous => previous?.uid === student.uid ? updateStudent(previous) : previous);
+      setCourseResetNotification(`Redo requested for "${submission.lessonTitle}". The student will see it in their course dashboard.`);
+      window.setTimeout(() => setCourseResetNotification(null), 4500);
+    } catch (error) {
+      console.error('Failed to request creative challenge redo:', error);
+      alert(`Unable to request a redo for "${submission.lessonTitle}". Please try again.`);
+    } finally {
+      setRequestingRedoLessonId(null);
+    }
   };
 
   const handleConfirmResetCourseProgress = async () => {
@@ -222,6 +276,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       // Optimistically update students state
       const updateStudentData = (s: StudentOverview): StudentOverview => {
         const remainingCompleted = (s.completedLessonIds || []).filter(id => !moduleLessonIds.includes(id));
+        const remainingRedoRequests = (s.redoCreativeChallengeLessonIds || []).filter(id => !moduleLessonIds.includes(id));
         const remainingSubs = (s.submissions || []).filter(
           sub => sub.courseId !== courseId || !moduleLessonIds.includes(sub.problemId)
         );
@@ -249,6 +304,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         return {
           ...s,
           completedLessonIds: remainingCompleted,
+          redoCreativeChallengeLessonIds: remainingRedoRequests,
           completedLessonsCount: remainingCompleted.length,
           submissions: remainingSubs,
           submissionsCount: remainingSubs.length,
@@ -4404,7 +4460,23 @@ solve()`
                                 <div className="text-xs font-bold text-slate-900">{submission.lessonTitle}</div>
                                 <div className="text-[10px] text-slate-500 uppercase">{submission.challengeType} · {new Date(submission.submittedAt).toLocaleString()}</div>
                               </div>
-                              <span className="px-2 py-1 rounded-full bg-amber-100 text-amber-800 border border-amber-200 text-[10px] font-bold">{submission.status} · {submission.points} points</span>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="px-2 py-1 rounded-full bg-amber-100 text-amber-800 border border-amber-200 text-[10px] font-bold">{submission.status} · {submission.points} points</span>
+                                {selectedStudentForDetails.redoCreativeChallengeLessonIds?.includes(submission.lessonId) ? (
+                                  <span className="px-2 py-1 rounded-full bg-violet-100 text-violet-800 border border-violet-200 text-[10px] font-bold">Redo requested</span>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    disabled={requestingRedoLessonId === submission.lessonId}
+                                    onClick={() => handleRequestCreativeRedo(selectedStudentForDetails, submission.courseId, submission)}
+                                    className="inline-flex items-center gap-1 rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1 text-[10px] font-bold text-violet-700 hover:bg-violet-100 disabled:opacity-50"
+                                    title="Make this challenge available to the student again"
+                                  >
+                                    <i className="fa-solid fa-rotate-left"></i>
+                                    {requestingRedoLessonId === submission.lessonId ? 'Requesting...' : 'Request Redo'}
+                                  </button>
+                                )}
+                              </div>
                             </div>
                             {submission.answerText ? (
                               <pre className="m-3 p-3 rounded-lg bg-slate-950 text-emerald-300 text-xs whitespace-pre-wrap font-mono overflow-x-auto">{submission.answerText}</pre>

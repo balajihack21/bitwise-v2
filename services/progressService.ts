@@ -397,6 +397,7 @@ export const submitCreativeChallenge = (
   const username = typeof userOrName === 'string' ? userOrName : (userOrName?.username || 'guest');
   const uid = typeof userOrName === 'object' ? userOrName?.uid : undefined;
   const currentProgress = loadUserProgress(username);
+  const isRedoSubmission = currentProgress.redoCreativeChallengeLessonIds?.includes(lesson.id) === true;
   // Persist once after adding the creative answer so the completion write cannot
   // race with a second write that omits creativeSubmissions.
   const completion = recordCompletion(userOrName, lesson.id, course, lesson.challenge?.points || 10, false);
@@ -415,6 +416,9 @@ export const submitCreativeChallenge = (
   };
   const updatedProgress: UserProgress = {
     ...completion.updatedProgress,
+    xp: isRedoSubmission ? currentProgress.xp : completion.updatedProgress.xp,
+    redoCreativeChallengeLessonIds: (completion.updatedProgress.redoCreativeChallengeLessonIds || [])
+      .filter(id => id !== lesson.id),
     creativeSubmissions: [
       ...(currentProgress.creativeSubmissions || []).filter(item => item.lessonId !== lesson.id),
       submission
@@ -559,6 +563,9 @@ export const resetUserCourseProgress = (
   const remainingCreativeSubmissions = (currentProgress.creativeSubmissions || []).filter(
     submission => submission.courseId !== courseId && !courseLessonIds.includes(submission.lessonId)
   );
+  const remainingRedoRequests = (currentProgress.redoCreativeChallengeLessonIds || []).filter(
+    lessonId => !courseLessonIds.includes(lessonId)
+  );
 
   const updatedProgress: UserProgress = {
     ...currentProgress,
@@ -566,6 +573,7 @@ export const resetUserCourseProgress = (
     unlockedLessonIds: remainingUnlocked,
     submissions: remainingSubmissions,
     creativeSubmissions: remainingCreativeSubmissions,
+    redoCreativeChallengeLessonIds: remainingRedoRequests,
     lastActiveDate: new Date().toISOString().split('T')[0]
   };
 

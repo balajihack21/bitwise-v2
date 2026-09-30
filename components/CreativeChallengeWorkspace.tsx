@@ -35,21 +35,22 @@ const CreativeChallengeWorkspace: React.FC<CreativeChallengeWorkspaceProps> = ({
     { id: 'node-4', type: 'Start / End', text: 'End' }
   ]);
   const [savedAt, setSavedAt] = useState<string | null>(null);
-  const [submitted, setSubmitted] = useState(progress.completedLessonIds.includes(lesson.id));
-  const [sessionTabSwitches, setSessionTabSwitches] = useState(0);
+  const isRedoRequested = progress.redoCreativeChallengeLessonIds?.includes(lesson.id) === true;
+  const hasExistingSubmission = progress.completedLessonIds.includes(lesson.id) ||
+    progress.creativeSubmissions?.some(submission => submission.lessonId === lesson.id) === true;
+  const [submitted, setSubmitted] = useState(!isRedoRequested && hasExistingSubmission);
   const [proctorNotice, setProctorNotice] = useState<string | null>(null);
   const [isSplitScreenMode, setIsSplitScreenMode] = useState(false);
-  const lastProctorEventAt = useRef(0);
+  const focusLossTimeout = useRef<number | null>(null);
 
   const recordSecurityViolation = (message: string) => {
-    const now = Date.now();
-    if (now - lastProctorEventAt.current < 750) return;
-    lastProctorEventAt.current = now;
-
-    setSessionTabSwitches(count => count + 1);
     setProctorNotice(message);
-    const updatedProgress = recordProctoringInfraction(user || 'guest', 'tab_switch');
+    const updatedProgress = recordProctoringInfraction(user || 'guest', 'focus_loss');
     onProgressUpdate(updatedProgress);
+  };
+
+  const showBlockedActionNotice = (message: string) => {
+    setProctorNotice(message);
   };
 
   useEffect(() => {
@@ -65,18 +66,21 @@ const CreativeChallengeWorkspace: React.FC<CreativeChallengeWorkspaceProps> = ({
   }, []);
 
   useEffect(() => {
-    const recordInfraction = (message: string) => {
-      recordSecurityViolation(message);
-    };
-
     const handleVisibilityChange = () => {
-      if (document.hidden) {
-        recordInfraction('Tab switch or window minimization detected.');
+      if (document.hidden && focusLossTimeout.current !== null) {
+        window.clearTimeout(focusLossTimeout.current);
+        focusLossTimeout.current = null;
       }
     };
 
     const handleWindowBlur = () => {
-      recordInfraction('Window focus lost or another application was opened.');
+      if (document.hidden || focusLossTimeout.current !== null) return;
+      focusLossTimeout.current = window.setTimeout(() => {
+        focusLossTimeout.current = null;
+        if (!document.hidden) {
+          recordSecurityViolation('Window focus lost or another application was opened.');
+        }
+      }, 100);
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -85,13 +89,17 @@ const CreativeChallengeWorkspace: React.FC<CreativeChallengeWorkspaceProps> = ({
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('blur', handleWindowBlur);
+      if (focusLossTimeout.current !== null) {
+        window.clearTimeout(focusLossTimeout.current);
+        focusLossTimeout.current = null;
+      }
     };
   }, [user, onProgressUpdate]);
 
   useEffect(() => {
     const blockClipboardAndShortcuts = (event: Event, message: string) => {
       event.preventDefault();
-      recordSecurityViolation(message);
+      showBlockedActionNotice(message);
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -155,11 +163,12 @@ const CreativeChallengeWorkspace: React.FC<CreativeChallengeWorkspaceProps> = ({
     setPseudoCode('');
     setFlowNodes(defaultFlowNodes);
     setSavedAt(null);
-    setSubmitted(
-      progress.completedLessonIds.includes(lesson.id) ||
-      progress.creativeSubmissions?.some(submission => submission.lessonId === lesson.id) === true
-    );
+    setSubmitted(!isRedoRequested && hasExistingSubmission);
 
+    if (isRedoRequested) {
+      localStorage.removeItem(storageKey);
+      return;
+    }
     try {
       const saved = localStorage.getItem(storageKey);
       if (!saved) return;
@@ -180,7 +189,7 @@ const CreativeChallengeWorkspace: React.FC<CreativeChallengeWorkspaceProps> = ({
     } catch {
       // Ignore malformed local drafts and start with an empty challenge.
     }
-  }, [storageKey, lesson.id, progress.completedLessonIds, progress.creativeSubmissions]);
+  }, [storageKey, lesson.id, isRedoRequested, hasExistingSubmission]);
 
   useEffect(() => {
     const draft = JSON.stringify({ pseudoCode, flowNodes, savedAt: new Date().toISOString() });
@@ -315,6 +324,7 @@ const CreativeChallengeWorkspace: React.FC<CreativeChallengeWorkspaceProps> = ({
                   {isFlowchart ? 'Flowchart Challenge' : isAlgorithm ? 'Algorithm Writing Challenge' : 'Pseudo-code Challenge'}
                 </span>
                 {submitted && <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-full">Submitted</span>}
+                {isRedoRequested && <span className="text-[10px] font-bold text-violet-700 bg-violet-50 border border-violet-200 px-2 py-1 rounded-full">Redo Task</span>}
               </div>
               <h1 className="text-2xl font-extrabold text-slate-900">{lesson.title}</h1>
               <p className="text-xs text-slate-500 mt-1">{lesson.duration} · {lesson.challenge?.points || 10} points</p>
@@ -324,14 +334,13 @@ const CreativeChallengeWorkspace: React.FC<CreativeChallengeWorkspaceProps> = ({
           <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-900">
             <span className="flex items-center gap-1.5 font-semibold">
               <i className="fa-solid fa-shield-halved text-amber-600"></i>
-              Proctoring active: tab switches and focus loss are monitored.
+              Focus loss is monitored; hidden-page events are not counted as tab switches.
             </span>
-            <span className="font-mono font-bold">Session switches: {sessionTabSwitches}</span>
           </div>
           {proctorNotice && (
             <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-800 flex items-center gap-2">
               <i className="fa-solid fa-triangle-exclamation text-rose-600"></i>
-              {proctorNotice} This event has been recorded.
+              {proctorNotice}
             </div>
           )}
           {isSplitScreenMode && (

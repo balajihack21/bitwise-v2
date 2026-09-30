@@ -1068,6 +1068,7 @@ export const loadUserProgressFromFirestore = async (userId: string): Promise<Use
         ...progressRecords[0],
         completedLessonIds: Array.from(new Set(progressRecords.flatMap(record => record.completedLessonIds || []))),
         unlockedLessonIds: Array.from(new Set(progressRecords.flatMap(record => record.unlockedLessonIds || []))),
+        redoCreativeChallengeLessonIds: Array.from(new Set(progressRecords.flatMap(record => record.redoCreativeChallengeLessonIds || []))),
         submissions: Array.from(new Map(
           progressRecords.flatMap(record => record.submissions || []).map(submission => [
             submission.id || JSON.stringify(submission),
@@ -1137,7 +1138,9 @@ export interface StudentOverview {
   enrolledCourses: CourseProgressDetail[];
   submissions: SubmissionRecord[];
   creativeSubmissions?: import('../types').CreativeChallengeSubmission[];
+  redoCreativeChallengeLessonIds?: string[];
   completedLessonIds: string[];
+  username?: string;
   tabSwitchCount: number;
   focusLossCount: number;
   testExitAttempts: number;
@@ -1503,6 +1506,7 @@ export const fetchAllStudentsFromFirestore = async (
       let streak = 1;
       let completedCount = 0;
       let completedLessonIds: string[] = [];
+      let redoCreativeChallengeLessonIds: string[] = [];
       let submissions: SubmissionRecord[] = [];
       let creativeSubmissions: import('../types').CreativeChallengeSubmission[] = [];
       let lastActive = uData.lastLogin || uData.createdAt || 'Recent';
@@ -1528,6 +1532,7 @@ export const fetchAllStudentsFromFirestore = async (
                 ...(otherP || {}),
                 completedLessonIds: Array.from(new Set([...(p?.completedLessonIds || []), ...(otherP?.completedLessonIds || [])])),
                 unlockedLessonIds: Array.from(new Set([...(p?.unlockedLessonIds || []), ...(otherP?.unlockedLessonIds || [])])),
+                redoCreativeChallengeLessonIds: Array.from(new Set([...(p?.redoCreativeChallengeLessonIds || []), ...(otherP?.redoCreativeChallengeLessonIds || [])])),
                 submissions: Array.from(new Map([...(p?.submissions || []), ...(otherP?.submissions || [])].map(s => [s.id || JSON.stringify(s), s])).values()),
                 creativeSubmissions: Array.from(new Map([...(p?.creativeSubmissions || []), ...(otherP?.creativeSubmissions || [])].map(s => [s.id || JSON.stringify(s), s])).values()),
                 xp: Math.max(p?.xp || 0, otherP?.xp || 0),
@@ -1552,6 +1557,7 @@ export const fetchAllStudentsFromFirestore = async (
           xp = p.xp || 0;
           streak = p.streakDays || 1;
           completedLessonIds = p.completedLessonIds || [];
+          redoCreativeChallengeLessonIds = p.redoCreativeChallengeLessonIds || [];
           completedCount = completedLessonIds.length;
           submissions = p.submissions || [];
           creativeSubmissions = p.creativeSubmissions || [];
@@ -1627,7 +1633,9 @@ export const fetchAllStudentsFromFirestore = async (
         enrolledCourses,
         submissions,
         creativeSubmissions,
+        redoCreativeChallengeLessonIds,
         completedLessonIds,
+        username: uData.username || '',
         tabSwitchCount,
         focusLossCount,
         testExitAttempts,
@@ -1653,6 +1661,7 @@ export const fetchAllStudentsFromFirestore = async (
             let xp = 0;
             let streak = 1;
             let completedLessonIds: string[] = [];
+            let redoCreativeChallengeLessonIds: string[] = [];
             let submissions: SubmissionRecord[] = [];
             let lastActive = 'Today';
             let tabSwitchCount = 0;
@@ -1670,6 +1679,7 @@ export const fetchAllStudentsFromFirestore = async (
                 xp = parsedP.xp || 0;
                 streak = parsedP.streakDays || 1;
                 completedLessonIds = parsedP.completedLessonIds || [];
+                redoCreativeChallengeLessonIds = parsedP.redoCreativeChallengeLessonIds || [];
                 submissions = parsedP.submissions || [];
                 if (parsedP.lastActiveDate) lastActive = parsedP.lastActiveDate;
                 tabSwitchCount = parsedP.tabSwitchCount || 0;
@@ -1726,6 +1736,8 @@ export const fetchAllStudentsFromFirestore = async (
               enrolledCourses,
               submissions,
               completedLessonIds,
+              redoCreativeChallengeLessonIds,
+              username: lu.username || '',
               tabSwitchCount,
               focusLossCount,
               testExitAttempts,
@@ -1946,6 +1958,75 @@ export const loadCoursesFromFirestore = async (): Promise<Course[] | null> => {
   return null;
 };
 
+export const requestCreativeChallengeRedo = async (
+  uid: string,
+  studentName: string,
+  username: string | undefined,
+  studentEmail: string | undefined,
+  studentRegNo: string | undefined,
+  courseId: string,
+  lessonId: string
+): Promise<string[]> => {
+  if (!uid || !courseId || !lessonId) {
+    throw new Error('Student, course, and challenge are required to request a redo.');
+  }
+
+  const normalizedEmail = String(studentEmail || '').trim().toLowerCase();
+  const normalizedRegNo = String(studentRegNo || '').trim();
+  const progressIds = new Set<string>([uid]);
+  if (normalizedEmail || normalizedRegNo) {
+    const usersSnap = await getDocs(collection(db, 'users'));
+    usersSnap.docs.forEach(userDoc => {
+      const data = userDoc.data();
+      const sameEmail = normalizedEmail &&
+        String(data.email || '').trim().toLowerCase() === normalizedEmail;
+      const sameRegNo = normalizedRegNo &&
+        String(data.regNo || '').trim() === normalizedRegNo;
+      if (sameEmail || sameRegNo) progressIds.add(userDoc.id);
+    });
+  }
+
+  const redoIds = new Set<string>();
+  for (const progressId of progressIds) {
+    const progressRef = doc(db, 'user_progress', progressId);
+    const progressSnap = await getDoc(progressRef);
+    const progress = progressSnap.exists() ? progressSnap.data() as UserProgress : null;
+    const nextRedoIds = new Set(progress?.redoCreativeChallengeLessonIds || []);
+    nextRedoIds.add(lessonId);
+    nextRedoIds.forEach(id => redoIds.add(id));
+
+    await setDoc(progressRef, sanitizeForFirestore({
+      completedLessonIds: (progress?.completedLessonIds || []).filter(id => id !== lessonId),
+      redoCreativeChallengeLessonIds: Array.from(nextRedoIds),
+      updatedAt: new Date().toISOString()
+    }), { merge: true });
+  }
+
+  const localProgressKeys = Array.from(new Set([
+    username ? `bitwise_progress_${username.toLowerCase()}` : '',
+    studentName ? `bitwise_progress_${studentName.toLowerCase()}` : '',
+    `bitwise_progress_${uid.toLowerCase()}`
+  ].filter(Boolean)));
+  for (const key of localProgressKeys) {
+    const raw = localStorage.getItem(key);
+    if (!raw) continue;
+    const progress = JSON.parse(raw) as UserProgress;
+    const nextRedoIds = new Set(progress.redoCreativeChallengeLessonIds || []);
+    nextRedoIds.add(lessonId);
+    nextRedoIds.forEach(id => redoIds.add(id));
+    localStorage.setItem(key, JSON.stringify({
+      ...progress,
+      completedLessonIds: (progress.completedLessonIds || []).filter(id => id !== lessonId),
+      redoCreativeChallengeLessonIds: Array.from(nextRedoIds)
+    }));
+  }
+
+  window.dispatchEvent(new CustomEvent('bitwise_progress_updated', {
+    detail: { uid, username, courseId, lessonId, redoRequested: true }
+  }));
+  return Array.from(redoIds);
+};
+
 /**
  * Admin API: Reset a student's progress for a specific course in Firestore and LocalStorage
  */
@@ -2006,6 +2087,9 @@ export const resetStudentCourseProgressInFirestore = async (
         const remainingCreativeSubmissions = (p.creativeSubmissions || []).filter(
           submission => submission.courseId !== courseId || !courseLessonIds.includes(submission.lessonId)
         );
+        const remainingRedoRequests = (p.redoCreativeChallengeLessonIds || []).filter(
+          lessonId => !courseLessonIds.includes(lessonId)
+        );
 
         await setDoc(progressDocRef, sanitizeForFirestore({
           ...p,
@@ -2013,6 +2097,7 @@ export const resetStudentCourseProgressInFirestore = async (
           unlockedLessonIds: remainingUnlocked,
           submissions: remainingSubmissions,
           creativeSubmissions: remainingCreativeSubmissions,
+          redoCreativeChallengeLessonIds: remainingRedoRequests,
           updatedAt: new Date().toISOString()
         }), { merge: true });
       }
@@ -2057,6 +2142,9 @@ export const resetStudentCourseProgressInFirestore = async (
         const remainingCreativeSubmissions = (parsed.creativeSubmissions || []).filter(
           submission => submission.courseId !== courseId || !courseLessonIds.includes(submission.lessonId)
         );
+        const remainingRedoRequests = (parsed.redoCreativeChallengeLessonIds || []).filter(
+          lessonId => !courseLessonIds.includes(lessonId)
+        );
 
         const updated: UserProgress = {
           ...parsed,
@@ -2064,6 +2152,7 @@ export const resetStudentCourseProgressInFirestore = async (
           unlockedLessonIds: remainingUnlocked,
           submissions: remainingSubmissions,
           creativeSubmissions: remainingCreativeSubmissions,
+          redoCreativeChallengeLessonIds: remainingRedoRequests,
           lastActiveDate: new Date().toISOString().split('T')[0]
         };
         localStorage.setItem(key, JSON.stringify(updated));

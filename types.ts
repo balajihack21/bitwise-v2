@@ -225,6 +225,7 @@ export interface UserProgress {
   unlockedLessonIds: string[];
   submissions: SubmissionRecord[];
   creativeSubmissions?: CreativeChallengeSubmission[];
+  redoCreativeChallengeLessonIds?: string[];
   xp: number;
   streakDays: number;
   lastActiveDate: string;
