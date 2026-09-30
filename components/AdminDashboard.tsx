@@ -2097,6 +2097,25 @@ solve()`
                           />
                         </div>
 
+                        {!isInstructor && (
+                          <label className="mb-3 flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={mod.unlockedForAllStudents || false}
+                              onChange={e => {
+                                const updated = [...editingCourse.modules];
+                                updated[mIdx] = { ...updated[mIdx], unlockedForAllStudents: e.target.checked };
+                                setEditingCourse({ ...editingCourse, modules: updated });
+                              }}
+                              className="mt-0.5 accent-blue-600"
+                            />
+                            <span>
+                              <span className="block font-bold">Unlock this Unit for all enrolled students</span>
+                              <span className="text-blue-700">Bypasses the Unit schedule and lesson prerequisites. Click Save &amp; Publish to apply.</span>
+                            </span>
+                          </label>
+                        )}
+
                         {/* Lessons in this module */}
                         <div className="space-y-2 pl-2">
                           {mod.lessons.map((lesson, lIdx) => {
@@ -4280,6 +4299,11 @@ solve()`
                                       <div className="font-bold text-slate-700 mb-1 text-[11px] flex items-center justify-between gap-2">
                                         <span>{mod.title}</span>
                                         <div className="flex items-center gap-1">
+                                          {mod.unlockedForAllStudents && (
+                                            <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">
+                                              Unlocked for all
+                                            </span>
+                                          )}
                                           {(() => {
                                             const moduleLessonIds = mod.lessons.map(lesson => lesson.id);
                                             const moduleCompletedCount = moduleLessonIds.filter(id => selectedStudentForDetails.completedLessonIds?.includes(id)).length;
@@ -4342,9 +4366,7 @@ solve()`
                                               <span className={`truncate max-w-[200px] ${isCompleted ? 'text-slate-900 font-semibold' : 'text-slate-500'}`}>
                                                 {les.title}
                                               </span>
-                                              <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${
-                                                isCompleted ? 'bg-green-100 text-green-800' : 'bg-slate-200 text-slate-500'
-                                              }`}>
+                                              <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${isCompleted ? 'bg-green-100 text-green-800' : 'bg-slate-200 text-slate-500'}`}>
                                                 {isCompleted ? '✓ Completed' : 'Pending'}
                                               </span>
                                             </div>

@@ -100,6 +100,7 @@ export interface Module {
   lessons: Lesson[];
   startDate?: string;
   endDate?: string;
+  unlockedForAllStudents?: boolean;
 }
 
 export interface CourseCodingTestDefinition {

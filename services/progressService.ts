@@ -185,6 +185,11 @@ export const isLessonUnlocked = (
 
   if (!progress) return true;
 
+  const lessonModule = course.modules?.find(module => module.lessons.some(lesson => lesson.id === lessonId));
+  if (lessonModule?.unlockedForAllStudents) {
+    return true;
+  }
+
   // Find lesson index
   const allLessons: Lesson[] = [];
   course.modules?.forEach(m => {
@@ -232,7 +237,12 @@ export const isLessonUnlocked = (
 /**
  * Gets the next lesson after the given lessonId in a course
  */
-export const getNextLesson = (course: Course, currentLessonId: string, user?: User | null): Lesson | null => {
+export const getNextLesson = (
+  course: Course,
+  currentLessonId: string,
+  user?: User | null,
+  progress?: UserProgress
+): Lesson | null => {
   const isInstructor = isInstructorForCourse(user, course);
   const allLessons: Lesson[] = [];
   course.modules?.forEach(m => {
@@ -249,7 +259,12 @@ export const getNextLesson = (course: Course, currentLessonId: string, user?: Us
     // If current module is deadline-passed, do not allow moving to next lesson in that module
     const currentModule = course.modules?.find(m => m.lessons?.some(l => l.id === currentLessonId));
     const currentModuleDeadline = currentModule ? getEffectiveModuleDeadline(user, course, currentModule.id) : undefined;
-    if (currentModule && currentModuleDeadline && new Date(currentModuleDeadline) < new Date()) {
+    if (
+      currentModule &&
+      currentModuleDeadline &&
+      new Date(currentModuleDeadline) < new Date() &&
+      !currentModule.unlockedForAllStudents
+    ) {
       const nextModule = course.modules?.find(m => m.lessons?.some(l => l.id === nextL.id));
       if (nextModule && nextModule.id === currentModule.id) {
         return null; // Block next lesson within same passed module
@@ -336,7 +351,12 @@ export const recordCompletion = (
   const currentProgress = loadUserProgress(username);
   
   const isAlreadyCompleted = currentProgress.completedLessonIds?.includes(lessonId);
-  const nextLesson = getNextLesson(course, lessonId);
+  const nextLesson = getNextLesson(
+    course,
+    lessonId,
+    typeof userOrName === 'object' ? userOrName : undefined,
+    currentProgress
+  );
 
   const completed = isAlreadyCompleted
     ? (currentProgress.completedLessonIds || [])

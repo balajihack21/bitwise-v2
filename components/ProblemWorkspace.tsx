@@ -781,9 +781,9 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
                 </div>
               </div>
 
-              {getNextLesson(course, lesson.id) && (
+              {getNextLesson(course, lesson.id, user, progress) && (
                 <button
-                  onClick={() => onNavigateToLesson(getNextLesson(course, lesson.id)!)}
+                  onClick={() => onNavigateToLesson(getNextLesson(course, lesson.id, user, progress)!)}
                   className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-600/20 flex items-center gap-2 transition-all hover:scale-105"
                 >
                   Next Challenge <i className="fa-solid fa-arrow-right"></i>

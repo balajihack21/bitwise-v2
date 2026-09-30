@@ -1998,23 +1998,23 @@ export const resetStudentCourseProgressInFirestore = async (
       const snap = await getDoc(progressDocRef);
       if (snap.exists()) {
         const p = snap.data() as UserProgress;
-      remainingCompleted = (p.completedLessonIds || []).filter(id => !courseLessonIds.includes(id));
-      const remainingUnlocked = (p.unlockedLessonIds || []).filter(id => !courseLessonIds.includes(id));
-      remainingSubmissions = (p.submissions || []).filter(
-        s => s.courseId !== courseId || !courseLessonIds.includes(s.problemId)
-      );
-      const remainingCreativeSubmissions = (p.creativeSubmissions || []).filter(
-        submission => submission.courseId !== courseId || !courseLessonIds.includes(submission.lessonId)
-      );
+        remainingCompleted = (p.completedLessonIds || []).filter(id => !courseLessonIds.includes(id));
+        const remainingUnlocked = (p.unlockedLessonIds || []).filter(id => !courseLessonIds.includes(id));
+        remainingSubmissions = (p.submissions || []).filter(
+          s => s.courseId !== courseId || !courseLessonIds.includes(s.problemId)
+        );
+        const remainingCreativeSubmissions = (p.creativeSubmissions || []).filter(
+          submission => submission.courseId !== courseId || !courseLessonIds.includes(submission.lessonId)
+        );
 
-      await setDoc(progressDocRef, sanitizeForFirestore({
-        ...p,
-        completedLessonIds: remainingCompleted,
-        unlockedLessonIds: remainingUnlocked,
-        submissions: remainingSubmissions,
-        creativeSubmissions: remainingCreativeSubmissions,
-        updatedAt: new Date().toISOString()
-      }), { merge: true });
+        await setDoc(progressDocRef, sanitizeForFirestore({
+          ...p,
+          completedLessonIds: remainingCompleted,
+          unlockedLessonIds: remainingUnlocked,
+          submissions: remainingSubmissions,
+          creativeSubmissions: remainingCreativeSubmissions,
+          updatedAt: new Date().toISOString()
+        }), { merge: true });
       }
     }
   } catch (err) {
