@@ -6,6 +6,9 @@ import {
   signOut, 
   onAuthStateChanged,
   updateProfile,
+  updatePassword,
+  reauthenticateWithCredential,
+  EmailAuthProvider,
   sendPasswordResetEmail,
   User as FirebaseUser
 } from 'firebase/auth';
@@ -45,7 +48,7 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 export { onAuthStateChanged };
 
-// Admin credentials constants for easy verification and direct admin access
+// Admin account details used by the local/demo fallback.
 export const DEFAULT_ADMIN_CREDENTIALS = {
   email: 'admin@bitwise.com',
   password: 'admin123', // also supports Admin@123
@@ -520,7 +523,8 @@ const isPasswordMatch = (storedAccount: any, enteredPassword: string): boolean =
 };
 
 export const loginUser = async (email: string, password: string): Promise<User> => {
-  const cleanEmail = email.trim().toLowerCase();
+  const enteredEmail = email.trim().toLowerCase();
+  const cleanEmail = enteredEmail === 'admin' ? DEFAULT_ADMIN_CREDENTIALS.email : enteredEmail;
 
   // Explicit helper to determine role from user data
   const determineRole = (data: any): 'student' | 'admin' | 'instructor' => {
@@ -538,11 +542,8 @@ export const loginUser = async (email: string, password: string): Promise<User> 
     return 'student';
   };
 
-  // 1. Direct check for Admin Master credentials
-  if (
-    (cleanEmail === 'admin' || cleanEmail === 'admin@bitwise.com') &&
-    (password === 'admin123' || password === 'Admin@123')
-  ) {
+  // 1. Admin sign-in supports Firebase Auth and the changeable local/demo credential.
+  if (cleanEmail === DEFAULT_ADMIN_CREDENTIALS.email) {
     try {
       const userCredential = await signInWithEmailAndPassword(auth, 'admin@bitwise.com', password);
       return {
@@ -551,12 +552,19 @@ export const loginUser = async (email: string, password: string): Promise<User> 
         email: userCredential.user.email || 'admin@bitwise.com',
         uid: userCredential.user.uid
       };
-    } catch (e) {
+    } catch (authError) {
+      const storedAdmin = getStoredAccounts().find(account =>
+        account.email.toLowerCase().trim() === DEFAULT_ADMIN_CREDENTIALS.email &&
+        account.role === 'admin'
+      );
+      if (!storedAdmin || storedAdmin.password !== password) {
+        throw authError;
+      }
       return {
-        username: 'Bitwise Admin',
+        username: storedAdmin.username,
         role: 'admin',
-        email: 'admin@bitwise.com',
-        uid: 'admin_master_uid'
+        email: storedAdmin.email,
+        uid: storedAdmin.uid
       };
     }
   }
@@ -931,6 +939,44 @@ export const loginUser = async (email: string, password: string): Promise<User> 
     }
 
     throw authError;
+  }
+};
+
+export const changeAdminPassword = async (
+  currentPassword: string,
+  newPassword: string
+): Promise<void> => {
+  if (newPassword.length < 8) {
+    throw new Error('Choose a password with at least 8 characters.');
+  }
+
+  const firebaseUser = auth.currentUser;
+  if (firebaseUser) {
+    if (firebaseUser.email?.toLowerCase() !== DEFAULT_ADMIN_CREDENTIALS.email) {
+      throw new Error('The signed-in Firebase account is not the administrator account.');
+    }
+    const credential = EmailAuthProvider.credential(firebaseUser.email, currentPassword);
+    await reauthenticateWithCredential(firebaseUser, credential);
+    await updatePassword(firebaseUser, newPassword);
+  } else {
+    const accounts = getStoredAccounts();
+    const adminAccount = accounts.find(account =>
+      account.email.toLowerCase().trim() === DEFAULT_ADMIN_CREDENTIALS.email &&
+      account.role === 'admin'
+    );
+    if (!adminAccount || adminAccount.password !== currentPassword) {
+      throw new Error('Current password is incorrect.');
+    }
+  }
+
+  const accounts = getStoredAccounts();
+  const adminAccount = accounts.find(account =>
+    account.email.toLowerCase().trim() === DEFAULT_ADMIN_CREDENTIALS.email &&
+    account.role === 'admin'
+  );
+  if (adminAccount) {
+    adminAccount.password = newPassword;
+    saveStoredAccounts(accounts);
   }
 };
 

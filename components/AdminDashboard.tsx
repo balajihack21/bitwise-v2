@@ -8,10 +8,8 @@ import {
   fetchAllStudentsFromFirestore,
   fetchAllSubmissionsFromFirestore,
   requestCreativeChallengeRedo,
+  changeAdminPassword,
   saveCoursesToFirestore,
-  resetAllFirebaseData,
-  resetAllUserProgressInFirestore,
-  resetUserProgressAndSubmissionsInFirestore,
   resetStudentCourseProgressInFirestore,
   StudentOverview,
   updateStudentProctoringReview,
@@ -21,8 +19,6 @@ import {
   deleteStudentFromFirestore,
   exportFirestoreToJSON,
   sanitizeStudentAssignments,
-  deduplicateInstructorUsers,
-  mergeDuplicateStudentProgressRecords
 } from '../services/firebase';
 import { parseSeedFile, SeedStudentRow } from '../services/seedParser';
 import { MOCK_COURSES } from '../constants';
@@ -52,7 +48,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const isInstructor = currentUser?.role === 'instructor';
   const canManageCourseTests = currentUser?.role === 'instructor' || currentUser?.role === 'admin';
   const canViewInternalMarks = currentUser?.role === 'instructor' || currentUser?.role === 'admin';
-  const [activeTab, setActiveTab] = useState<'courses' | 'instructors' | 'students' | 'instructor-progress' | 'submissions' | 'firebase' | 'coding-tests' | 'practice-problems'>('courses');
+  const [activeTab, setActiveTab] = useState<'courses' | 'instructors' | 'students' | 'instructor-progress' | 'submissions' | 'coding-tests' | 'practice-problems'>('courses');
   const [practiceCourseId, setPracticeCourseId] = useState('');
   const [practiceTopic, setPracticeTopic] = useState('');
   const [practiceTitle, setPracticeTitle] = useState('');
@@ -69,6 +65,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [bulkSelectMode, setBulkSelectMode] = useState<'none' | 'all-matched'>('none');
   const [bulkSelectedUids, setBulkSelectedUids] = useState<Set<string>>(new Set());
   const [showJudge0Settings, setShowJudge0Settings] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [passwordChangeError, setPasswordChangeError] = useState<string | null>(null);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   // Instructor Course Scoping:
   const currentInstructorEmail = currentUser?.email?.toLowerCase().trim();
@@ -116,8 +118,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [isLoadingStudents, setIsLoadingStudents] = useState<boolean>(false);
   const [isLoadingSubmissions, setIsLoadingSubmissions] = useState<boolean>(false);
-  const [resetStatus, setResetStatus] = useState<{ message: string; success: boolean } | null>(null);
-  const [isResetting, setIsResetting] = useState<boolean>(false);
   const [exportSuccessMessage, setExportSuccessMessage] = useState<string | null>(null);
 
   // Instructors state
@@ -241,6 +241,45 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       alert(`Unable to request a redo for "${submission.lessonTitle}". Please try again.`);
     } finally {
       setRequestingRedoLessonId(null);
+    }
+  };
+
+  const closeChangePasswordModal = () => {
+    setShowChangePassword(false);
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmNewPassword('');
+    setPasswordChangeError(null);
+  };
+
+  const handleAdminPasswordChange = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setPasswordChangeError(null);
+    if (newPassword !== confirmNewPassword) {
+      setPasswordChangeError('The new passwords do not match.');
+      return;
+    }
+    if (newPassword.length < 8) {
+      setPasswordChangeError('Choose a password with at least 8 characters.');
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      await changeAdminPassword(currentPassword, newPassword);
+      closeChangePasswordModal();
+      window.alert('Admin password changed successfully.');
+    } catch (error) {
+      const code = (error as { code?: string })?.code;
+      if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+        setPasswordChangeError('Current password is incorrect.');
+      } else if (code === 'auth/requires-recent-login') {
+        setPasswordChangeError('Please log out, sign in again, and then change the password.');
+      } else {
+        setPasswordChangeError(error instanceof Error ? error.message : 'Unable to change the password. Please try again.');
+      }
+    } finally {
+      setIsChangingPassword(false);
     }
   };
 
@@ -1152,89 +1191,6 @@ solve()`
     setAssignModalCourse(null);
   };
 
-  const handleResetFirebaseData = async () => {
-    const confirmed = window.confirm(
-      '⚠️ Reset Firebase & Start Fresh?\n\nThis will wipe all existing submissions, progress documents, and refresh the catalog to default courses as requested. Are you sure?'
-    );
-    if (!confirmed) return;
-
-    setIsResetting(true);
-    setResetStatus(null);
-    try {
-      const res = await resetAllFirebaseData();
-      onUpdateCourses(MOCK_COURSES);
-      await saveCoursesToFirestore(MOCK_COURSES);
-      setResetStatus({
-        success: res.success,
-        message: 'Successfully reset Firebase database. You are starting fresh with clean collections!'
-      });
-      loadStudents();
-      loadSubmissions();
-    } catch (err: any) {
-      setResetStatus({
-        success: false,
-        message: err.message || 'Failed to reset Firebase collections.'
-      });
-    } finally {
-      setIsResetting(false);
-    }
-  };
-
-  const [isDeduping, setIsDeduping] = useState(false);
-  const [dedupStatus, setDedupStatus] = useState<{success:boolean;message:string}|null>(null);
-  const [isMergingStudentProgress, setIsMergingStudentProgress] = useState(false);
-
-  const handleDeduplicateInstructors = async () => {
-    const confirmed = window.confirm(
-      '⚠️ Deduplicate Instructor Users?\n\nThis will compare users collection docs against the instructors collection for balaji@gmail.com / vaheetha@gmail.com and delete unexpected duplicates. Proceed?'
-    );
-    if (!confirmed) return;
-    setIsDeduping(true);
-    setDedupStatus(null);
-    try {
-      const res = await deduplicateInstructorUsers();
-      setDedupStatus({ success: res.success, message: (res.messages || []).join('; ') || 'Done' });
-    } catch (err: any) {
-      setDedupStatus({ success: false, message: err.message || 'Failed' });
-    } finally {
-      setIsDeduping(false);
-    }
-  };
-
-  const handleMergeDuplicateStudentProgress = async () => {
-    const confirmed = window.confirm(
-      '⚠️ Merge duplicate student progress records by email?\n\nThis will keep the canonical seeded student UID and merge all generated duplicate progress data into it. Proceed?'
-    );
-    if (!confirmed) return;
-
-    setIsMergingStudentProgress(true);
-    setDedupStatus(null);
-    try {
-      const res = await mergeDuplicateStudentProgressRecords();
-      setDedupStatus({
-        success: res.errors.length === 0,
-        message: res.errors.length === 0
-          ? `Merged ${res.merged} duplicate student progress records.`
-          : `Merged with warnings: ${res.errors.join('; ')}`
-      });
-      await loadStudents();
-    } catch (err: any) {
-      setDedupStatus({ success: false, message: err.message || 'Failed to merge student progress.' });
-    } finally {
-      setIsMergingStudentProgress(false);
-    }
-  };
-
-  // Show dedup status near reset area if set
-  const DedupStatusBanner = () => {
-    if (!dedupStatus) return null;
-    return (
-      <div className={`text-xs font-bold px-3 py-2 rounded-lg mb-3 ${dedupStatus.success ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
-        Dedup: {dedupStatus.message}
-      </div>
-    );
-  };
-
   // Lock student progress edits (admin protection)
   const [isProgressLocked, setIsProgressLocked] = useState<boolean>(false);
 
@@ -1430,13 +1386,11 @@ solve()`
                 <h1 className="text-2xl font-bold text-slate-900">
                   {isInstructor ? 'Instructor Teaching Portal' : 'Admin Control Center'}
                 </h1>
-                <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                  isInstructor
-                    ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                    : 'bg-amber-100 text-amber-800 border border-amber-200'
-                }`}>
-                  {isInstructor ? 'Instructor: Read-Only Curriculum' : 'Firebase Connected'}
-                </span>
+                {isInstructor && (
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-800 border border-blue-200">
+                    Instructor: Read-Only Curriculum
+                  </span>
+                )}
               </div>
               <p className="text-slate-500 text-sm mt-0.5">
                 {isInstructor
@@ -1494,13 +1448,19 @@ solve()`
                   {isInstructor ? (currentUser?.email || 'instructor@bitwise.com') : DEFAULT_ADMIN_CREDENTIALS.email}
                 </span>
               </div>
-              {!isInstructor && (
-                <div className="border-l border-slate-200 pl-3">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Pass</span>
-                  <span className="font-mono text-slate-700">admin123</span>
-                </div>
-              )}
             </div>
+            {currentUser?.role === 'admin' && (
+              <button
+                type="button"
+                onClick={() => {
+                  setPasswordChangeError(null);
+                  setShowChangePassword(true);
+                }}
+                className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 hover:bg-slate-50"
+              >
+                <i className="fa-solid fa-key mr-1.5"></i>Change Password
+              </button>
+            )}
 
             {/* Direct Logout */}
             {onLogout && (
@@ -1606,18 +1566,6 @@ solve()`
             </button>
           )}
 
-          {!isInstructor && (
-            <button
-              onClick={() => { setActiveTab('firebase'); setEditingCourse(null); }}
-              className={`flex-1 py-2.5 px-4 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2 ${
-                activeTab === 'firebase'
-                  ? 'bg-bitwise-600 text-white shadow-sm'
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              <i className="fa-solid fa-database"></i> Database & Reset
-            </button>
-          )}
         </div>
 
         {activeTab === 'practice-problems' && !isInstructor && (
@@ -3529,13 +3477,15 @@ solve()`
 
                                 <td className="p-3.5 align-top text-right">
                                   <div className="flex items-center gap-2 justify-end">
-                                    <button
-                                      onClick={() => handleDeleteStudent(student)}
-                                      title="Delete student record from database"
-                                      className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 text-[10px] font-bold rounded-lg border border-red-200 transition-colors cursor-pointer"
-                                    >
-                                      <i className="fa-solid fa-trash-can mr-1"></i> Delete
-                                    </button>
+                                    {!isInstructor && (
+                                      <button
+                                        onClick={() => handleDeleteStudent(student)}
+                                        title="Delete student record from database"
+                                        className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 text-[10px] font-bold rounded-lg border border-red-200 transition-colors cursor-pointer"
+                                      >
+                                        <i className="fa-solid fa-trash-can mr-1"></i> Delete
+                                      </button>
+                                    )}
                                     <button
                                       onClick={() => openStudentDetails(student)}
                                       className="px-3 py-1.5 bg-bitwise-600 hover:bg-bitwise-700 text-white font-bold text-xs rounded-lg transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
@@ -3659,113 +3609,6 @@ solve()`
                   </table>
                 </div>
               )}
-            </div>
-          )}
-
-          {/* TAB 4: FIREBASE MANAGEMENT & RESET */}
-          {activeTab === 'firebase' && (
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-6">
-              <div>
-                <h2 className="text-lg font-bold text-slate-900">Firebase Project & Database Maintenance</h2>
-                <p className="text-xs text-slate-500">
-                  Manage cloud persistence, reset test records, and ensure fresh deployment.
-                </p>
-              </div>
-
-              {resetStatus && (
-                <div className={`p-4 rounded-xl text-xs font-bold flex items-center gap-2 ${
-                  resetStatus.success
-                    ? 'bg-green-50 border border-green-200 text-green-800'
-                    : 'bg-red-50 border border-red-200 text-red-800'
-                }`}>
-                  <i className={`fa-solid ${resetStatus.success ? 'fa-check-circle text-green-600' : 'fa-triangle-exclamation text-red-600'}`}></i>
-                  {resetStatus.message}
-                </div>
-              )}
-              <DedupStatusBanner />
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Card 1: Project Credentials Info */}
-                <div className="bg-slate-50 rounded-xl p-5 border border-slate-200">
-                  <div className="flex items-center gap-2 text-sm font-bold text-slate-800 mb-3">
-                    <i className="fa-solid fa-server text-bitwise-600"></i> Active Firebase Setup
-                  </div>
-                  <div className="space-y-2 text-xs font-mono text-slate-600">
-                    <div className="flex justify-between border-b border-slate-200 pb-1">
-                      <span className="text-slate-400">Project ID:</span>
-                      <span className="font-bold text-slate-800">ipd2026</span>
-                    </div>
-                    <div className="flex justify-between border-b border-slate-200 pb-1">
-                      <span className="text-slate-400">Auth Domain:</span>
-                      <span>ipd2026.firebaseapp.com</span>
-                    </div>
-                    <div className="flex justify-between border-b border-slate-200 pb-1">
-                      <span className="text-slate-400">Database:</span>
-                      <span className="text-green-700 font-bold">Cloud Firestore</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Storage Bucket:</span>
-                      <span>ipd2026.firebasestorage.app</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Card 2: Reset / Fresh Start Tool */}
-                <div className="bg-red-50/50 rounded-xl p-5 border border-red-200 flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-center gap-2 text-sm font-bold text-red-900 mb-2">
-                      <i className="fa-solid fa-trash-can text-red-600"></i> Fresh Start & Data Reset
-                    </div>
-                    <p className="text-xs text-red-700 leading-relaxed">
-                      As requested, this will clear previous test progress, delete submission histories, and restore fresh course catalogs.
-                    </p>
-                  </div>
-
-                  <div className="mt-4 pt-3 border-t border-red-200/60 flex gap-3">
-                    <button
-                      onClick={handleDeduplicateInstructors}
-                      disabled={isDeduping || isInstructor}
-                      className="flex-1 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white font-bold text-xs py-2.5 px-4 rounded-lg shadow-sm flex items-center justify-center gap-2 cursor-pointer"
-                      title={isInstructor ? 'Admin only' : ''}
-                    >
-                      {isDeduping ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-user-check"></i>}
-                      Deduplicate Instructor Docs
-                    </button>
-                    <button
-                      onClick={handleMergeDuplicateStudentProgress}
-                      disabled={isMergingStudentProgress || isInstructor}
-                      className="flex-1 bg-cyan-600 hover:bg-cyan-700 disabled:opacity-50 text-white font-bold text-xs py-2.5 px-4 rounded-lg shadow-sm flex items-center justify-center gap-2 cursor-pointer"
-                      title={isInstructor ? 'Admin only' : ''}
-                    >
-                      {isMergingStudentProgress ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-users-gear"></i>}
-                      Merge Student Progress
-                    </button>
-                    <button
-                      onClick={handleResetFirebaseData}
-                      disabled={isResetting}
-                      className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-bold text-xs py-2.5 px-4 rounded-lg shadow-sm flex items-center justify-center gap-2 cursor-pointer"
-                    >
-                      {isResetting ? (
-                        <i className="fa-solid fa-spinner fa-spin"></i>
-                      ) : (
-                        <i className="fa-solid fa-rotate-left"></i>
-                      )}
-                      Delete Existing Data & Start Fresh
-                    </button>
-                    <button
-                      onClick={async () => {
-                        if (!window.confirm('Clear user_progress, submissions, and local progress keys?')) return;
-                        const res = await resetUserProgressAndSubmissionsInFirestore();
-                        setResetStatus({ success: res.success, message: res.message });
-                      }}
-                      className="flex-1 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs py-2.5 px-4 rounded-lg shadow-sm flex items-center justify-center gap-2 cursor-pointer"
-                    >
-                      <i className="fa-solid fa-eraser"></i>
-                      Reset Progress + Submissions
-                    </button>
-                  </div>
-                </div>
-              </div>
             </div>
           )}
 
@@ -4846,6 +4689,71 @@ solve()`
           )}
         </div>
       </div>
+      {showChangePassword && currentUser?.role === 'admin' && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/60 p-4">
+          <form onSubmit={handleAdminPasswordChange} className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+            <div className="mb-5 flex items-start justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">Change Admin Password</h2>
+                <p className="mt-1 text-xs text-slate-500">Verify your current password before setting a new one.</p>
+              </div>
+              <button type="button" onClick={closeChangePasswordModal} className="text-slate-400 hover:text-slate-700" aria-label="Close">
+                <i className="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+            <div className="space-y-3">
+              <label className="block text-xs font-bold text-slate-700">
+                Current password
+                <input
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  value={currentPassword}
+                  onChange={event => setCurrentPassword(event.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-normal outline-none focus:border-bitwise-500 focus:ring-2 focus:ring-bitwise-100"
+                />
+              </label>
+              <label className="block text-xs font-bold text-slate-700">
+                New password
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  minLength={8}
+                  required
+                  value={newPassword}
+                  onChange={event => setNewPassword(event.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-normal outline-none focus:border-bitwise-500 focus:ring-2 focus:ring-bitwise-100"
+                />
+              </label>
+              <label className="block text-xs font-bold text-slate-700">
+                Confirm new password
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  minLength={8}
+                  required
+                  value={confirmNewPassword}
+                  onChange={event => setConfirmNewPassword(event.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-normal outline-none focus:border-bitwise-500 focus:ring-2 focus:ring-bitwise-100"
+                />
+              </label>
+            </div>
+            {passwordChangeError && (
+              <div role="alert" className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
+                {passwordChangeError}
+              </div>
+            )}
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" onClick={closeChangePasswordModal} className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
+                Cancel
+              </button>
+              <button type="submit" disabled={isChangingPassword} className="rounded-lg bg-bitwise-600 px-4 py-2 text-xs font-bold text-white hover:bg-bitwise-700 disabled:opacity-50">
+                {isChangingPassword ? 'Updating...' : 'Update Password'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
       <Judge0SettingsModal
         isOpen={showJudge0Settings}
         onClose={() => setShowJudge0Settings(false)}
