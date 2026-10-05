@@ -645,7 +645,7 @@ const Courses: React.FC<CoursesProps> = ({
                       const effectiveDeadline = getEffectiveModuleDeadline(user, selectedCourse, module.id);
                       const hasStudentOverride = !!user?.moduleDeadlineOverrides?.[selectedCourse.id]?.[module.id];
                       const isDeadlinePassed = getModuleScheduleState(user, selectedCourse, module.id) === 'expired' && !hasStudentOverride;
-                      if (!effectiveDeadline) return null;
+                      if (!effectiveDeadline || isInstructorAssigned) return null;
                       const isExtended = isModuleExtended(selectedCourse, module.id);
                       return (
                         <div className="px-4 py-2 text-[10px] font-semibold flex items-center justify-between gap-2">

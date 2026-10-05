@@ -164,6 +164,8 @@ export const getModuleScheduleState = (
   moduleId: string,
   now = new Date()
 ): 'not-started' | 'active' | 'expired' => {
+  if (isInstructorForCourse(user, course)) return 'active';
+
   const module = course.modules?.find(m => m.id === moduleId);
   const startDate = getScheduleDate(module?.startDate);
   const endDate = getScheduleDate(getEffectiveModuleDeadline(user, course, moduleId), true);
