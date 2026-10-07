@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { Course, Lesson, StudentProfile, User, UserProgress } from '../types';
+import { Course, Lesson, StudentProfile, SubmissionRecord, User, UserProgress } from '../types';
 import ProblemWorkspace from './ProblemWorkspace';
-import { fetchAllSubmissionsFromFirestore, fetchStudentProfiles } from '../services/firebase';
+import { fetchAllPracticeSubmissionsFromFirestore, fetchStudentPracticeSubmissionsFromFirestore, fetchStudentProfiles } from '../services/firebase';
 
 interface PracticeProblemsProps {
   courses: Course[];
@@ -17,6 +17,7 @@ const PracticeProblems: React.FC<PracticeProblemsProps> = ({ courses, user, prog
   const [completionStatus, setCompletionStatus] = useState<'ALL' | 'SOLVED' | 'UNSOLVED'>('ALL');
   const [selected, setSelected] = useState<Lesson | null>(null);
   const [allSubmissions, setAllSubmissions] = useState<any[]>([]);
+  const [studentSubmissions, setStudentSubmissions] = useState<SubmissionRecord[]>([]);
   const [studentProfiles, setStudentProfiles] = useState<StudentProfile[]>([]);
   const [leaderboardLoading, setLeaderboardLoading] = useState(true);
   const course = assignedCourses.find(item => item.id === courseId) || assignedCourses[0];
@@ -24,11 +25,14 @@ const PracticeProblems: React.FC<PracticeProblemsProps> = ({ courses, user, prog
   const topics = useMemo(() => Array.from(new Set(practiceProblems.map(problem => problem.topic))).sort(), [practiceProblems]);
   const solvedProblemIds = useMemo(
     () => new Set(
-      progress.submissions
+      [
+        ...progress.submissions,
+        ...studentSubmissions
+      ]
         .filter(submission => submission.status === 'ACCEPTED' && submission.isPractice)
         .map(submission => submission.problemId)
     ),
-    [progress.submissions]
+    [progress.submissions, studentSubmissions]
   );
   const visibleProblems = practiceProblems.filter(problem => {
     const matchesTopic = topic === 'ALL' || problem.topic === topic;
@@ -42,7 +46,7 @@ const PracticeProblems: React.FC<PracticeProblemsProps> = ({ courses, user, prog
   React.useEffect(() => {
     let cancelled = false;
     setLeaderboardLoading(true);
-    Promise.all([fetchAllSubmissionsFromFirestore(500), fetchStudentProfiles()])
+    Promise.all([fetchAllPracticeSubmissionsFromFirestore(), fetchStudentProfiles()])
       .then(([submissions, profiles]) => {
         if (!cancelled) {
           setAllSubmissions(submissions);
@@ -60,6 +64,25 @@ const PracticeProblems: React.FC<PracticeProblemsProps> = ({ courses, user, prog
     };
   }, []);
 
+  React.useEffect(() => {
+    let cancelled = false;
+    if (user.role !== 'student') {
+      setStudentSubmissions([]);
+      return;
+    }
+
+    fetchStudentPracticeSubmissionsFromFirestore(user.uid || user.username)
+      .then(submissions => {
+        if (!cancelled) setStudentSubmissions(submissions);
+      })
+      .catch(error => {
+        console.warn('Failed to load student practice submissions:', error);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user.role, user.uid, user.username]);
+
   const leaderboard = useMemo(() => {
     if (!course) return [];
     const problemMap = new Map(practiceProblems.map(problem => [
@@ -68,7 +91,8 @@ const PracticeProblems: React.FC<PracticeProblemsProps> = ({ courses, user, prog
     ]));
     const submissions = [
       ...allSubmissions.filter(submission => submission.isPractice && submission.courseId === course.id),
-      ...progress.submissions.filter(submission => submission.isPractice && submission.courseId === course.id)
+      ...progress.submissions.filter(submission => submission.isPractice && submission.courseId === course.id),
+      ...studentSubmissions.filter(submission => submission.isPractice && submission.courseId === course.id)
     ];
     const acceptedByUser = new Map<string, Map<string, { points: number; title: string }>>();
 
@@ -129,7 +153,7 @@ const PracticeProblems: React.FC<PracticeProblemsProps> = ({ courses, user, prog
       })
       .sort((first, second) => second.points - first.points || second.solved - first.solved || first.username.localeCompare(second.username))
       .map((entry, index) => ({ ...entry, rank: index + 1 }));
-  }, [allSubmissions, course, practiceProblems, progress.submissions, studentProfiles, user.dept, user.regNo, user.role, user.section, user.uid, user.username]);
+  }, [allSubmissions, course, practiceProblems, progress.submissions, studentProfiles, studentSubmissions, user.dept, user.regNo, user.role, user.section, user.uid, user.username]);
 
   if (selected && course) {
     return (
@@ -222,7 +246,7 @@ const PracticeProblems: React.FC<PracticeProblemsProps> = ({ courses, user, prog
       ) : (
         <div className="grid md:grid-cols-2 gap-4">
           {visibleProblems.map(problem => {
-            const solved = progress.submissions.some(submission => submission.problemId === problem.id && submission.status === 'ACCEPTED' && submission.isPractice);
+            const solved = solvedProblemIds.has(problem.id);
             return (
               <button key={problem.id} onClick={() => setSelected(problem)} className="text-left bg-white border border-slate-200 rounded-2xl p-5 hover:border-sky-400 hover:shadow-md transition-all">
                 <div className="flex items-start justify-between gap-3">

@@ -1482,6 +1482,32 @@ export const fetchAllStudentsFromFirestore = async (
     progressSnap.forEach(progressDoc => {
       progressByUid.set(progressDoc.id, progressDoc.data() as UserProgress);
     });
+    const submissionRecordsByUid = new Map<string, SubmissionRecord[]>();
+    const studentUids = userDocs
+      .filter(userDoc => userDoc.data().role === 'student')
+      .map(userDoc => userDoc.id);
+    try {
+      for (let index = 0; index < studentUids.length; index += 30) {
+        const uidBatch = studentUids.slice(index, index + 30);
+        const submissionsSnap = await getDocs(query(
+          collection(db, 'submissions'),
+          where('userId', 'in', uidBatch)
+        ));
+        submissionsSnap.docs.forEach(submissionDoc => {
+          const data = submissionDoc.data();
+          const userId = String(data.userId || '');
+          if (!userId) return;
+          const userSubmissions = submissionRecordsByUid.get(userId) || [];
+          userSubmissions.push({
+            ...data,
+            id: data.id || submissionDoc.id
+          } as SubmissionRecord);
+          submissionRecordsByUid.set(userId, userSubmissions);
+        });
+      }
+    } catch (submissionError) {
+      console.warn('Could not load Firestore student submissions for the admin dashboard:', submissionError);
+    }
     const studentsByEmail = new Map<string, any[]>();
     userDocs.forEach(userDoc => {
       const email = String(userDoc.data()?.email || '').trim().toLowerCase();
@@ -1619,6 +1645,20 @@ export const fetchAllStudentsFromFirestore = async (
       } catch (e) {
         // ignore individual progress read error
       }
+
+      const sameEmailDocs = studentsByEmail.get(String(uData.email || '').trim().toLowerCase()) || [uDoc];
+      const allStudentSubmissions = [
+        ...submissions,
+        ...sameEmailDocs.flatMap(studentDoc => submissionRecordsByUid.get(studentDoc.id) || [])
+      ];
+      submissions = Array.from(new Map(
+        allStudentSubmissions.map(submission => [
+          submission.id || JSON.stringify(submission),
+          submission
+        ])
+      ).values()).sort((first, second) =>
+        new Date(second.timestamp || 0).getTime() - new Date(first.timestamp || 0).getTime()
+      );
 
       // Check tab switches from submissions as well
       const subsTabSwitches = submissions.reduce((acc, s) => acc + (s.tabSwitchesDuringTest || 0), 0);
@@ -1969,6 +2009,31 @@ export const fetchAllSubmissionsFromFirestore = async (limitCount: number = 50):
       return [];
     }
   }
+};
+
+export const fetchStudentPracticeSubmissionsFromFirestore = async (userId: string): Promise<SubmissionRecord[]> => {
+  if (!userId) return [];
+  const submissionsQuery = query(collection(db, 'submissions'), where('userId', '==', userId));
+  const snapshot = await getDocs(submissionsQuery);
+  return snapshot.docs.map(submissionDoc => {
+    const data = submissionDoc.data();
+    return {
+      ...data,
+      id: data.id || submissionDoc.id
+    } as SubmissionRecord;
+  });
+};
+
+export const fetchAllPracticeSubmissionsFromFirestore = async (): Promise<SubmissionRecord[]> => {
+  const submissionsQuery = query(collection(db, 'submissions'), where('isPractice', '==', true));
+  const snapshot = await getDocs(submissionsQuery);
+  return snapshot.docs.map(submissionDoc => {
+    const data = submissionDoc.data();
+    return {
+      ...data,
+      id: data.id || submissionDoc.id
+    } as SubmissionRecord;
+  });
 };
 
 /**
