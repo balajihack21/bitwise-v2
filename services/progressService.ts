@@ -131,10 +131,8 @@ export const isInstructorForCourse = (user?: User | null, course?: Course | null
 /**
  * Checks if a specific lesson or problem is unlocked.
  * Sequential rule:
- * 1. An assigned instructor testing their course has ALL lessons unlocked.
- * 2. The very first lesson of the first module of a course is ALWAYS unlocked.
- * 3. Any subsequent lesson is unlocked if the immediate PREVIOUS lesson in the module/course is completed.
- * 4. Or if explicitly in unlockedLessonIds.
+ * Assigned instructors bypass lesson locks. Module schedules always constrain
+ * student access; global unlocks only bypass lesson prerequisites.
  */
 export const getEffectiveModuleDeadline = (
   user: User | null | undefined,
@@ -185,9 +183,16 @@ export const isLessonUnlocked = (
     return true;
   }
 
+  const lessonModule = course.modules?.find(module => module.lessons.some(lesson => lesson.id === lessonId));
+  if (lessonModule) {
+    const scheduleState = getModuleScheduleState(user, course, lessonModule.id);
+    if (scheduleState === 'not-started') return false;
+    if (scheduleState === 'expired') {
+      return progress?.completedLessonIds?.includes(lessonId) || false;
+    }
+  }
   if (!progress) return true;
 
-  const lessonModule = course.modules?.find(module => module.lessons.some(lesson => lesson.id === lessonId));
   if (lessonModule?.unlockedForAllStudents) {
     return true;
   }
@@ -201,16 +206,6 @@ export const isLessonUnlocked = (
   if (lessonIndex === -1) return true;
 
   const currentModule = course.modules?.find(m => m.lessons?.some(l => l.id === lessonId));
-  const currentModuleState = currentModule
-    ? getModuleScheduleState(user, course, currentModule.id)
-    : 'active';
-
-  // Schedule restrictions must take precedence over cached unlocks.
-  if (currentModuleState === 'not-started') return false;
-  if (currentModuleState === 'expired') {
-    return progress.completedLessonIds?.includes(lessonId) || false;
-  }
-
   if (lessonIndex === 0) return true;
 
   const prevLesson = allLessons[lessonIndex - 1];
@@ -220,11 +215,8 @@ export const isLessonUnlocked = (
     return true;
   }
 
-  const previousModuleDeadline = prevModule ? getEffectiveModuleDeadline(user, course, prevModule.id) : undefined;
-  const currentModuleDeadline = currentModule ? getEffectiveModuleDeadline(user, course, currentModule.id) : undefined;
-
   // If previous module deadline crossed, unlock first lesson of next module
-  if (prevModule && previousModuleDeadline && new Date(previousModuleDeadline) < new Date()) {
+  if (prevModule && getModuleScheduleState(user, course, prevModule.id) === 'expired') {
     if (currentModule && currentModule.id !== prevModule.id) {
       // First lesson of next active module after passed module should be unlocked
       const isFirstInModule = currentModule.lessons[0]?.id === lessonId;
@@ -258,19 +250,16 @@ export const getNextLesson = (
     if (isInstructor) {
       return nextL;
     }
-    // If current module is deadline-passed, do not allow moving to next lesson in that module
     const currentModule = course.modules?.find(m => m.lessons?.some(l => l.id === currentLessonId));
-    const currentModuleDeadline = currentModule ? getEffectiveModuleDeadline(user, course, currentModule.id) : undefined;
-    if (
-      currentModule &&
-      currentModuleDeadline &&
-      new Date(currentModuleDeadline) < new Date() &&
-      !currentModule.unlockedForAllStudents
-    ) {
-      const nextModule = course.modules?.find(m => m.lessons?.some(l => l.id === nextL.id));
-      if (nextModule && nextModule.id === currentModule.id) {
-        return null; // Block next lesson within same passed module
-      }
+    const nextModule = course.modules?.find(m => m.lessons?.some(l => l.id === nextL.id));
+    if (nextModule && getModuleScheduleState(user, course, nextModule.id) !== 'active') {
+      return null;
+    }
+    // If current module is deadline-passed, do not allow moving to another lesson in it.
+    const currentModuleExpired = currentModule &&
+      getModuleScheduleState(user, course, currentModule.id) === 'expired';
+    if (currentModuleExpired && nextModule?.id === currentModule?.id) {
+      return null; // Block next lesson within same passed module
     }
     return nextL;
   }

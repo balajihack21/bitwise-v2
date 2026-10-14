@@ -61,14 +61,9 @@ const Courses: React.FC<CoursesProps> = ({
     const isAssignedInstructor = isInstructorForCourse(user, course);
 
     for (const module of course.modules) {
-      const hasRedoTask = module.lessons.some(lesson =>
-        progress.redoCreativeChallengeLessonIds?.includes(lesson.id)
-      );
       if (
         !isAssignedInstructor &&
-        getModuleScheduleState(user, course, module.id) !== 'active' &&
-        !module.unlockedForAllStudents &&
-        !hasRedoTask
+        getModuleScheduleState(user, course, module.id) !== 'active'
       ) {
         continue;
       }
@@ -232,11 +227,12 @@ const Courses: React.FC<CoursesProps> = ({
         if (initialLessonId) {
           for (const m of foundCourse.modules) {
             const l = m.lessons.find(less => less.id === initialLessonId);
-            if (l && (
+            const canAccessModule = isInstructorForCourse(user, foundCourse)
+              || getModuleScheduleState(user, foundCourse, m.id) === 'active';
+            if (l && canAccessModule && (
               isInstructorForCourse(user, foundCourse) ||
               progress.redoCreativeChallengeLessonIds?.includes(l.id) ||
-              m.unlockedForAllStudents ||
-              getModuleScheduleState(user, foundCourse, m.id) === 'active'
+              isLessonUnlocked(l.id, foundCourse, progress, user)
             )) {
               setSelectedLesson(l);
               return;
@@ -260,7 +256,7 @@ const Courses: React.FC<CoursesProps> = ({
 
     if (
       extendedModule &&
-      (isInstructor || extendedModule.unlockedForAllStudents || getModuleScheduleState(user, course, extendedModule.id) === 'active')
+      (isInstructor || getModuleScheduleState(user, course, extendedModule.id) === 'active')
     ) {
       const firstPendingLesson = extendedModule.lessons.find(l => !progress.completedLessonIds.includes(l.id));
       if (firstPendingLesson) {
@@ -270,13 +266,10 @@ const Courses: React.FC<CoursesProps> = ({
 
     if (!targetLesson) {
       for (const m of course.modules) {
-        const hasRedoTask = m.lessons.some(lesson =>
-          progress.redoCreativeChallengeLessonIds?.includes(lesson.id)
-        );
-        if (!isInstructor && isModuleExpiredForStudent(course, m.id) && !m.unlockedForAllStudents && !hasRedoTask) {
+        if (!isInstructor && isModuleExpiredForStudent(course, m.id)) {
           continue;
         }
-        if (!isInstructor && isModuleNotStartedForStudent(course, m.id) && !m.unlockedForAllStudents && !hasRedoTask) {
+        if (!isInstructor && isModuleNotStartedForStudent(course, m.id)) {
           continue;
         }
 
@@ -304,8 +297,6 @@ const Courses: React.FC<CoursesProps> = ({
     if (!selectedCourse) return;
 
     const currentModule = selectedCourse.modules.find(module => module.lessons.some(l => l.id === lesson.id));
-    const effectiveDeadline = currentModule ? getEffectiveModuleDeadline(user, selectedCourse, currentModule.id) : undefined;
-    const isGloballyUnlocked = currentModule?.unlockedForAllStudents === true;
     const isRedoRequested = progress.redoCreativeChallengeLessonIds?.includes(lesson.id) === true;
     const isDeadlinePassed = currentModule
       ? getModuleScheduleState(user, selectedCourse, currentModule.id) === 'expired'
@@ -314,13 +305,13 @@ const Courses: React.FC<CoursesProps> = ({
       ? isModuleNotStartedForStudent(selectedCourse, currentModule.id)
       : false;
 
-    if (!isRedoRequested && !isGloballyUnlocked && isModuleNotStarted) {
+    if (isModuleNotStarted) {
       setLockedNotice(`🔒 "${lesson.title}" is locked because this module has not started yet.`);
       setTimeout(() => setLockedNotice(null), 4000);
       return;
     }
 
-    if (!isRedoRequested && !isGloballyUnlocked && isDeadlinePassed && !progress.completedLessonIds.includes(lesson.id)) {
+    if (isDeadlinePassed && (!progress.completedLessonIds.includes(lesson.id) || isRedoRequested)) {
       setLockedNotice(`🔒 "${lesson.title}" is locked because the module deadline has passed and no further progression is allowed.`);
       setTimeout(() => setLockedNotice(null), 4000);
       return;
@@ -534,18 +525,10 @@ const Courses: React.FC<CoursesProps> = ({
                       const hasStudentOverride = !!user?.moduleDeadlineOverrides?.[selectedCourse.id]?.[module.id];
                       const isDeadlinePassed = getModuleScheduleState(user, selectedCourse, module.id) === 'expired' && !hasStudentOverride;
 
-                      if (module.unlockedForAllStudents) {
+                      if (getModuleScheduleState(user, selectedCourse, module.id) === 'not-started') {
                         return (
-                          <span className="px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-200 text-[9px] font-bold uppercase tracking-wide">
-                            Unlocked
-                          </span>
-                        );
-                      }
-
-                      if (isModuleExtended(selectedCourse, module.id)) {
-                        return (
-                          <span className="px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200 text-[9px] font-bold uppercase tracking-wide">
-                            {selectedLesson && module.lessons.some(l => l.id === selectedLesson.id) ? 'Resume' : 'Extended'}
+                          <span className="px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200 text-[9px] font-bold uppercase tracking-wide">
+                            Starts {module.startDate}
                           </span>
                         );
                       }
@@ -554,6 +537,22 @@ const Courses: React.FC<CoursesProps> = ({
                         return (
                           <span className="px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-700 border border-rose-200 text-[9px] font-bold uppercase tracking-wide">
                             Review Only
+                          </span>
+                        );
+                      }
+
+                      if (module.unlockedForAllStudents) {
+                        return (
+                          <span className="px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-200 text-[9px] font-bold uppercase tracking-wide">
+                            Prerequisites bypassed
+                          </span>
+                        );
+                      }
+
+                      if (isModuleExtended(selectedCourse, module.id)) {
+                        return (
+                          <span className="px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200 text-[9px] font-bold uppercase tracking-wide">
+                            {selectedLesson && module.lessons.some(l => l.id === selectedLesson.id) ? 'Resume' : 'Extended'}
                           </span>
                         );
                       }
@@ -577,7 +576,7 @@ const Courses: React.FC<CoursesProps> = ({
                       const scheduleState = getModuleScheduleState(user, selectedCourse, module.id);
                       const isPastDeadline = scheduleState === 'expired' && !hasStudentOverride;
                       const isNotStarted = scheduleState === 'not-started';
-                      const isDisabled = !isRedoRequested && !module.unlockedForAllStudents && (isNotStarted || (isPastDeadline && !isCompleted));
+                      const isDisabled = isNotStarted || (isPastDeadline && !isCompleted);
 
                       return (
                         <button

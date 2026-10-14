@@ -2114,8 +2114,8 @@ solve()`
                               className="mt-0.5 accent-blue-600"
                             />
                             <span>
-                              <span className="block font-bold">Unlock this Unit for all enrolled students</span>
-                              <span className="text-blue-700">Bypasses the Unit schedule and lesson prerequisites. Click Save &amp; Publish to apply.</span>
+                              <span className="block font-bold">Bypass lesson prerequisites for enrolled students</span>
+                              <span className="text-blue-700">Students can access the Unit only between its Start and End dates. Click Save &amp; Publish to apply.</span>
                             </span>
                           </label>
                         )}
