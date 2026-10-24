@@ -22,7 +22,7 @@ import {
 } from '../services/firebase';
 import { parseSeedFile, SeedStudentRow } from '../services/seedParser';
 import { MOCK_COURSES } from '../constants';
-import { exportStudentsToExcel, exportStudentsToCsv } from '../services/excelExportService';
+import { exportInstructorProgressToExcel, exportStudentsToExcel, exportStudentsToCsv } from '../services/excelExportService';
 import { AdminProblemEditorModal } from './AdminProblemEditorModal';
 import { AdminInstructorManager } from './AdminInstructorManager';
 import { AssignCourseModal } from './AssignCourseModal';
@@ -2677,14 +2677,25 @@ solve()`
           {/* TAB: INSTRUCTOR PROGRESS (ADMIN ONLY) */}
           {activeTab === 'instructor-progress' && !isInstructor && (
             <div className="space-y-6">
-              <div className="p-4 bg-violet-50 border border-violet-200 rounded-2xl">
-                <h2 className="text-base font-bold text-violet-950 flex items-center gap-2">
-                  <i className="fa-solid fa-chart-line text-violet-600"></i>
-                  Instructor Progress
-                </h2>
-                <p className="text-xs text-violet-800 mt-1">
-                  Review course completion, coding activity, creative challenge submissions, and proctoring activity for every instructor.
-                </p>
+              <div className="p-4 bg-violet-50 border border-violet-200 rounded-2xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <h2 className="text-base font-bold text-violet-950 flex items-center gap-2">
+                    <i className="fa-solid fa-chart-line text-violet-600"></i>
+                    Instructor Progress
+                  </h2>
+                  <p className="text-xs text-violet-800 mt-1">
+                    Review course completion, coding activity, creative challenge submissions, and proctoring activity for every instructor.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => exportInstructorProgressToExcel(instructorProgress)}
+                  disabled={instructorProgress.length === 0}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <i className="fa-solid fa-file-excel"></i>
+                  Export Excel
+                </button>
               </div>
 
               {instructorProgress.length === 0 ? (

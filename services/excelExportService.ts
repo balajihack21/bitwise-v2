@@ -600,3 +600,132 @@ export const exportStudentsToCsv = (
   const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\n');
   downloadFile(csvContent, filename, 'text/csv;charset=utf-8;');
 };
+
+export const exportInstructorProgressToExcel = (
+  instructors: StudentOverview[],
+  filename: string = `Bitwise_Instructor_Progress_${new Date().toISOString().split('T')[0]}.xls`
+) => {
+  const textCell = (value: unknown) =>
+    `<Cell ss:StyleID="DataCell"><Data ss:Type="String">${escapeXml(value)}</Data></Cell>`;
+  const numberCell = (value: number) =>
+    `<Cell ss:StyleID="DataCellCenter"><Data ss:Type="Number">${Number.isFinite(value) ? value : 0}</Data></Cell>`;
+  const courseProgress = instructors.flatMap(instructor =>
+    (instructor.enrolledCourses || [])
+      .filter(course => course.isEnrolled)
+      .map(course => ({ instructor, course }))
+  );
+
+  let xml = `<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+ <DocumentProperties xmlns="urn:schemas-microsoft-com:office:office">
+  <Title>Bitwise LMS - Instructor Progress Report</Title>
+  <Author>Bitwise Academy Admin</Author>
+  <Created>${new Date().toISOString()}</Created>
+ </DocumentProperties>
+ <Styles>
+  <Style ss:ID="Default" ss:Name="Normal">
+   <Alignment ss:Vertical="Center"/>
+   <Font ss:FontName="Calibri" ss:Size="11" ss:Color="#1E293B"/>
+  </Style>
+  <Style ss:ID="TitleStyle">
+   <Font ss:FontName="Calibri" ss:Size="16" ss:Bold="1" ss:Color="#0F172A"/>
+  </Style>
+  <Style ss:ID="HeaderStyle">
+   <Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#FFFFFF"/>
+   <Interior ss:Color="#7C3AED" ss:Pattern="Solid"/>
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/>
+  </Style>
+  <Style ss:ID="DataCell">
+   <Alignment ss:Vertical="Center"/>
+  </Style>
+  <Style ss:ID="DataCellCenter">
+   <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+  </Style>
+ </Styles>
+ <Worksheet ss:Name="Instructor Summary">
+  <Table ss:DefaultRowHeight="20">
+   <Column ss:Width="180"/><Column ss:Width="220"/><Column ss:Width="100"/>
+   <Column ss:Width="110"/><Column ss:Width="130"/><Column ss:Width="120"/>
+   <Column ss:Width="120"/><Column ss:Width="120"/><Column ss:Width="240"/>
+   <Row ss:Height="30"><Cell ss:MergeAcross="8" ss:StyleID="TitleStyle"><Data ss:Type="String">Instructor Progress Summary</Data></Cell></Row>
+   <Row ss:Height="18"><Cell ss:MergeAcross="8"><Data ss:Type="String">Generated ${escapeXml(new Date().toLocaleString())} | ${instructors.length} instructors</Data></Cell></Row>
+   <Row ss:Height="25">
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Instructor</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Email</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Lessons Completed</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Code Submissions</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Creative Submissions</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Tab Switches</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Focus Losses</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Exit Attempts</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Assigned Courses</Data></Cell>
+   </Row>`;
+
+  instructors.forEach(instructor => {
+    const assignedCourses = (instructor.enrolledCourses || [])
+      .filter(course => course.isEnrolled)
+      .map(course => course.courseTitle)
+      .join(', ');
+    xml += `<Row>
+     ${textCell(instructor.displayName)}
+     ${textCell(instructor.email)}
+     ${numberCell(instructor.completedLessonsCount)}
+     ${numberCell(instructor.submissionsCount)}
+     ${numberCell(instructor.creativeSubmissions?.length || 0)}
+     ${numberCell(instructor.tabSwitchCount)}
+     ${numberCell(instructor.focusLossCount)}
+     ${numberCell(instructor.testExitAttempts)}
+     ${textCell(assignedCourses)}
+    </Row>`;
+  });
+
+  xml += `
+  </Table>
+ </Worksheet>
+ <Worksheet ss:Name="Course Progress">
+  <Table ss:DefaultRowHeight="20">
+   <Column ss:Width="180"/><Column ss:Width="220"/><Column ss:Width="260"/>
+   <Column ss:Width="110"/><Column ss:Width="100"/><Column ss:Width="100"/>
+   <Column ss:Width="120"/><Column ss:Width="110"/><Column ss:Width="150"/>
+   <Row ss:Height="25">
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Instructor</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Email</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Course</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Lessons Completed</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Total Lessons</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Progress %</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Challenges Solved</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Total Challenges</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Course Status</Data></Cell>
+   </Row>`;
+
+  courseProgress.forEach(({ instructor, course }) => {
+    const status = course.isCompleted
+      ? 'Completed'
+      : course.completedLessons > 0
+        ? 'In Progress'
+        : 'Not Started';
+    xml += `<Row>
+     ${textCell(instructor.displayName)}
+     ${textCell(instructor.email)}
+     ${textCell(course.courseTitle)}
+     ${numberCell(course.completedLessons)}
+     ${numberCell(course.totalLessons)}
+     ${numberCell(course.progressPercentage)}
+     ${numberCell(course.problemsSolved)}
+     ${numberCell(course.totalProblems)}
+     ${textCell(status)}
+    </Row>`;
+  });
+
+  xml += `
+  </Table>
+ </Worksheet>
+</Workbook>`;
+
+  downloadFile(xml, filename, 'application/vnd.ms-excel');
+};
