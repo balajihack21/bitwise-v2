@@ -1,11 +1,47 @@
 import { UserProgress, SubmissionRecord, Course, Lesson, User, CreativeChallengeSubmission } from '../types';
 import { 
-  saveUserProgressToFirestore, 
   loadUserProgressFromFirestore,
-  recordSubmissionInFirestore 
 } from './firebase';
 
 const PROGRESS_STORAGE_PREFIX = 'bitwise_progress_';
+const PROGRESS_SYNC_PENDING_PREFIX = 'bitwise_progress_sync_pending_';
+const PROGRESS_SYNC_REPLACE_PREFIX = 'bitwise_progress_sync_replace_';
+const PROGRESS_SYNCED_SUBMISSIONS_PREFIX = 'bitwise_progress_synced_submissions_';
+
+const getProgressSyncKey = (prefix: string, username: string) =>
+  `${prefix}${username.toLowerCase()}`;
+
+export const getPendingProgressSyncOptions = (
+  username: string
+): { replaceCompletedLessonIds?: boolean } => ({
+  replaceCompletedLessonIds:
+    localStorage.getItem(getProgressSyncKey(PROGRESS_SYNC_REPLACE_PREFIX, username)) === 'true'
+});
+
+export const getPendingSubmissionSyncs = (
+  username: string,
+  submissions: SubmissionRecord[]
+): SubmissionRecord[] => {
+  const rawSyncedIds = localStorage.getItem(getProgressSyncKey(PROGRESS_SYNCED_SUBMISSIONS_PREFIX, username));
+  const syncedIds = new Set<string>(rawSyncedIds ? JSON.parse(rawSyncedIds) as string[] : []);
+  return submissions.filter(submission => !syncedIds.has(submission.id));
+};
+
+export const markSubmissionsSynced = (
+  username: string,
+  submissions: SubmissionRecord[]
+): void => {
+  const key = getProgressSyncKey(PROGRESS_SYNCED_SUBMISSIONS_PREFIX, username);
+  const rawSyncedIds = localStorage.getItem(key);
+  const syncedIds = new Set<string>(rawSyncedIds ? JSON.parse(rawSyncedIds) as string[] : []);
+  submissions.forEach(submission => syncedIds.add(submission.id));
+  localStorage.setItem(key, JSON.stringify(Array.from(syncedIds).slice(-500)));
+};
+
+export const clearPendingProgressSync = (username: string): void => {
+  localStorage.removeItem(getProgressSyncKey(PROGRESS_SYNC_PENDING_PREFIX, username));
+  localStorage.removeItem(getProgressSyncKey(PROGRESS_SYNC_REPLACE_PREFIX, username));
+};
 
 export const getInitialProgress = (): UserProgress => {
   return {
@@ -66,51 +102,61 @@ const loadCachedUserProgress = (username: string): UserProgress => {
  */
 export const syncProgressWithFirestore = async (user: User | null): Promise<UserProgress> => {
   if (!user) return getInitialProgress();
-  const userId = user.uid || user.username;
   const localProgress = loadCachedUserProgress(user.username);
   
   try {
     if (user.uid) {
       const cloudProg = await loadUserProgressFromFirestore(user.uid);
       if (cloudProg) {
+        const pendingSyncKey = getProgressSyncKey(PROGRESS_SYNC_PENDING_PREFIX, user.username);
+        if (localStorage.getItem(pendingSyncKey) === 'true') {
+          return localProgress;
+        }
         const localUpdatedAt = Date.parse(localProgress.updatedAt || '');
         const cloudUpdatedAt = Date.parse(cloudProg.updatedAt || '');
         if (
           Number.isFinite(localUpdatedAt) &&
           (!Number.isFinite(cloudUpdatedAt) || localUpdatedAt > cloudUpdatedAt)
         ) {
-          await saveUserProgressToFirestore(user.uid, localProgress);
+          localStorage.setItem(pendingSyncKey, 'true');
           return localProgress;
         }
         const cloudCompletedIds = new Set(cloudProg.completedLessonIds || []);
         const hasLocalOnlyCompletions = (localProgress.completedLessonIds || [])
           .some(lessonId => !cloudCompletedIds.has(lessonId));
-        if (!Number.isFinite(localUpdatedAt) && hasLocalOnlyCompletions) {
+        const cloudSubmissionIds = new Set((cloudProg.submissions || []).map(submission => submission.id));
+        const hasLocalOnlySubmissions = (localProgress.submissions || [])
+          .some(submission => !cloudSubmissionIds.has(submission.id));
+        if (hasLocalOnlyCompletions || hasLocalOnlySubmissions) {
           localStorage.setItem(
             `bitwise_progress_recovery_${user.username.toLowerCase()}`,
             JSON.stringify(localProgress)
           );
           window.dispatchEvent(new CustomEvent('bitwise_progress_recovery_available'));
+          localStorage.setItem(pendingSyncKey, 'true');
+          return localProgress;
         }
         localStorage.setItem(`${PROGRESS_STORAGE_PREFIX}${user.username.toLowerCase()}`, JSON.stringify(cloudProg));
         return cloudProg;
       }
+      localStorage.setItem(getProgressSyncKey(PROGRESS_SYNC_PENDING_PREFIX, user.username), 'true');
     }
   } catch (e) {
     console.error('Could not sync progress with Firestore; keeping local progress:', e);
+    localStorage.setItem(getProgressSyncKey(PROGRESS_SYNC_PENDING_PREFIX, user.username), 'true');
     return localProgress;
   }
 
-  if (user.uid) {
-    await saveUserProgressToFirestore(user.uid, localProgress);
-  }
   return localProgress;
 };
 
-export function saveUserProgress(progressOrUser: string | User | UserProgress, progress?: UserProgress): void {
+export function saveUserProgress(
+  progressOrUser: string | User | UserProgress,
+  progress?: UserProgress,
+  options: { replaceCompletedLessonIds?: boolean } = {}
+): void {
   try {
     let u = 'guest';
-    let uid: string | undefined;
     let p: UserProgress;
 
     if (typeof progressOrUser === 'string') {
@@ -118,7 +164,6 @@ export function saveUserProgress(progressOrUser: string | User | UserProgress, p
       p = progress || getInitialProgress();
     } else if (progressOrUser && 'username' in progressOrUser && !('completedLessonIds' in progressOrUser)) {
       u = progressOrUser.username;
-      uid = progressOrUser.uid;
       p = progress || getInitialProgress();
     } else {
       p = progressOrUser as UserProgress;
@@ -129,10 +174,9 @@ export function saveUserProgress(progressOrUser: string | User | UserProgress, p
       updatedAt: new Date().toISOString()
     };
     localStorage.setItem(`${PROGRESS_STORAGE_PREFIX}${u.toLowerCase()}`, JSON.stringify(progressToSave));
-
-    // Async sync to Firestore if UID available
-    if (uid) {
-      saveUserProgressToFirestore(uid, progressToSave).catch(() => {});
+    localStorage.setItem(getProgressSyncKey(PROGRESS_SYNC_PENDING_PREFIX, u), 'true');
+    if (options.replaceCompletedLessonIds) {
+      localStorage.setItem(getProgressSyncKey(PROGRESS_SYNC_REPLACE_PREFIX, u), 'true');
     }
   } catch (e) {
     console.error('Error saving user progress:', e);
@@ -190,6 +234,52 @@ const getScheduleDate = (value?: string, endOfDay = false): Date | undefined => 
   return Number.isNaN(date.getTime()) ? undefined : date;
 };
 
+export const isChallengeLesson = (lesson: Lesson): boolean =>
+  lesson.type === 'problem' ||
+  lesson.type === 'algorithm' ||
+  lesson.type === 'pseudocode' ||
+  lesson.type === 'flowchart';
+
+export const getModuleCurriculumCounts = (module: Course['modules'][number]) => ({
+  lessons: module.lessons.length,
+  challenges: module.lessons.filter(isChallengeLesson).length
+});
+
+const getDateInTimeZone = (date: Date, timeZone?: string): string => {
+  if (!timeZone) {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  }
+
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).formatToParts(date);
+    const partValue = (type: string) => parts.find(part => part.type === type)?.value || '';
+    return `${partValue('year')}-${partValue('month')}-${partValue('day')}`;
+  } catch (error) {
+    console.warn(`Invalid lesson deadline time zone "${timeZone}"; using the local time zone.`, error);
+    return getDateInTimeZone(date);
+  }
+};
+
+export const isLessonDeadlineExpired = (lesson: Lesson, now = new Date()): boolean => {
+  if (!lesson.deadlineDate || !/^\d{4}-\d{2}-\d{2}$/.test(lesson.deadlineDate)) return false;
+  return getDateInTimeZone(now, lesson.deadlineTimeZone) > lesson.deadlineDate;
+};
+
+export const isLessonAvailableByDeadline = (
+  lesson: Lesson,
+  module: Course['modules'][number],
+  now = new Date()
+): boolean => {
+  const moduleUsesLessonDeadlines = module.lessons.some(item => Boolean(item.deadlineDate));
+  if (!moduleUsesLessonDeadlines) return true;
+  return Boolean(lesson.deadlineDate) && !isLessonDeadlineExpired(lesson, now);
+};
+
 export const getModuleScheduleState = (
   user: User | null | undefined,
   course: Course,
@@ -219,6 +309,8 @@ export const isLessonUnlocked = (
 
   const lessonModule = course.modules?.find(module => module.lessons.some(lesson => lesson.id === lessonId));
   if (lessonModule) {
+    const lesson = lessonModule.lessons.find(item => item.id === lessonId);
+    if (lesson && !isLessonAvailableByDeadline(lesson, lessonModule)) return false;
     const scheduleState = getModuleScheduleState(user, course, lessonModule.id);
     if (scheduleState === 'not-started') return false;
     if (scheduleState === 'expired') {
@@ -247,6 +339,16 @@ export const isLessonUnlocked = (
 
   if (progress.completedLessonIds?.includes(lessonId) || progress.unlockedLessonIds?.includes(lessonId)) {
     return true;
+  }
+
+  if (currentModule) {
+    const currentModuleLessonIndex = currentModule.lessons.findIndex(lesson => lesson.id === lessonId);
+    if (
+      currentModuleLessonIndex > 0 &&
+      !isLessonAvailableByDeadline(currentModule.lessons[currentModuleLessonIndex - 1], currentModule)
+    ) {
+      return true;
+    }
   }
 
   // If previous module deadline crossed, unlock first lesson of next module
@@ -279,13 +381,28 @@ export const getNextLesson = (
 
   const currentIndex = allLessons.findIndex(l => l.id === currentLessonId);
   if (currentIndex >= 0 && currentIndex < allLessons.length - 1) {
-    const nextL = allLessons[currentIndex + 1];
+    let nextL: Lesson | undefined = allLessons[currentIndex + 1];
     // Instructors bypass deadline blocks on assigned course
     if (isInstructor) {
-      return nextL;
+      return nextL || null;
     }
     const currentModule = course.modules?.find(m => m.lessons?.some(l => l.id === currentLessonId));
-    const nextModule = course.modules?.find(m => m.lessons?.some(l => l.id === nextL.id));
+    let nextModule = nextL
+      ? course.modules?.find(m => m.lessons?.some(l => l.id === nextL?.id))
+      : undefined;
+    if (
+      currentModule?.id === nextModule?.id &&
+      nextL &&
+      !isLessonAvailableByDeadline(nextL, currentModule)
+    ) {
+      const nextModuleIndex = currentModule.lessons.findIndex(lesson => lesson.id === nextL.id);
+      nextL = currentModule.lessons
+        .slice(nextModuleIndex + 1)
+        .find(lesson => isLessonAvailableByDeadline(lesson, currentModule));
+      if (!nextL) return null;
+      nextModule = currentModule;
+    }
+    if (!nextL) return null;
     if (nextModule && getModuleScheduleState(user, course, nextModule.id) !== 'active') {
       return null;
     }
@@ -330,7 +447,7 @@ export const completeAllCourseLessons = (
     lastActiveDate: new Date().toISOString().split('T')[0]
   };
 
-  saveUserProgress(userOrName, updatedProgress);
+  saveUserProgress(username, updatedProgress);
   return updatedProgress;
 };
 
@@ -356,7 +473,7 @@ export const resetCourseProgress = (
     submissions: (currentProgress.submissions || []).filter(s => s.courseId !== course.id)
   };
 
-  saveUserProgress(userOrName, updatedProgress);
+  saveUserProgress(username, updatedProgress);
   return updatedProgress;
 };
 
@@ -371,8 +488,6 @@ export const recordCompletion = (
   persist: boolean = true
 ): { updatedProgress: UserProgress; newlyUnlockedLesson: Lesson | null } => {
   const username = typeof userOrName === 'string' ? userOrName : (userOrName?.username || 'guest');
-  const uid = typeof userOrName === 'object' ? userOrName?.uid : undefined;
-  
   const currentProgress = loadUserProgress(username);
   
   const isAlreadyCompleted = currentProgress.completedLessonIds?.includes(lessonId);
@@ -402,9 +517,6 @@ export const recordCompletion = (
 
   if (persist) {
     saveUserProgress(username, updatedProgress);
-    if (uid) {
-      saveUserProgressToFirestore(uid, updatedProgress).catch(() => {});
-    }
   }
 
   return {
@@ -420,7 +532,6 @@ export const submitCreativeChallenge = (
   answer: Pick<CreativeChallengeSubmission, 'answerText' | 'flowNodes'>
 ): { updatedProgress: UserProgress; newlyUnlockedLesson: Lesson | null } => {
   const username = typeof userOrName === 'string' ? userOrName : (userOrName?.username || 'guest');
-  const uid = typeof userOrName === 'object' ? userOrName?.uid : undefined;
   const currentProgress = loadUserProgress(username);
   const isRedoSubmission = currentProgress.redoCreativeChallengeLessonIds?.includes(lesson.id) === true;
   // Persist once after adding the creative answer so the completion write cannot
@@ -450,20 +561,17 @@ export const submitCreativeChallenge = (
     ]
   };
   saveUserProgress(username, updatedProgress);
-  if (uid) saveUserProgressToFirestore(uid, updatedProgress).catch(() => {});
   return { updatedProgress, newlyUnlockedLesson: completion.newlyUnlockedLesson };
 };
 
 /**
- * Adds a submission record to user's history and persists to Firestore
+ * Adds a submission record to the user's local history for manual synchronization
  */
 export const addSubmission = (
   userOrName: string | User = 'guest',
   submission: SubmissionRecord
 ): UserProgress => {
   const username = typeof userOrName === 'string' ? userOrName : (userOrName?.username || 'guest');
-  const uid = typeof userOrName === 'object' ? userOrName?.uid : undefined;
-
   const currentProgress = loadUserProgress(username);
   const updatedSubmissions = [submission, ...(currentProgress.submissions || [])].slice(0, 50); // Keep latest 50
 
@@ -473,13 +581,6 @@ export const addSubmission = (
   };
 
   saveUserProgress(username, updatedProgress);
-  
-  if (uid) {
-    saveUserProgressToFirestore(uid, updatedProgress).catch(() => {});
-    recordSubmissionInFirestore(uid, username, submission).catch(() => {});
-  } else {
-    recordSubmissionInFirestore('guest', username, submission).catch(() => {});
-  }
 
   return updatedProgress;
 };
@@ -549,9 +650,6 @@ export const recordProctoringInfraction = (
       console.warn('Failed to clear stale proctor review override:', e);
     }
   }
-  if (uid) {
-    saveUserProgressToFirestore(uid, updatedProgress).catch(() => {});
-  }
   return updatedProgress;
 };
 
@@ -604,7 +702,8 @@ export const resetUserCourseProgress = (
 
   saveUserProgress(username, updatedProgress);
   if (uid) {
-    saveUserProgressToFirestore(uid, updatedProgress).catch(() => {});
+    localStorage.setItem(getProgressSyncKey(PROGRESS_SYNC_PENDING_PREFIX, username), 'true');
+    localStorage.setItem(getProgressSyncKey(PROGRESS_SYNC_REPLACE_PREFIX, username), 'true');
   }
 
   // Notify any active views/listeners

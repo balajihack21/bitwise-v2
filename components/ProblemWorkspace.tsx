@@ -53,6 +53,7 @@ interface ProblemWorkspaceProps {
   onClose?: () => void;
   onOpenPlayground?: (code: string, language: string) => void;
   onActivateWorkspace?: () => void;
+  isLessonAvailable?: () => boolean;
 }
 
 const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
@@ -64,7 +65,8 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
   onNavigateToLesson,
   onClose,
   onOpenPlayground,
-  onActivateWorkspace
+  onActivateWorkspace,
+  isLessonAvailable = () => true
 }) => {
   const problemMeta = lesson.problem;
   const username = user?.username || 'guest';
@@ -322,6 +324,10 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
 
   // Run Sample Test Cases
   const handleRunSampleTests = async () => {
+    if (!isLessonAvailable()) {
+      setSubmissionFeedback({ status: 'IDLE', message: 'This lesson is unavailable under the current deadline schedule.' });
+      return;
+    }
     if (isSplitScreenMode) return;
     if (!code.trim() || isRunning || isSubmitting) return;
 
@@ -384,6 +390,10 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
 
   // Submit Solution (validates ALL test cases including hidden ones)
   const handleSubmitSolution = async () => {
+    if (!isLessonAvailable()) {
+      setSubmissionFeedback({ status: 'IDLE', message: 'This lesson is unavailable under the current deadline schedule. The submission was not saved.' });
+      return;
+    }
     if (isSplitScreenMode) return;
     if (!code.trim() || isRunning || isSubmitting) return;
 
@@ -400,6 +410,11 @@ const ProblemWorkspace: React.FC<ProblemWorkspaceProps> = ({
         language,
         allCases
       );
+
+      if (!isLessonAvailable()) {
+        setSubmissionFeedback({ status: 'IDLE', message: 'This lesson became unavailable under the deadline schedule while tests were running. The submission was not saved.' });
+        return;
+      }
 
       setTestResults(results);
       const passedCount = results.filter(r => r.passed).length;

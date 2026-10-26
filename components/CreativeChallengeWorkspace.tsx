@@ -9,6 +9,7 @@ interface CreativeChallengeWorkspaceProps {
   progress: UserProgress;
   onProgressUpdate: (updatedProgress: UserProgress) => void;
   onClose?: () => void;
+  isLessonAvailable?: () => boolean;
 }
 
 type FlowNode = CreativeFlowNode;
@@ -22,7 +23,8 @@ const CreativeChallengeWorkspace: React.FC<CreativeChallengeWorkspaceProps> = ({
   user,
   progress,
   onProgressUpdate,
-  onClose
+  onClose,
+  isLessonAvailable = () => true
 }) => {
   const isFlowchart = lesson.type === 'flowchart';
   const isAlgorithm = lesson.type === 'algorithm';
@@ -267,6 +269,10 @@ const CreativeChallengeWorkspace: React.FC<CreativeChallengeWorkspaceProps> = ({
   );
 
   const handleSubmit = () => {
+    if (!isLessonAvailable()) {
+      showBlockedActionNotice('This lesson is unavailable under the current deadline schedule. The challenge was not submitted.');
+      return;
+    }
     if (!hasAnswer) {
       window.alert(isFlowchart
         ? 'Please describe at least one flowchart step before submitting.'
@@ -278,6 +284,10 @@ const CreativeChallengeWorkspace: React.FC<CreativeChallengeWorkspaceProps> = ({
       return;
     }
     if (!window.confirm('Submit this challenge for review? You can no longer edit this draft after submitting.')) return;
+    if (!isLessonAvailable()) {
+      showBlockedActionNotice('This lesson became unavailable under the deadline schedule. The challenge was not submitted.');
+      return;
+    }
 
     const { updatedProgress } = submitCreativeChallenge(user || 'guest', lesson, course, {
       answerText: isFlowchart ? undefined : pseudoCode,

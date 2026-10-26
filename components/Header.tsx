@@ -6,6 +6,8 @@ interface HeaderProps {
   setView: (view: ViewState) => void;
   user: User | null;
   progress: UserProgress;
+  onSyncNow: () => void;
+  isSyncing: boolean;
   onLogout: () => void;
   onLoginClick: () => void;
 }
@@ -15,6 +17,8 @@ const Header: React.FC<HeaderProps> = ({
   setView,
   user,
   progress,
+  onSyncNow,
+  isSyncing,
   onLogout,
   onLoginClick
 }) => {
@@ -150,6 +154,19 @@ const Header: React.FC<HeaderProps> = ({
                 <span>{isFullscreen ? 'Fullscreen active' : 'Enter full screen'}</span>
               </button>
             )}
+
+            {user && (
+              <button
+                type="button"
+                onClick={onSyncNow}
+                disabled={isSyncing}
+                className="px-2.5 py-1.5 rounded-lg border border-bitwise-200 bg-bitwise-50 text-bitwise-700 hover:bg-bitwise-100 text-xs font-semibold flex items-center gap-1.5 disabled:cursor-wait disabled:opacity-60"
+                title="Sync locally saved progress to your account"
+              >
+                <i className={`fa-solid ${isSyncing ? 'fa-spinner fa-spin' : 'fa-cloud-arrow-up'}`}></i>
+                <span>{isSyncing ? 'Syncing...' : 'Sync now'}</span>
+              </button>
+            )}
             
             <div className="pl-3 border-l border-slate-200 flex items-center gap-2.5">
               {user ? (
@@ -258,6 +275,18 @@ const Header: React.FC<HeaderProps> = ({
                       {isFullscreen ? 'Fullscreen active' : 'Enter fullscreen'}
                     </button>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onSyncNow();
+                      setMobileMenuOpen(false);
+                    }}
+                    disabled={isSyncing}
+                    className="w-full px-3 py-2 rounded-lg border border-bitwise-200 bg-bitwise-50 text-bitwise-700 hover:bg-bitwise-100 text-xs font-bold flex items-center justify-center gap-2 disabled:cursor-wait disabled:opacity-60"
+                  >
+                    <i className={`fa-solid ${isSyncing ? 'fa-spinner fa-spin' : 'fa-cloud-arrow-up'}`}></i>
+                    {isSyncing ? 'Syncing progress...' : 'Sync progress now'}
+                  </button>
                 </div>
               )}
 

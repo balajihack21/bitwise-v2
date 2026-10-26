@@ -16,7 +16,11 @@ import {
   getUserProgress, 
   saveUserProgress, 
   resetUserProgress, 
-  syncProgressWithFirestore 
+  syncProgressWithFirestore,
+  clearPendingProgressSync,
+  getPendingProgressSyncOptions,
+  getPendingSubmissionSyncs,
+  markSubmissionsSynced
 } from './services/progressService';
 import { 
   auth, 
@@ -28,7 +32,8 @@ import {
   fetchInstructorsList,
   loadUserModuleDeadlineOverrides,
   loadUserScheduledCodingTests,
-  saveUserProgressToFirestore
+  saveUserProgressToFirestore,
+  recordSubmissionsInFirestore
 } from './services/firebase';
 
 const mergeDefaultPracticeProblems = (courses: Course[]): Course[] => {
@@ -42,10 +47,22 @@ const mergeDefaultPracticeProblems = (courses: Course[]): Course[] => {
   ));
 };
 
+const getProgressSyncErrorMessage = (error: unknown): string => {
+  if (error instanceof Error) {
+    const code = typeof error === 'object' && 'code' in error && typeof error.code === 'string'
+      ? `${error.code}: `
+      : '';
+    return `Sync failed: ${code}${error.message}`;
+  }
+  return 'Sync failed. Check your connection, Firebase Authentication, Firestore rules, and Firestore usage/quota details, then retry.';
+};
+
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<ViewState>(ViewState.HOME);
   const [authBanner, setAuthBanner] = useState<string | null>(null);
   const [progressSyncError, setProgressSyncError] = useState(false);
+  const [isRetryingProgressSync, setIsRetryingProgressSync] = useState(false);
+  const [progressSyncMessage, setProgressSyncMessage] = useState<string | null>(null);
   const [progressRecoveryAvailable, setProgressRecoveryAvailable] = useState(false);
   const [pendingTargetView, setPendingTargetView] = useState<ViewState | null>(null);
   const [playgroundCode, setPlaygroundCode] = useState<string>(
@@ -243,17 +260,16 @@ const App: React.FC = () => {
     const handleGlobalProgressUpdated = () => {
       const activeUser = user || JSON.parse(localStorage.getItem('bitwise_active_user') || 'null');
       if (activeUser) {
-        syncProgressWithFirestore(activeUser).then(p => {
-          setProgress(p);
-        }).catch(() => {
-          setProgress(getUserProgress(activeUser.username));
-        });
+        setProgress(getUserProgress(activeUser.username));
       }
     };
     window.addEventListener('bitwise_progress_updated', handleGlobalProgressUpdated);
 
     const handleProgressSyncError = () => setProgressSyncError(true);
-    const handleProgressSyncSaved = () => setProgressSyncError(false);
+    const handleProgressSyncSaved = () => {
+      setProgressSyncError(false);
+      setProgressSyncMessage('Progress synced to your account.');
+    };
     const handleProgressRecoveryAvailable = () => setProgressRecoveryAvailable(true);
     window.addEventListener('bitwise_progress_sync_error', handleProgressSyncError);
     window.addEventListener('bitwise_progress_sync_saved', handleProgressSyncSaved);
@@ -337,9 +353,47 @@ const App: React.FC = () => {
     }
   };
 
-  const handleProgressUpdate = (updated: UserProgress) => {
+  const handleProgressUpdate = (
+    updated: UserProgress,
+    options: { replaceCompletedLessonIds?: boolean } = {}
+  ) => {
     setProgress(updated);
-    saveUserProgress(user || user?.username || 'guest', updated);
+    saveUserProgress(user || user?.username || 'guest', updated, options);
+  };
+
+  const handleManualProgressSync = async () => {
+    if (!user?.uid || isRetryingProgressSync) return;
+    setIsRetryingProgressSync(true);
+    setProgressSyncMessage('Syncing progress...');
+    const latestLocalProgress = getUserProgress(user.username);
+    setProgress(latestLocalProgress);
+
+    try {
+      await saveUserProgressToFirestore(
+        user.uid,
+        latestLocalProgress,
+        getPendingProgressSyncOptions(user.username)
+      );
+      const pendingSubmissions = getPendingSubmissionSyncs(
+        user.username,
+        latestLocalProgress.submissions || []
+      );
+      await recordSubmissionsInFirestore(user.uid, user.username, pendingSubmissions);
+      markSubmissionsSynced(user.username, pendingSubmissions);
+      const progressAfterSync = getUserProgress(user.username);
+      const hasNewerLocalChanges = progressAfterSync.updatedAt !== latestLocalProgress.updatedAt;
+      if (!hasNewerLocalChanges) clearPendingProgressSync(user.username);
+      setProgressSyncError(false);
+      setProgressSyncMessage(hasNewerLocalChanges
+        ? 'Sync complete. Newer local changes are still waiting to sync.'
+        : 'Progress synced to your account.');
+    } catch (error) {
+      console.error('Manual progress synchronization failed:', error);
+      setProgressSyncError(true);
+      setProgressSyncMessage(getProgressSyncErrorMessage(error));
+    } finally {
+      setIsRetryingProgressSync(false);
+    }
   };
 
   const handleResetProgress = () => {
@@ -483,6 +537,8 @@ const App: React.FC = () => {
             courses={courses}
             progress={progress}
             onSelectCourse={handleSelectCourseFromAnywhere}
+            onSyncNow={handleManualProgressSync}
+            isSyncing={isRetryingProgressSync}
             onNavigateToCertificates={() => setCurrentView(ViewState.HOME)}
           />
         );
@@ -592,6 +648,8 @@ const App: React.FC = () => {
         setView={(v) => requireAuthForView(v)}
         user={user}
         progress={progress}
+        onSyncNow={handleManualProgressSync}
+        isSyncing={isRetryingProgressSync}
         onLogout={handleLogout}
         onLoginClick={() => {
           setAuthBanner(null);
@@ -600,24 +658,65 @@ const App: React.FC = () => {
       />
       
       <main className="flex-grow">
-        {(progressSyncError || progressRecoveryAvailable) && (
-          <div className="mx-auto mt-4 flex max-w-7xl items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            <i className="fa-solid fa-triangle-exclamation shrink-0"></i>
+        {(progressSyncError || progressRecoveryAvailable || progressSyncMessage) && (
+          <div className={`mx-auto mt-4 flex max-w-7xl items-center gap-3 rounded-xl border px-4 py-3 text-sm ${
+            progressSyncError || progressRecoveryAvailable
+              ? 'border-amber-300 bg-amber-50 text-amber-900'
+              : 'border-emerald-300 bg-emerald-50 text-emerald-900'
+          }`}>
+            <i className={`fa-solid shrink-0 ${
+              progressSyncError || progressRecoveryAvailable
+                ? 'fa-triangle-exclamation'
+                : 'fa-circle-check'
+            }`}></i>
             <p className="flex-1">
-              {progressSyncError && 'Your progress is saved on this device, but could not be synced to your account. Keep this page open and retry when your connection is available.'}
+              {progressSyncError && (
+                progressSyncMessage
+                  ? `Your progress is still saved on this device. ${progressSyncMessage}`
+                  : 'Your progress is saved on this device, but could not be synced to your account. Keep this page open and retry when your connection is available.'
+              )}
               {progressRecoveryAvailable && 'A local progress backup was found with completed lessons missing from the cloud. It has been preserved in this browser as bitwise_progress_recovery_<username>; contact your instructor before clearing browser data.'}
+              {!progressSyncError && !progressRecoveryAvailable && progressSyncMessage}
             </p>
             {progressSyncError && user?.uid && (
               <button
                 type="button"
-                onClick={() => {
-                  saveUserProgressToFirestore(user.uid, progress).catch(error => {
+                disabled={isRetryingProgressSync}
+                onClick={async () => {
+                  setIsRetryingProgressSync(true);
+                  setProgressSyncMessage('Retrying sync...');
+                  const latestLocalProgress = getUserProgress(user.username);
+                  setProgress(latestLocalProgress);
+                  try {
+                    await saveUserProgressToFirestore(
+                      user.uid,
+                      latestLocalProgress,
+                      getPendingProgressSyncOptions(user.username)
+                    );
+                    const pendingSubmissions = getPendingSubmissionSyncs(
+                      user.username,
+                      latestLocalProgress.submissions || []
+                    );
+                    await recordSubmissionsInFirestore(user.uid, user.username, pendingSubmissions);
+                    markSubmissionsSynced(user.username, pendingSubmissions);
+                    const progressAfterSync = getUserProgress(user.username);
+                    const hasNewerLocalChanges = progressAfterSync.updatedAt !== latestLocalProgress.updatedAt;
+                    if (!hasNewerLocalChanges) clearPendingProgressSync(user.username);
+                    setProgressSyncError(false);
+                    setProgressSyncMessage(hasNewerLocalChanges
+                      ? 'Sync complete. Newer local changes are still waiting to sync.'
+                      : 'Progress synced to your account.');
+                  } catch (error) {
                     console.error('Retrying progress synchronization failed:', error);
-                  });
+                    setProgressSyncError(true);
+                    setProgressSyncMessage(getProgressSyncErrorMessage(error));
+                  } finally {
+                    setIsRetryingProgressSync(false);
+                  }
                 }}
-                className="shrink-0 rounded-lg bg-amber-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-800"
+                className="shrink-0 rounded-lg bg-amber-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-800 disabled:cursor-wait disabled:opacity-60"
               >
-                Retry
+                {isRetryingProgressSync ? 'Syncing...' : 'Retry'}
               </button>
             )}
           </div>

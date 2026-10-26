@@ -11,7 +11,10 @@ import {
   completeAllCourseLessons,
   resetCourseProgress,
   getEffectiveModuleDeadline,
-  getModuleScheduleState
+  getModuleScheduleState,
+  getModuleCurriculumCounts,
+  isLessonDeadlineExpired,
+  isLessonAvailableByDeadline
 } from '../services/progressService';
 
 interface CoursesProps {
@@ -19,7 +22,10 @@ interface CoursesProps {
   isPro: boolean;
   user: User | null;
   progress: UserProgress;
-  onProgressUpdate: (updated: UserProgress) => void;
+  onProgressUpdate: (
+    updated: UserProgress,
+    options?: { replaceCompletedLessonIds?: boolean }
+  ) => void;
   onUpgrade: () => void;
   onSelectCourse?: (courseId: string) => void;
   onOpenPlayground?: (code: string, language: string) => void;
@@ -69,6 +75,9 @@ const Courses: React.FC<CoursesProps> = ({
       }
 
       for (const lesson of module.lessons) {
+        if (!isAssignedInstructor && !isLessonAvailableByDeadline(lesson, module)) {
+          continue;
+        }
         if (
           isAssignedInstructor ||
           progress.redoCreativeChallengeLessonIds?.includes(lesson.id) ||
@@ -97,6 +106,9 @@ const Courses: React.FC<CoursesProps> = ({
     }
     return null;
   });
+  const selectedLessonModule = selectedCourse?.modules.find(module =>
+    module.lessons.some(lesson => lesson.id === selectedLesson?.id)
+  );
 
   const [lockedNotice, setLockedNotice] = useState<string | null>(null);
   const [isMobileUnitSidebarOpen, setIsMobileUnitSidebarOpen] = useState(false);
@@ -216,8 +228,40 @@ const Courses: React.FC<CoursesProps> = ({
     return getModuleScheduleState(user, course, moduleId) === 'not-started';
   };
 
+  const findNextAvailableLessonInModule = (module: Course['modules'][number], lessonId: string): Lesson | null => {
+    const currentIndex = module.lessons.findIndex(lesson => lesson.id === lessonId);
+    if (currentIndex < 0) return null;
+    return module.lessons.slice(currentIndex + 1)
+      .find(lesson => isLessonAvailableByDeadline(lesson, module)) || null;
+  };
+
   // Instructor test mode for bypassing deadlines and locks
   const [isTestMode, setIsTestMode] = useState(false);
+
+  useEffect(() => {
+    if (!selectedCourse || !selectedLesson || isInstructorForCourse(user, selectedCourse)) return;
+
+    const skipExpiredLesson = () => {
+      const module = selectedCourse.modules.find(item => item.lessons.some(lesson => lesson.id === selectedLesson.id));
+      if (
+        !module ||
+        getModuleScheduleState(user, selectedCourse, module.id) !== 'active' ||
+        isLessonAvailableByDeadline(selectedLesson, module)
+      ) {
+        return;
+      }
+
+      const nextLesson = findNextAvailableLessonInModule(module, selectedLesson.id);
+      setSelectedLesson(nextLesson);
+      setLockedNotice(nextLesson
+        ? `The deadline for "${selectedLesson.title}" has passed. Moving to "${nextLesson.title}".`
+        : `The deadline for "${selectedLesson.title}" has passed, and no later lessons in this unit are available.`);
+    };
+
+    skipExpiredLesson();
+    const intervalId = window.setInterval(skipExpiredLesson, 1000);
+    return () => window.clearInterval(intervalId);
+  }, [selectedCourse, selectedLesson, user]);
 
   useEffect(() => {
     if (initialCourseId) {
@@ -229,6 +273,10 @@ const Courses: React.FC<CoursesProps> = ({
             const l = m.lessons.find(less => less.id === initialLessonId);
             const canAccessModule = isInstructorForCourse(user, foundCourse)
               || getModuleScheduleState(user, foundCourse, m.id) === 'active';
+            if (l && !isInstructorForCourse(user, foundCourse) && !isLessonAvailableByDeadline(l, m)) {
+              setSelectedLesson(findNextAvailableLessonInModule(m, l.id));
+              return;
+            }
             if (l && canAccessModule && (
               isInstructorForCourse(user, foundCourse) ||
               progress.redoCreativeChallengeLessonIds?.includes(l.id) ||
@@ -258,7 +306,10 @@ const Courses: React.FC<CoursesProps> = ({
       extendedModule &&
       (isInstructor || getModuleScheduleState(user, course, extendedModule.id) === 'active')
     ) {
-      const firstPendingLesson = extendedModule.lessons.find(l => !progress.completedLessonIds.includes(l.id));
+      const firstPendingLesson = extendedModule.lessons.find(l =>
+        !progress.completedLessonIds.includes(l.id) &&
+        (isInstructor || isLessonAvailableByDeadline(l, extendedModule))
+      );
       if (firstPendingLesson) {
         targetLesson = firstPendingLesson;
       }
@@ -273,7 +324,16 @@ const Courses: React.FC<CoursesProps> = ({
           continue;
         }
 
+        let hasSkippedExpiredLesson = false;
         for (const l of m.lessons) {
+          if (!isInstructor && !isLessonAvailableByDeadline(l, m)) {
+            hasSkippedExpiredLesson = true;
+            continue;
+          }
+          if (hasSkippedExpiredLesson) {
+            targetLesson = l;
+            break;
+          }
           if (
             (progress.redoCreativeChallengeLessonIds?.includes(l.id) || isLessonUnlocked(l.id, course, progress, user)) &&
             !progress.completedLessonIds.includes(l.id)
@@ -297,6 +357,19 @@ const Courses: React.FC<CoursesProps> = ({
     if (!selectedCourse) return;
 
     const currentModule = selectedCourse.modules.find(module => module.lessons.some(l => l.id === lesson.id));
+    if (
+      currentModule &&
+      !isInstructorForCourse(user, selectedCourse) &&
+      getModuleScheduleState(user, selectedCourse, currentModule.id) === 'active' &&
+      !isLessonAvailableByDeadline(lesson, currentModule)
+    ) {
+      const nextLesson = findNextAvailableLessonInModule(currentModule, lesson.id);
+      setSelectedLesson(nextLesson);
+      setLockedNotice(nextLesson
+        ? `This lesson is unavailable under the unit's deadline schedule. Moving to "${nextLesson.title}".`
+        : `This lesson is unavailable under the unit's deadline schedule, and no later scheduled lessons in this unit are available.`);
+      return;
+    }
     const isRedoRequested = progress.redoCreativeChallengeLessonIds?.includes(lesson.id) === true;
     const isDeadlinePassed = currentModule
       ? getModuleScheduleState(user, selectedCourse, currentModule.id) === 'expired'
@@ -347,12 +420,20 @@ const Courses: React.FC<CoursesProps> = ({
   const handleTestResetCourse = () => {
     if (!selectedCourse || !user) return;
     const updated = resetCourseProgress(user, selectedCourse);
-    onProgressUpdate(updated);
+    onProgressUpdate(updated, { replaceCompletedLessonIds: true });
   };
 
   // Mark article as completed and unlock next
   const handleCompleteArticle = (lessonId: string) => {
     if (!selectedCourse) return;
+    const lessonModule = selectedCourse.modules.find(module => module.lessons.some(lesson => lesson.id === lessonId));
+    const lesson = lessonModule?.lessons.find(item => item.id === lessonId);
+    if (
+      lesson &&
+      lessonModule &&
+      !isInstructorForCourse(user, selectedCourse) &&
+      !isLessonAvailableByDeadline(lesson, lessonModule)
+    ) return;
     const { updatedProgress, newlyUnlockedLesson } = recordCompletion(
       user || 'guest',
       lessonId,
@@ -519,7 +600,13 @@ const Courses: React.FC<CoursesProps> = ({
               }).map((module) => (
                 <div key={module.id} className="py-2">
                   <div className="px-4 py-2 text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between gap-2">
-                    <span>{module.title}</span>
+                    <span className="min-w-0">
+                      {module.title}
+                      {(() => {
+                        const counts = getModuleCurriculumCounts(module);
+                        return <span className="block normal-case tracking-normal text-[10px] font-medium text-slate-500">{counts.lessons} lessons · {counts.challenges} challenges</span>;
+                      })()}
+                    </span>
                     {(() => {
                       const effectiveDeadline = getEffectiveModuleDeadline(user, selectedCourse, module.id);
                       const hasStudentOverride = !!user?.moduleDeadlineOverrides?.[selectedCourse.id]?.[module.id];
@@ -576,7 +663,10 @@ const Courses: React.FC<CoursesProps> = ({
                       const scheduleState = getModuleScheduleState(user, selectedCourse, module.id);
                       const isPastDeadline = scheduleState === 'expired' && !hasStudentOverride;
                       const isNotStarted = scheduleState === 'not-started';
-                      const isDisabled = isNotStarted || (isPastDeadline && !isCompleted);
+                      const isLessonPastDeadline = !isInstructorAssigned && isLessonDeadlineExpired(lesson);
+                      const isLessonUnavailableBySchedule = !isInstructorAssigned &&
+                        !isLessonAvailableByDeadline(lesson, module);
+                      const isDisabled = isNotStarted || (isPastDeadline && !isCompleted) || isLessonUnavailableBySchedule;
 
                       return (
                         <button
@@ -626,6 +716,16 @@ const Courses: React.FC<CoursesProps> = ({
                                 lesson.isPractice ? 'bg-sky-50 text-sky-700' : 'bg-purple-50 text-purple-700'
                               }`}>
                                 {lesson.isPractice ? 'Practice' : 'Challenge'}
+                              </span>
+                            )}
+                            {lesson.deadlineDate && !isLessonPastDeadline && (
+                              <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 font-mono text-[9px] font-bold">
+                                Due {lesson.deadlineDate}
+                              </span>
+                            )}
+                            {isLessonUnavailableBySchedule && (
+                              <span className="px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 font-mono text-[9px] font-bold">
+                                {isLessonPastDeadline ? 'Deadline passed' : 'Not scheduled'}
                               </span>
                             )}
                             {(lesson.type === 'algorithm' || lesson.type === 'pseudocode' || lesson.type === 'flowchart') && (
@@ -715,6 +815,10 @@ const Courses: React.FC<CoursesProps> = ({
                   user={user}
                   progress={progress}
                   onProgressUpdate={onProgressUpdate}
+                  isLessonAvailable={() =>
+                    isInstructorAssigned ||
+                    Boolean(selectedLessonModule && isLessonAvailableByDeadline(selectedLesson, selectedLessonModule))
+                  }
                   onNavigateToLesson={(nextL) => setSelectedLesson(nextL)}
                   onClose={() => setSelectedLesson(null)}
                   onOpenPlayground={onOpenPlayground}
@@ -727,6 +831,10 @@ const Courses: React.FC<CoursesProps> = ({
                   user={user}
                   progress={progress}
                   onProgressUpdate={onProgressUpdate}
+                  isLessonAvailable={() =>
+                    isInstructorAssigned ||
+                    Boolean(selectedLessonModule && isLessonAvailableByDeadline(selectedLesson, selectedLessonModule))
+                  }
                   onClose={() => setSelectedLesson(null)}
                 />
               ) : (

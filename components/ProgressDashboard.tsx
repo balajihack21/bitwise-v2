@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Course, User, UserProgress, Lesson, InstructorAccount } from '../types';
-import { getCourseProgress } from '../services/progressService';
+import { getCourseProgress, getModuleCurriculumCounts } from '../services/progressService';
 import { fetchInstructorsList } from '../services/firebase';
 
 interface ProgressDashboardProps {
@@ -8,6 +8,8 @@ interface ProgressDashboardProps {
   courses: Course[];
   progress: UserProgress;
   onSelectCourse: (course: Course, lesson?: Lesson) => void;
+  onSyncNow: () => Promise<void>;
+  isSyncing: boolean;
   onResetProgress?: () => void;
   onNavigateToCertificates: () => void;
 }
@@ -17,6 +19,8 @@ const ProgressDashboard: React.FC<ProgressDashboardProps> = ({
   courses,
   progress,
   onSelectCourse,
+  onSyncNow,
+  isSyncing,
   onNavigateToCertificates
 }) => {
   const [instructorMap, setInstructorMap] = useState<Record<string, string>>({});
@@ -130,6 +134,18 @@ const ProgressDashboard: React.FC<ProgressDashboardProps> = ({
         </div>
 
         <div className="flex items-center gap-3">
+          {user?.role === 'student' && user.uid && (
+            <button
+              type="button"
+              onClick={() => { void onSyncNow(); }}
+              disabled={isSyncing}
+              className="px-4 py-2 text-xs font-bold text-white bg-bitwise-600 hover:bg-bitwise-700 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs disabled:cursor-wait disabled:opacity-60"
+              title="Sync locally saved progress to your account"
+            >
+              <i className={`fa-solid ${isSyncing ? 'fa-spinner fa-spin' : 'fa-cloud-arrow-up'}`}></i>
+              {isSyncing ? 'Syncing...' : 'Sync progress'}
+            </button>
+          )}
           <button
             onClick={onNavigateToCertificates}
             className="px-4 py-2 text-xs font-bold text-bitwise-700 bg-bitwise-50 hover:bg-bitwise-100 rounded-xl transition-colors border border-bitwise-200 flex items-center gap-1.5 cursor-pointer shadow-2xs"
@@ -406,11 +422,17 @@ const ProgressDashboard: React.FC<ProgressDashboardProps> = ({
             </div>
             <div className="p-5 space-y-3 overflow-y-auto max-h-[65vh]">
               {selectedCourseForUnits.modules.map(module => {
+                const moduleCounts = getModuleCurriculumCounts(module);
                 const completedLessons = module.lessons.filter(lesson => progress.completedLessonIds.includes(lesson.id)).length;
                 return (
                   <div key={module.id} className="rounded-xl border border-slate-200 bg-white p-4">
                   <div className="flex items-center justify-between gap-3 mb-3">
-                    <span className="text-sm font-bold text-slate-800">{module.title}</span>
+                    <div className="min-w-0">
+                      <span className="text-sm font-bold text-slate-800">{module.title}</span>
+                      <div className="text-[10px] text-slate-500 mt-0.5">
+                        {moduleCounts.lessons} lessons · {moduleCounts.challenges} challenges
+                      </div>
+                    </div>
                     <span className="shrink-0 px-2 py-1 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold">
                       {completedLessons}/{module.lessons.length} completed
                     </span>

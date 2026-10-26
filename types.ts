@@ -87,6 +87,8 @@ export interface Lesson {
   type: 'video' | 'article' | 'problem' | 'algorithm' | 'pseudocode' | 'flowchart';
   isPractice?: boolean;
   isPro?: boolean;
+  deadlineDate?: string;
+  deadlineTimeZone?: string;
   content?: string;
   codeSnippet?: string;
   language?: string;

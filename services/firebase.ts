@@ -27,6 +27,7 @@ import {
   limit, 
   deleteDoc, 
   addDoc,
+  writeBatch,
   serverTimestamp
 } from 'firebase/firestore';
 import { User, UserProgress, Course, SubmissionRecord, CourseProgressDetail, ProctorStatus, InstructorAccount, CourseInstructorAssignment, CourseInternalAssessment, StudentProfile } from '../types';
@@ -34,13 +35,14 @@ import { MOCK_COURSES } from '../constants';
 
 // The Firebase configuration provided by the user
 export const firebaseConfig = {
-  apiKey: "AIzaSyBH2N7lFd27aJIdoaTH_Bl-29C-4sgZkx4",
-  authDomain: "ipd2026.firebaseapp.com",
-  projectId: "ipd2026",
-  storageBucket: "ipd2026.firebasestorage.app",
-  messagingSenderId: "999528529665",
-  appId: "1:999528529665:web:e25a178f652201b781e500",
-  measurementId: "G-JL0YJP3DKQ"
+  apiKey: "AIzaSyBnvqzy4ilvhyqd1dBX6wcnRvN0IxSrC4c",
+  authDomain: "bitwise-c1645.firebaseapp.com",
+  databaseURL: "https://bitwise-c1645-default-rtdb.firebaseio.com",
+  projectId: "bitwise-c1645",
+  storageBucket: "bitwise-c1645.firebasestorage.app",
+  messagingSenderId: "115697721498",
+  appId: "1:115697721498:web:1d8e841c4a9a22be883f23",
+  measurementId: "G-42LP2KHJWH"
 };
 
 // Initialize Firebase safely (avoid multi-instance collision)
@@ -279,16 +281,27 @@ const resolveCanonicalStudentUid = async (preferredUid?: string, fallbackEmail?:
   const queryRegNo = String(fallbackRegNo || '').trim();
 
   try {
-    const usersSnap = await getDocs(collection(db, 'users'));
-    const candidateDocs = usersSnap.docs.filter(docSnap => {
-      const data = docSnap.data();
-      const sameUid = Boolean(preferredUid && docSnap.id === preferredUid);
-      const sameEmail = Boolean(queryEmail && String(data.email || '').trim().toLowerCase() === queryEmail);
-      const sameRegNo = Boolean(queryRegNo && String(data.regNo || '').trim() === queryRegNo);
-      return sameUid || sameEmail || sameRegNo;
+    const identitySnapshot = queryEmail
+      ? getDocs(query(collection(db, 'users'), where('email', '==', queryEmail)))
+      : queryRegNo
+        ? getDocs(query(collection(db, 'users'), where('regNo', '==', queryRegNo)))
+        : Promise.resolve(null);
+    const snapshots = await Promise.all([
+      preferredUid ? getDoc(doc(db, 'users', preferredUid)) : Promise.resolve(null),
+      identitySnapshot
+    ]);
+    const candidateDocs = new Map<string, any>();
+    snapshots.forEach(snapshot => {
+      if (!snapshot) return;
+      if ('docs' in snapshot) {
+        snapshot.docs.forEach(candidate => candidateDocs.set(candidate.id, candidate));
+      } else if (snapshot.exists()) {
+        candidateDocs.set(snapshot.id, snapshot);
+      }
     });
+    const candidates = Array.from(candidateDocs.values());
 
-    if (candidateDocs.length === 0) {
+    if (candidates.length === 0) {
       if (preferredUid) return preferredUid;
       if (queryEmail) {
         const localMatch = getStoredAccounts().find(account => normalizeIdentityToken(account.email) === normalizeIdentityToken(queryEmail));
@@ -301,7 +314,7 @@ const resolveCanonicalStudentUid = async (preferredUid?: string, fallbackEmail?:
       return preferredUid || '';
     }
 
-    const canonicalDoc = [...candidateDocs].sort((a, b) => {
+    const canonicalDoc = candidates.sort((a, b) => {
       const aIsSeed = a.id.startsWith('seed_');
       const bIsSeed = b.id.startsWith('seed_');
       if (aIsSeed !== bIsSeed) return aIsSeed ? -1 : 1;
@@ -315,7 +328,8 @@ const resolveCanonicalStudentUid = async (preferredUid?: string, fallbackEmail?:
 
     return canonicalDoc?.id || preferredUid || '';
   } catch (e) {
-    return preferredUid || '';
+    console.error('Failed to resolve the canonical student account:', e);
+    throw e;
   }
 };
 
@@ -1029,7 +1043,11 @@ const progressWriteQueues = new Map<string, Promise<void>>();
 /**
  * Save user progress to Firestore
  */
-export const saveUserProgressToFirestore = async (userId: string, progress: UserProgress): Promise<void> => {
+export const saveUserProgressToFirestore = async (
+  userId: string,
+  progress: UserProgress,
+  options: { replaceCompletedLessonIds?: boolean } = {}
+): Promise<void> => {
   if (!userId) return;
   try {
     let activeUser: any = null;
@@ -1042,14 +1060,60 @@ export const saveUserProgressToFirestore = async (userId: string, progress: User
     const targetUid = canonicalUid || userId;
 
     const progressDocRef = doc(db, 'user_progress', targetUid);
-    const sanitizedPayload = sanitizeForFirestore({
+    const incomingProgress = sanitizeForFirestore({
       ...progress,
-      updatedAt: new Date().toISOString()
+      updatedAt: progress.updatedAt || new Date().toISOString()
     });
     const previousWrite = progressWriteQueues.get(targetUid) || Promise.resolve();
-    const currentWrite = previousWrite.catch(() => {}).then(() =>
-      setDoc(progressDocRef, sanitizedPayload, { merge: true })
-    );
+    const currentWrite = previousWrite.catch(() => {}).then(() => runTransaction(db, async transaction => {
+      const progressSnapshot = await transaction.get(progressDocRef);
+      const currentProgress = progressSnapshot.exists() ? progressSnapshot.data() : {};
+      const incomingTimestamp = Date.parse(incomingProgress.updatedAt || '');
+      const currentTimestamp = Date.parse(String(currentProgress.updatedAt || ''));
+      const incomingIsNewer = !Number.isFinite(currentTimestamp) ||
+        (Number.isFinite(incomingTimestamp) && incomingTimestamp >= currentTimestamp);
+      const latestSnapshot = incomingIsNewer ? incomingProgress : currentProgress;
+      const completedLessonIds = options.replaceCompletedLessonIds
+        ? (incomingProgress.completedLessonIds || [])
+        : Array.from(new Set([
+            ...(currentProgress.completedLessonIds || []),
+            ...(incomingProgress.completedLessonIds || [])
+          ]));
+      const unlockedLessonIds = options.replaceCompletedLessonIds
+        ? (incomingProgress.unlockedLessonIds || [])
+        : Array.from(new Set([
+            ...(currentProgress.unlockedLessonIds || []),
+            ...(incomingProgress.unlockedLessonIds || [])
+          ]));
+      const submissions = Array.from(new Map([
+        ...(currentProgress.submissions || []),
+        ...(incomingProgress.submissions || [])
+      ].map(submission => [
+        submission.id || JSON.stringify(submission),
+        submission
+      ])).values()).slice(0, 50);
+      const creativeSubmissions = Array.from(new Map([
+        ...(currentProgress.creativeSubmissions || []),
+        ...(incomingProgress.creativeSubmissions || [])
+      ].map(submission => [
+        submission.id || JSON.stringify(submission),
+        submission
+      ])).values());
+
+      transaction.set(progressDocRef, sanitizeForFirestore({
+        ...currentProgress,
+        ...latestSnapshot,
+        completedLessonIds,
+        unlockedLessonIds,
+        submissions,
+        creativeSubmissions,
+        xp: Math.max(currentProgress.xp || 0, incomingProgress.xp || 0),
+        streakDays: Math.max(currentProgress.streakDays || 1, incomingProgress.streakDays || 1),
+        updatedAt: incomingIsNewer
+          ? incomingProgress.updatedAt
+          : currentProgress.updatedAt
+      }), { merge: true });
+    }));
     progressWriteQueues.set(targetUid, currentWrite);
     try {
       await currentWrite;
@@ -1059,26 +1123,6 @@ export const saveUserProgressToFirestore = async (userId: string, progress: User
       }
     }
 
-    try {
-      const allUsers = await getDocs(collection(db, 'users'));
-      const duplicateUserDocs = allUsers.docs.filter(docSnap => {
-        const data = docSnap.data();
-        const sameEmail = activeUser?.email && String(data.email || '').trim().toLowerCase() === String(activeUser.email).trim().toLowerCase();
-        const sameRegNo = activeUser?.regNo && String(data.regNo || '').trim() === String(activeUser.regNo).trim();
-        const sameUid = docSnap.id === userId || docSnap.id === targetUid;
-        return sameEmail || sameRegNo || sameUid;
-      });
-
-      for (const duplicateDoc of duplicateUserDocs) {
-        if (duplicateDoc.id === targetUid) continue;
-        const altProgressDocRef = doc(db, 'user_progress', duplicateDoc.id);
-        await setDoc(altProgressDocRef, sanitizedPayload, { merge: true }).catch(err => {
-          console.warn(`Failed to sync duplicate progress document ${duplicateDoc.id}:`, err);
-        });
-      }
-    } catch (err) {
-      console.warn('Progress was saved, but duplicate student records could not be synchronized:', err);
-    }
     window.dispatchEvent(new CustomEvent('bitwise_progress_sync_saved'));
   } catch (err) {
     console.error('Failed to sync progress to Firestore:', err);
@@ -1278,22 +1322,42 @@ export const loadUserProgressFromFirestore = async (userId: string): Promise<Use
 /**
  * Record a code submission in Firestore 'submissions' collection
  */
-export const recordSubmissionInFirestore = async (
+export const recordSubmissionsInFirestore = async (
   userId: string,
   username: string,
-  submission: SubmissionRecord
+  submissions: SubmissionRecord[]
 ): Promise<void> => {
+  if (submissions.length === 0) return;
+  let activeUser: any = null;
   try {
-    const submissionsCol = collection(db, 'submissions');
-    const sanitizedSubmission = sanitizeForFirestore({
-      userId: userId || 'anonymous',
-      username: username || 'Student',
-      ...submission,
-      createdAt: new Date().toISOString()
+    const raw = localStorage.getItem('bitwise_active_user');
+    if (raw) activeUser = JSON.parse(raw);
+  } catch (error) {
+    console.warn('Could not read the active user while resolving the submission owner:', error);
+  }
+  const canonicalUid = await resolveCanonicalStudentUid(
+    userId,
+    activeUser?.email,
+    activeUser?.regNo
+  );
+  const submissionOwnerUid = canonicalUid || userId;
+
+  for (let start = 0; start < submissions.length; start += 450) {
+    const batch = writeBatch(db);
+    const batchSubmissions = submissions.slice(start, start + 450);
+    batchSubmissions.forEach(submission => {
+      const stableSubmissionId = submission.id ||
+        `${submission.problemId || 'problem'}-${submission.timestamp || 'untimestamped'}`;
+      const submissionDocId = `${encodeURIComponent(submissionOwnerUid || 'anonymous')}_${encodeURIComponent(stableSubmissionId)}`;
+      const submissionRef = doc(db, 'submissions', submissionDocId);
+      batch.set(submissionRef, sanitizeForFirestore({
+        userId: submissionOwnerUid || 'anonymous',
+        username: username || 'Student',
+        ...submission,
+        createdAt: new Date().toISOString()
+      }), { merge: true });
     });
-    await addDoc(submissionsCol, sanitizedSubmission);
-  } catch (err) {
-    console.warn('Failed to save submission record to Firestore:', err);
+    await batch.commit();
   }
 };
 

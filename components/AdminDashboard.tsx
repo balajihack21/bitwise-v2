@@ -30,6 +30,7 @@ import { AssignCourseModal } from './AssignCourseModal';
 import Judge0SettingsModal from './Judge0SettingsModal';
 import { fetchInstructorsList } from '../services/firebase';
 import { InstructorAccount } from '../types';
+import { getModuleCurriculumCounts } from '../services/progressService';
 
 interface AdminDashboardProps {
   courses: Course[];
@@ -2093,19 +2094,26 @@ solve()`
                   </div>
 
                   <div className="space-y-4">
-                    {editingCourse.modules.map((mod, mIdx) => (
+                    {editingCourse.modules.map((mod, mIdx) => {
+                      const moduleCounts = getModuleCurriculumCounts(mod);
+                      return (
                       <div key={mod.id} className="bg-slate-50 border border-slate-200 rounded-xl p-4">
                         <div className="flex justify-between items-center mb-3">
-                          <input
-                            value={mod.title}
-                            readOnly={isInstructor}
-                            onChange={e => {
-                              const updated = [...editingCourse.modules];
-                              updated[mIdx].title = e.target.value;
-                              setEditingCourse({ ...editingCourse, modules: updated });
-                            }}
-                            className={`font-bold text-sm bg-transparent border-b border-transparent ${isInstructor ? 'cursor-default' : 'hover:border-slate-300 focus:border-bitwise-500'} outline-none flex-1 mr-4 text-slate-900`}
-                          />
+                          <div className="flex-1 min-w-0 mr-4">
+                            <input
+                              value={mod.title}
+                              readOnly={isInstructor}
+                              onChange={e => {
+                                const updated = [...editingCourse.modules];
+                                updated[mIdx].title = e.target.value;
+                                setEditingCourse({ ...editingCourse, modules: updated });
+                              }}
+                              className={`font-bold text-sm bg-transparent border-b border-transparent ${isInstructor ? 'cursor-default' : 'hover:border-slate-300 focus:border-bitwise-500'} outline-none w-full text-slate-900`}
+                            />
+                            <div className="mt-1 text-[10px] text-slate-500">
+                              {moduleCounts.lessons} lessons · {moduleCounts.challenges} challenges
+                            </div>
+                          </div>
                           {!isInstructor && (
                             <button
                               onClick={() => {
@@ -2230,6 +2238,35 @@ solve()`
                                     </button>
                                   )}
                                 </div>
+
+                                <label className="flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
+                                  <span className="font-semibold">Lesson deadline</span>
+                                  <input
+                                    type="date"
+                                    disabled={isInstructor}
+                                    value={lesson.deadlineDate || ''}
+                                    onChange={e => {
+                                      const updated = [...editingCourse.modules];
+                                      const updatedLesson = { ...lesson };
+                                      if (e.target.value) {
+                                        updatedLesson.deadlineDate = e.target.value;
+                                        updatedLesson.deadlineTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                                      } else {
+                                        delete updatedLesson.deadlineDate;
+                                        delete updatedLesson.deadlineTimeZone;
+                                      }
+                                      updated[mIdx] = {
+                                        ...updated[mIdx],
+                                        lessons: updated[mIdx].lessons.map((item, index) => index === lIdx ? updatedLesson : item)
+                                      };
+                                      setEditingCourse({ ...editingCourse, modules: updated });
+                                    }}
+                                    className="text-xs border border-slate-300 rounded px-1.5 py-1 disabled:bg-slate-100"
+                                  />
+                                  <span>
+                                    Expires at end of this date in the admin’s local time zone. Once any lesson in this unit has a deadline, lessons without one stay locked until scheduled.
+                                  </span>
+                                </label>
 
                                 <textarea
                                   value={lesson.content || ''}
@@ -2463,7 +2500,7 @@ solve()`
                           )}
                         </div>
                       </div>
-                    ))}
+                    )})}
                   </div>
                 </div>
               </div>
@@ -2557,8 +2594,8 @@ solve()`
                     <tbody className="divide-y divide-slate-100 text-sm">
                       {visibleCourses.map(course => {
                         const totalLessons = course.modules.reduce((acc, m) => acc + m.lessons.length, 0);
-                        const codingChallenges = course.modules.reduce(
-                          (acc, m) => acc + m.lessons.filter(l => l.type === 'problem').length,
+                        const totalChallenges = course.modules.reduce(
+                          (acc, module) => acc + getModuleCurriculumCounts(module).challenges,
                           0
                         );
 
@@ -2634,9 +2671,19 @@ solve()`
                             </td>
                             <td className="p-4 text-xs text-slate-600">
                               <div><strong>{course.modules.length}</strong> modules, <strong>{totalLessons}</strong> lessons</div>
-                              {codingChallenges > 0 && (
-                                <div className="text-amber-600 font-medium">⚡ {codingChallenges} Coding Challenges</div>
+                              {totalChallenges > 0 && (
+                                <div className="text-amber-600 font-medium">⚡ {totalChallenges} challenges</div>
                               )}
+                              <div className="mt-1 space-y-0.5 text-[10px] text-slate-500">
+                                {course.modules.map(module => {
+                                  const counts = getModuleCurriculumCounts(module);
+                                  return (
+                                    <div key={module.id} className="truncate" title={module.title}>
+                                      {module.title}: {counts.lessons} lessons · {counts.challenges} challenges
+                                    </div>
+                                  );
+                                })}
+                              </div>
                             </td>
                             <td className="p-4">
                               <div className="flex flex-wrap gap-1">
@@ -4241,10 +4288,11 @@ solve()`
                               <div className="mt-2 space-y-2 max-h-48 overflow-y-auto pr-1">
                                 {fullCourse.modules.map(mod => {
                                   const effectiveDeadline = selectedStudentForDetails.moduleDeadlineOverrides?.[cp.courseId]?.[mod.id] || mod.endDate;
+                                  const moduleCounts = getModuleCurriculumCounts(mod);
                                   return (
                                     <div key={mod.id} className="bg-slate-50 p-2 rounded-lg text-xs">
                                       <div className="font-bold text-slate-700 mb-1 text-[11px] flex items-center justify-between gap-2">
-                                        <span>{mod.title}</span>
+                                        <span>{mod.title} · {moduleCounts.lessons} lessons · {moduleCounts.challenges} challenges</span>
                                         <div className="flex items-center gap-1">
                                           {mod.unlockedForAllStudents && (
                                             <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">
