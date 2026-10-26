@@ -27,7 +27,8 @@ import {
   getInstructorAssignedCourses,
   fetchInstructorsList,
   loadUserModuleDeadlineOverrides,
-  loadUserScheduledCodingTests
+  loadUserScheduledCodingTests,
+  saveUserProgressToFirestore
 } from './services/firebase';
 
 const mergeDefaultPracticeProblems = (courses: Course[]): Course[] => {
@@ -44,6 +45,8 @@ const mergeDefaultPracticeProblems = (courses: Course[]): Course[] => {
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<ViewState>(ViewState.HOME);
   const [authBanner, setAuthBanner] = useState<string | null>(null);
+  const [progressSyncError, setProgressSyncError] = useState(false);
+  const [progressRecoveryAvailable, setProgressRecoveryAvailable] = useState(false);
   const [pendingTargetView, setPendingTargetView] = useState<ViewState | null>(null);
   const [playgroundCode, setPlaygroundCode] = useState<string>(
     '// Welcome to Bitwise Judge0 Code Playground\n// Write code, pass custom stdin, and run in the isolated sandbox!\n\nfunction main() {\n    console.log("Hello from Bitwise Judge0 Sandbox!");\n}\n\nmain();'
@@ -218,8 +221,13 @@ const App: React.FC = () => {
         };
         setUser(activeUser);
         localStorage.setItem('bitwise_active_user', JSON.stringify(activeUser));
-        const syncedProgress = await syncProgressWithFirestore(activeUser);
-        setProgress(syncedProgress);
+        try {
+          const syncedProgress = await syncProgressWithFirestore(activeUser);
+          setProgress(syncedProgress);
+        } catch (error) {
+          console.error('Failed to synchronize progress after authentication:', error);
+          setProgress(getUserProgress(activeUser.username));
+        }
       }
     });
 
@@ -243,6 +251,13 @@ const App: React.FC = () => {
       }
     };
     window.addEventListener('bitwise_progress_updated', handleGlobalProgressUpdated);
+
+    const handleProgressSyncError = () => setProgressSyncError(true);
+    const handleProgressSyncSaved = () => setProgressSyncError(false);
+    const handleProgressRecoveryAvailable = () => setProgressRecoveryAvailable(true);
+    window.addEventListener('bitwise_progress_sync_error', handleProgressSyncError);
+    window.addEventListener('bitwise_progress_sync_saved', handleProgressSyncSaved);
+    window.addEventListener('bitwise_progress_recovery_available', handleProgressRecoveryAvailable);
 
     // Sync courses whenever updated across components or browser tabs
     const handleCoursesUpdated = (e: any) => {
@@ -275,6 +290,9 @@ const App: React.FC = () => {
     return () => {
       unsubscribe();
       window.removeEventListener('bitwise_progress_updated', handleGlobalProgressUpdated);
+      window.removeEventListener('bitwise_progress_sync_error', handleProgressSyncError);
+      window.removeEventListener('bitwise_progress_sync_saved', handleProgressSyncSaved);
+      window.removeEventListener('bitwise_progress_recovery_available', handleProgressRecoveryAvailable);
       window.removeEventListener('bitwise_courses_updated', handleCoursesUpdated);
       window.removeEventListener('storage', handleStorageChange);
     };
@@ -283,7 +301,12 @@ const App: React.FC = () => {
   // Sync progress when user changes
   useEffect(() => {
     if (user) {
-      syncProgressWithFirestore(user).then(p => setProgress(p));
+      syncProgressWithFirestore(user)
+        .then(p => setProgress(p))
+        .catch(error => {
+          console.error('Failed to synchronize progress for the active user:', error);
+          setProgress(getUserProgress(user.username));
+        });
     } else {
       const p = getUserProgress('guest');
       setProgress(p);
@@ -353,7 +376,12 @@ const App: React.FC = () => {
     setUser(hydratedUser);
     setAuthBanner(null);
     localStorage.setItem('bitwise_active_user', JSON.stringify(hydratedUser));
-    syncProgressWithFirestore(hydratedUser).then(p => setProgress(p));
+    syncProgressWithFirestore(hydratedUser)
+      .then(p => setProgress(p))
+      .catch(error => {
+        console.error('Failed to synchronize progress after login:', error);
+        setProgress(getUserProgress(hydratedUser.username));
+      });
 
     if (pendingTargetView) {
       const target = pendingTargetView;
@@ -572,6 +600,28 @@ const App: React.FC = () => {
       />
       
       <main className="flex-grow">
+        {(progressSyncError || progressRecoveryAvailable) && (
+          <div className="mx-auto mt-4 flex max-w-7xl items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <i className="fa-solid fa-triangle-exclamation shrink-0"></i>
+            <p className="flex-1">
+              {progressSyncError && 'Your progress is saved on this device, but could not be synced to your account. Keep this page open and retry when your connection is available.'}
+              {progressRecoveryAvailable && 'A local progress backup was found with completed lessons missing from the cloud. It has been preserved in this browser as bitwise_progress_recovery_<username>; contact your instructor before clearing browser data.'}
+            </p>
+            {progressSyncError && user?.uid && (
+              <button
+                type="button"
+                onClick={() => {
+                  saveUserProgressToFirestore(user.uid, progress).catch(error => {
+                    console.error('Retrying progress synchronization failed:', error);
+                  });
+                }}
+                className="shrink-0 rounded-lg bg-amber-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-800"
+              >
+                Retry
+              </button>
+            )}
+          </div>
+        )}
         {renderContent()}
       </main>
 

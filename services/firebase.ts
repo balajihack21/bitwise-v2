@@ -20,6 +20,7 @@ import {
   updateDoc, 
   collection, 
   getDocs, 
+  runTransaction,
   query, 
   where, 
   orderBy, 
@@ -1023,6 +1024,8 @@ export const logoutFirebase = async (): Promise<void> => {
 // FIRESTORE PROGRESS & SUBMISSIONS SYNC
 // ==========================================
 
+const progressWriteQueues = new Map<string, Promise<void>>();
+
 /**
  * Save user progress to Firestore
  */
@@ -1043,25 +1046,152 @@ export const saveUserProgressToFirestore = async (userId: string, progress: User
       ...progress,
       updatedAt: new Date().toISOString()
     });
-    await setDoc(progressDocRef, sanitizedPayload, { merge: true });
-
-    const allUsers = await getDocs(collection(db, 'users'));
-    const duplicateUserDocs = allUsers.docs.filter(docSnap => {
-      const data = docSnap.data();
-      const sameEmail = activeUser?.email && String(data.email || '').trim().toLowerCase() === String(activeUser.email).trim().toLowerCase();
-      const sameRegNo = activeUser?.regNo && String(data.regNo || '').trim() === String(activeUser.regNo).trim();
-      const sameUid = docSnap.id === userId || docSnap.id === targetUid;
-      return sameEmail || sameRegNo || sameUid;
-    });
-
-    for (const duplicateDoc of duplicateUserDocs) {
-      if (duplicateDoc.id === targetUid) continue;
-      const altProgressDocRef = doc(db, 'user_progress', duplicateDoc.id);
-      await setDoc(altProgressDocRef, sanitizedPayload, { merge: true }).catch(() => {});
+    const previousWrite = progressWriteQueues.get(targetUid) || Promise.resolve();
+    const currentWrite = previousWrite.catch(() => {}).then(() =>
+      setDoc(progressDocRef, sanitizedPayload, { merge: true })
+    );
+    progressWriteQueues.set(targetUid, currentWrite);
+    try {
+      await currentWrite;
+    } finally {
+      if (progressWriteQueues.get(targetUid) === currentWrite) {
+        progressWriteQueues.delete(targetUid);
+      }
     }
+
+    try {
+      const allUsers = await getDocs(collection(db, 'users'));
+      const duplicateUserDocs = allUsers.docs.filter(docSnap => {
+        const data = docSnap.data();
+        const sameEmail = activeUser?.email && String(data.email || '').trim().toLowerCase() === String(activeUser.email).trim().toLowerCase();
+        const sameRegNo = activeUser?.regNo && String(data.regNo || '').trim() === String(activeUser.regNo).trim();
+        const sameUid = docSnap.id === userId || docSnap.id === targetUid;
+        return sameEmail || sameRegNo || sameUid;
+      });
+
+      for (const duplicateDoc of duplicateUserDocs) {
+        if (duplicateDoc.id === targetUid) continue;
+        const altProgressDocRef = doc(db, 'user_progress', duplicateDoc.id);
+        await setDoc(altProgressDocRef, sanitizedPayload, { merge: true }).catch(err => {
+          console.warn(`Failed to sync duplicate progress document ${duplicateDoc.id}:`, err);
+        });
+      }
+    } catch (err) {
+      console.warn('Progress was saved, but duplicate student records could not be synchronized:', err);
+    }
+    window.dispatchEvent(new CustomEvent('bitwise_progress_sync_saved'));
   } catch (err) {
     console.error('Failed to sync progress to Firestore:', err);
+    window.dispatchEvent(new CustomEvent('bitwise_progress_sync_error'));
+    throw err;
   }
+};
+
+export const recoverCompletionsFromAcceptedSubmissions = async (
+  courses: Course[]
+): Promise<{ studentsUpdated: number; completionsAdded: number; errors: string[] }> => {
+  const usersSnapshot = await getDocs(collection(db, 'users'));
+  const studentIds = new Set(
+    usersSnapshot.docs
+      .filter(userDoc => userDoc.data().role === 'student')
+      .map(userDoc => userDoc.id)
+  );
+  const lessonCourseById = new Map<string, string>();
+  courses.forEach(course => {
+    course.modules?.forEach(module => {
+      module.lessons?.forEach(lesson => {
+        if (!lesson.isPractice) lessonCourseById.set(lesson.id, course.id);
+      });
+    });
+  });
+
+  const acceptedLessonIdsByStudent = new Map<string, Set<string>>();
+  const acceptedSubmissions = await getDocs(query(
+    collection(db, 'submissions'),
+    where('status', '==', 'ACCEPTED')
+  ));
+  acceptedSubmissions.docs.forEach(submissionDoc => {
+    const submission = submissionDoc.data();
+    const userId = String(submission.userId || '');
+    const lessonId = String(submission.problemId || '');
+    const matchingCourseId = lessonCourseById.get(lessonId);
+    if (
+      !studentIds.has(userId) ||
+      !matchingCourseId ||
+      submission.courseId !== matchingCourseId
+    ) {
+      return;
+    }
+    if (!acceptedLessonIdsByStudent.has(userId)) {
+      acceptedLessonIdsByStudent.set(userId, new Set());
+    }
+    acceptedLessonIdsByStudent.get(userId)!.add(lessonId);
+  });
+
+  let studentsUpdated = 0;
+  let completionsAdded = 0;
+  const errors: string[] = [];
+  const candidates = Array.from(acceptedLessonIdsByStudent.entries());
+  let nextCandidateIndex = 0;
+  const retryableFirestoreCodes = new Set([
+    'aborted',
+    'deadline-exceeded',
+    'firestore/aborted',
+    'firestore/deadline-exceeded',
+    'firestore/resource-exhausted',
+    'firestore/unavailable',
+    'resource-exhausted',
+    'unavailable'
+  ]);
+  const workers = Array.from({ length: Math.min(3, candidates.length) }, async () => {
+    while (nextCandidateIndex < candidates.length) {
+      const [userId, acceptedLessonIds] = candidates[nextCandidateIndex++];
+      const progressRef = doc(db, 'user_progress', userId);
+      let lastError: unknown;
+
+      for (let attempt = 0; attempt < 5; attempt++) {
+        try {
+          const added = await runTransaction(db, async transaction => {
+            const progressSnapshot = await transaction.get(progressRef);
+            const currentProgress = progressSnapshot.exists() ? progressSnapshot.data() : {};
+            const existingIds = Array.isArray(currentProgress.completedLessonIds)
+              ? currentProgress.completedLessonIds.filter((id): id is string => typeof id === 'string')
+              : [];
+            const existingIdSet = new Set(existingIds);
+            const recoveredIds = Array.from(acceptedLessonIds).filter(id => !existingIdSet.has(id));
+            if (recoveredIds.length === 0) return 0;
+
+            transaction.set(progressRef, {
+              ...currentProgress,
+              completedLessonIds: [...existingIds, ...recoveredIds],
+              updatedAt: new Date().toISOString()
+            }, { merge: true });
+            return recoveredIds.length;
+          });
+          if (added > 0) {
+            studentsUpdated++;
+            completionsAdded += added;
+          }
+          lastError = undefined;
+          break;
+        } catch (error) {
+          lastError = error;
+          const code = typeof error === 'object' && error !== null && 'code' in error
+            ? String(error.code)
+            : '';
+          if (!retryableFirestoreCodes.has(code) || attempt === 4) break;
+          await new Promise(resolve => setTimeout(resolve, Math.min(1000 * (2 ** attempt), 10000)));
+        }
+      }
+
+      if (lastError !== undefined) {
+        errors.push(`${userId}: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
+      }
+    }
+  });
+  await Promise.all(workers);
+
+  return { studentsUpdated, completionsAdded, errors };
 };
 
 /**
@@ -1112,6 +1242,10 @@ export const loadUserProgressFromFirestore = async (userId: string): Promise<Use
     if (progressRecords.length > 0) {
       const merged: UserProgress = {
         ...progressRecords[0],
+        updatedAt: progressRecords
+          .map(record => record.updatedAt)
+          .filter((value): value is string => typeof value === 'string')
+          .sort((a, b) => Date.parse(b) - Date.parse(a))[0],
         completedLessonIds: Array.from(new Set(progressRecords.flatMap(record => record.completedLessonIds || []))),
         unlockedLessonIds: Array.from(new Set(progressRecords.flatMap(record => record.unlockedLessonIds || []))),
         redoCreativeChallengeLessonIds: Array.from(new Set(progressRecords.flatMap(record => record.redoCreativeChallengeLessonIds || []))),

@@ -236,6 +236,7 @@ export interface UserProgress {
   proctorNotes?: string;
   proctorReviewedAt?: string;
   proctorReviewedBy?: string;
+  updatedAt?: string;
 }
 
 export interface CreativeChallengeSubmission {

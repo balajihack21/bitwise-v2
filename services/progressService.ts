@@ -51,30 +51,60 @@ export const loadUserProgress = (userOrName: string | User = 'guest'): UserProgr
 
 export const getUserProgress = loadUserProgress;
 
+const loadCachedUserProgress = (username: string): UserProgress => {
+  try {
+    const raw = localStorage.getItem(`${PROGRESS_STORAGE_PREFIX}${username.toLowerCase()}`);
+    return raw ? JSON.parse(raw) as UserProgress : getInitialProgress();
+  } catch (e) {
+    console.error('Error reading cached user progress for synchronization:', e);
+    return getInitialProgress();
+  }
+};
+
 /**
  * Async fetch user progress from Firestore with localStorage fallback
  */
 export const syncProgressWithFirestore = async (user: User | null): Promise<UserProgress> => {
   if (!user) return getInitialProgress();
   const userId = user.uid || user.username;
+  const localProgress = loadCachedUserProgress(user.username);
   
   try {
     if (user.uid) {
       const cloudProg = await loadUserProgressFromFirestore(user.uid);
       if (cloudProg) {
+        const localUpdatedAt = Date.parse(localProgress.updatedAt || '');
+        const cloudUpdatedAt = Date.parse(cloudProg.updatedAt || '');
+        if (
+          Number.isFinite(localUpdatedAt) &&
+          (!Number.isFinite(cloudUpdatedAt) || localUpdatedAt > cloudUpdatedAt)
+        ) {
+          await saveUserProgressToFirestore(user.uid, localProgress);
+          return localProgress;
+        }
+        const cloudCompletedIds = new Set(cloudProg.completedLessonIds || []);
+        const hasLocalOnlyCompletions = (localProgress.completedLessonIds || [])
+          .some(lessonId => !cloudCompletedIds.has(lessonId));
+        if (!Number.isFinite(localUpdatedAt) && hasLocalOnlyCompletions) {
+          localStorage.setItem(
+            `bitwise_progress_recovery_${user.username.toLowerCase()}`,
+            JSON.stringify(localProgress)
+          );
+          window.dispatchEvent(new CustomEvent('bitwise_progress_recovery_available'));
+        }
         localStorage.setItem(`${PROGRESS_STORAGE_PREFIX}${user.username.toLowerCase()}`, JSON.stringify(cloudProg));
         return cloudProg;
       }
     }
   } catch (e) {
-    console.warn('Could not sync with Firestore, using local cache:', e);
+    console.error('Could not sync progress with Firestore; keeping local progress:', e);
+    return localProgress;
   }
 
-  const localProg = loadUserProgress(user.username);
   if (user.uid) {
-    saveUserProgressToFirestore(user.uid, localProg).catch(() => {});
+    await saveUserProgressToFirestore(user.uid, localProgress);
   }
-  return localProg;
+  return localProgress;
 };
 
 export function saveUserProgress(progressOrUser: string | User | UserProgress, progress?: UserProgress): void {
@@ -94,11 +124,15 @@ export function saveUserProgress(progressOrUser: string | User | UserProgress, p
       p = progressOrUser as UserProgress;
     }
 
-    localStorage.setItem(`${PROGRESS_STORAGE_PREFIX}${u.toLowerCase()}`, JSON.stringify(p));
+    const progressToSave = {
+      ...p,
+      updatedAt: new Date().toISOString()
+    };
+    localStorage.setItem(`${PROGRESS_STORAGE_PREFIX}${u.toLowerCase()}`, JSON.stringify(progressToSave));
 
     // Async sync to Firestore if UID available
     if (uid) {
-      saveUserProgressToFirestore(uid, p).catch(() => {});
+      saveUserProgressToFirestore(uid, progressToSave).catch(() => {});
     }
   } catch (e) {
     console.error('Error saving user progress:', e);

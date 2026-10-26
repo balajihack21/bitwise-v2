@@ -19,6 +19,7 @@ import {
   deleteStudentFromFirestore,
   exportFirestoreToJSON,
   sanitizeStudentAssignments,
+  recoverCompletionsFromAcceptedSubmissions,
 } from '../services/firebase';
 import { parseSeedFile, SeedStudentRow } from '../services/seedParser';
 import { MOCK_COURSES } from '../constants';
@@ -71,6 +72,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [passwordChangeError, setPasswordChangeError] = useState<string | null>(null);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [isRecoveringProgress, setIsRecoveringProgress] = useState(false);
 
   // Instructor Course Scoping:
   const currentInstructorEmail = currentUser?.email?.toLowerCase().trim();
@@ -1435,6 +1437,41 @@ solve()`
                   className="px-3 py-2 bg-amber-600 text-white text-xs font-bold rounded-lg hover:bg-amber-700 cursor-pointer"
                 >
                   Migrate Assignment Fields
+                </button>
+                <button
+                  type="button"
+                  disabled={isRecoveringProgress}
+                  onClick={async () => {
+                    const shouldRecover = window.confirm(
+                      'Recover missing completed coding lessons from accepted submissions in Firestore? This only adds matching non-practice lesson IDs for known student accounts, and does not alter existing completions.'
+                    );
+                    if (!shouldRecover) return;
+
+                    setIsRecoveringProgress(true);
+                    try {
+                      const result = await recoverCompletionsFromAcceptedSubmissions(courses);
+                      const displayedErrors = result.errors.slice(0, 8);
+                      const omittedErrorCount = result.errors.length - displayedErrors.length;
+                      const errors = result.errors.length
+                        ? `\nFailed student records: ${result.errors.length}\n${displayedErrors.join('\n')}${omittedErrorCount > 0 ? `\n...and ${omittedErrorCount} more. See the browser console for the full list.` : ''}`
+                        : '';
+                      if (result.errors.length > 0) {
+                        console.error('Some student progress records could not be recovered:', result.errors);
+                      }
+                      window.alert(
+                        `Progress recovery finished.\nStudents updated: ${result.studentsUpdated}\nCompletions restored: ${result.completionsAdded}\nStudent records failed after retries: ${result.errors.length}${errors}`
+                      );
+                      if (result.studentsUpdated > 0) await loadStudents();
+                    } catch (error) {
+                      console.error('Failed to recover student progress from accepted submissions:', error);
+                      window.alert(`Progress recovery failed: ${error instanceof Error ? error.message : String(error)}`);
+                    } finally {
+                      setIsRecoveringProgress(false);
+                    }
+                  }}
+                  className="px-3 py-2 bg-emerald-700 text-white text-xs font-bold rounded-lg hover:bg-emerald-800 cursor-pointer disabled:cursor-wait disabled:opacity-60"
+                >
+                  {isRecoveringProgress ? 'Recovering Progress...' : 'Recover Accepted Completions'}
                 </button>
               </>
             )}
