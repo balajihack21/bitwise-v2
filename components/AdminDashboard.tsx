@@ -137,6 +137,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [studentDeptFilter, setStudentDeptFilter] = useState<string>('ALL');
   const [studentSectionFilter, setStudentSectionFilter] = useState<string>('ALL');
   const [studentYearFilter, setStudentYearFilter] = useState<string>('ALL');
+  const [selectedModuleFilter, setSelectedModuleFilter] = useState<string>('ALL');
   const [submissionFilter, setSubmissionFilter] = useState<string>('ALL');
   const [proctorFilter, setProctorFilter] = useState<'ALL' | 'FLAGGED' | 'WARNING' | 'EXCUSED' | 'SWITCHES' | 'CLEAN'>('ALL');
 
@@ -1340,6 +1341,47 @@ solve()`
       return getProgress(b) - getProgress(a);
     });
   }, [students, studentSearch, studentDeptFilter, studentSectionFilter, studentYearFilter, selectedCourseFilter, selectedInstructorFilter, progressFilter, studentSort, proctorFilter, isInstructor, courses, currentUser, currentInstructorEmail, assignedCourseIds]);
+
+  const selectedReportCourse = selectedCourseFilter === 'ALL'
+    ? undefined
+    : courses.find(course => course.id === selectedCourseFilter);
+  const reportModules = selectedReportCourse?.modules || [];
+  const selectedReportModule = selectedModuleFilter === 'ALL'
+    ? undefined
+    : reportModules.find(module => module.id === selectedModuleFilter);
+  const getStudentModuleProgress = (student: StudentOverview) => {
+    if (!selectedReportCourse || !selectedReportModule) return null;
+    const lessons = selectedReportModule.lessons || [];
+    const completedLessons = lessons.filter(lesson =>
+      student.completedLessonIds?.includes(lesson.id)
+    );
+    return { lessons, completedLessons };
+  };
+  const reportModuleSummary = useMemo(() => {
+    if (!selectedReportModule) return null;
+    const lessonIds = new Set(selectedReportModule.lessons.map(lesson => lesson.id));
+    const completedCount = filteredStudents.reduce(
+      (count, student) => count + (student.completedLessonIds || []).filter(id => lessonIds.has(id)).length,
+      0
+    );
+    const challengeIds = new Set(
+      selectedReportModule.lessons
+        .filter(lesson => lesson.type === 'problem' || lesson.type === 'algorithm' ||
+          lesson.type === 'pseudocode' || lesson.type === 'flowchart')
+        .map(lesson => lesson.id)
+    );
+    const completedChallengeCount = filteredStudents.reduce(
+      (count, student) => count + (student.completedLessonIds || []).filter(id => challengeIds.has(id)).length,
+      0
+    );
+    return {
+      studentCount: filteredStudents.length,
+      completedCount,
+      possibleCount: filteredStudents.length * selectedReportModule.lessons.length,
+      completedChallengeCount,
+      possibleChallengeCount: filteredStudents.length * challengeIds.size
+    };
+  }, [selectedReportModule, filteredStudents]);
 
   const instructorProgress = useMemo(
     () => students.filter(student => student.role === 'instructor'),
@@ -2877,7 +2919,10 @@ solve()`
                       <span className="text-xs font-bold text-slate-600 whitespace-nowrap">Filter Course:</span>
                       <select
                         value={selectedCourseFilter}
-                        onChange={e => setSelectedCourseFilter(e.target.value)}
+                        onChange={e => {
+                          setSelectedCourseFilter(e.target.value);
+                          setSelectedModuleFilter('ALL');
+                        }}
                         className="px-3 py-1.5 bg-white border border-blue-200 rounded-xl text-xs font-semibold text-slate-800 outline-none cursor-pointer"
                       >
                         <option value="ALL">All Assigned Courses</option>
@@ -3119,14 +3164,42 @@ solve()`
                     <div className="flex items-center gap-2">
                       <h2 className="text-base font-bold text-slate-900">Student Course Progress & Performance</h2>
                       <span className="px-2 py-0.5 bg-bitwise-100 text-bitwise-800 text-xs font-bold rounded-full">
-                        {students.length} Registered Students
+                        {filteredStudents.length} Matching Students
                       </span>
                     </div>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      Track which courses each student is enrolled in, proctoring tab switches & infractions, and export reports to Excel.
+                      Student filters define which records are exported. Course and unit selections scope the progress details in the report.
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2.5">
+                    <select
+                      value={selectedCourseFilter}
+                      onChange={e => {
+                        setSelectedCourseFilter(e.target.value);
+                        setSelectedModuleFilter('ALL');
+                      }}
+                      className="px-2.5 py-1.5 border border-bitwise-200 rounded-lg text-xs font-semibold text-slate-700 bg-bitwise-50 outline-none focus:border-bitwise-500 cursor-pointer"
+                      title="Limit the report to a course"
+                    >
+                      <option value="ALL">All Courses</option>
+                      {visibleCourses.map(course => (
+                        <option key={course.id} value={course.id}>{course.title}</option>
+                      ))}
+                    </select>
+
+                    <select
+                      value={selectedModuleFilter}
+                      disabled={!selectedReportCourse}
+                      onChange={e => setSelectedModuleFilter(e.target.value)}
+                      className="px-2.5 py-1.5 border border-violet-200 rounded-lg text-xs font-semibold text-slate-700 bg-violet-50 outline-none focus:border-violet-500 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                      title={selectedReportCourse ? 'Show lesson progress for a specific unit' : 'Choose a course first to filter by unit'}
+                    >
+                      <option value="ALL">{selectedReportCourse ? 'All Units' : 'Select course first'}</option>
+                      {reportModules.map(module => (
+                        <option key={module.id} value={module.id}>{module.title}</option>
+                      ))}
+                    </select>
+
                     <div className="relative">
                       <i className="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
                       <input
@@ -3228,24 +3301,32 @@ solve()`
                     {/* Export to Excel (.xls) Button */}
                     <button
                       onClick={() => {
-                        exportStudentsToExcel(students, courses);
-                        setExportSuccessMessage('Exported comprehensive Student Progress Report to Excel (.xls)!');
+                        exportStudentsToExcel(filteredStudents, courses, undefined, {
+                          courseId: selectedReportCourse?.id,
+                          moduleId: selectedReportModule?.id
+                        });
+                        setExportSuccessMessage(`Exported ${filteredStudents.length} filtered student records to Excel${selectedReportModule ? ` for ${selectedReportModule.title}` : ''}.`);
                         setTimeout(() => setExportSuccessMessage(null), 4000);
                       }}
-                      title="Export full multi-sheet student progress report to Excel"
+                      disabled={filteredStudents.length === 0}
+                      title={`Export ${filteredStudents.length} students matching the current filters${selectedReportModule ? `, including lesson-by-lesson progress for ${selectedReportModule.title}` : ''}`}
                       className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-sm flex items-center gap-1.5 cursor-pointer transition-colors"
                     >
-                      <i className="fa-solid fa-file-excel"></i> Export Excel (.xls)
+                      <i className="fa-solid fa-file-excel"></i> Export {filteredStudents.length} to Excel
                     </button>
 
                     {/* Export CSV Button */}
                     <button
                       onClick={() => {
-                        exportStudentsToCsv(students, courses);
-                        setExportSuccessMessage('Exported student progress summary to CSV!');
+                        exportStudentsToCsv(filteredStudents, courses, undefined, {
+                          courseId: selectedReportCourse?.id,
+                          moduleId: selectedReportModule?.id
+                        });
+                        setExportSuccessMessage(`Exported ${filteredStudents.length} filtered student records to CSV.`);
                         setTimeout(() => setExportSuccessMessage(null), 4000);
                       }}
-                      title="Export student summary table to CSV"
+                      disabled={filteredStudents.length === 0}
+                      title={`Export ${filteredStudents.length} students matching the current filters`}
                       className="px-3 py-1.5 border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer transition-colors"
                     >
                       <i className="fa-solid fa-file-csv text-slate-500"></i> Export CSV
@@ -3259,6 +3340,32 @@ solve()`
                     </button>
                   </div>
                 </div>
+
+                {reportModuleSummary && selectedReportModule && selectedReportCourse && (
+                  <div className="mb-4 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <div className="text-xs font-bold text-violet-900">
+                          Unit report: {selectedReportCourse.title} / {selectedReportModule.title}
+                        </div>
+                        <div className="mt-1 text-[11px] text-violet-800">
+                          {reportModuleSummary.studentCount} filtered students · {selectedReportModule.lessons.length} lessons · {selectedReportModule.lessons.filter(lesson =>
+                            lesson.type === 'problem' || lesson.type === 'algorithm' || lesson.type === 'pseudocode' || lesson.type === 'flowchart'
+                          ).length} challenges · {reportModuleSummary.completedChallengeCount}/{reportModuleSummary.possibleChallengeCount} challenge completions
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-lg font-black text-violet-900">
+                          {reportModuleSummary.completedCount}/{reportModuleSummary.possibleCount}
+                        </div>
+                        <div className="text-[10px] font-semibold text-violet-700">lesson completions across filtered students</div>
+                      </div>
+                    </div>
+                    <p className="mt-2 text-[10px] text-violet-700">
+                      Each student row lists completed lesson names; the Excel export includes every lesson in this unit with each student’s completion status.
+                    </p>
+                  </div>
+                )}
 
                 {courseResetNotification && (
                   <div className="mb-4 p-3 bg-emerald-50 border border-emerald-300 rounded-xl text-xs font-bold text-emerald-800 flex items-center justify-between animate-in fade-in duration-200">
@@ -3319,6 +3426,9 @@ solve()`
                               <th className="p-3.5">Reg No / Section</th>
                               <th className="p-3.5">Enrolled Courses & Progress</th>
                               <th className="p-3.5">Completed Lessons</th>
+                              <th className="p-3.5">
+                                {selectedReportModule ? `${selectedReportModule.title} Progress` : 'Selected Unit Progress'}
+                              </th>
                               <th className="p-3.5">XP & Streak</th>
                               <th className="p-3.5">Submissions</th>
                               <th className="p-3.5">Proctoring & Tab Switches</th>
@@ -3471,6 +3581,45 @@ solve()`
                                     {student.completedLessonsCount}
                                   </div>
                                   <div className="text-xs text-slate-500">lessons completed</div>
+                                </td>
+
+                                <td className="p-3.5 align-top">
+                                  {(() => {
+                                    const unitProgress = getStudentModuleProgress(student);
+                                    if (!selectedReportModule || !unitProgress) {
+                                      return <span className="text-[11px] text-slate-400">Select a course and unit</span>;
+                                    }
+                                    return (
+                                      <div className="min-w-[180px] max-w-[260px]">
+                                        <div className="font-bold text-slate-800 text-xs">
+                                          {unitProgress.completedLessons.length}/{unitProgress.lessons.length} lessons
+                                        </div>
+                                        <div className="text-[10px] text-violet-700">
+                                          {unitProgress.lessons.filter(lesson =>
+                                            ['problem', 'algorithm', 'pseudocode', 'flowchart'].includes(lesson.type)
+                                          ).filter(lesson => student.completedLessonIds?.includes(lesson.id)).length}/
+                                          {unitProgress.lessons.filter(lesson =>
+                                            ['problem', 'algorithm', 'pseudocode', 'flowchart'].includes(lesson.type)
+                                          ).length} challenges completed
+                                        </div>
+                                        <div className="mt-1 space-y-0.5">
+                                          {unitProgress.lessons.map(lesson => {
+                                            const completed = student.completedLessonIds?.includes(lesson.id);
+                                            return (
+                                              <div
+                                                key={lesson.id}
+                                                className={`truncate text-[10px] ${completed ? 'text-emerald-700 font-semibold' : 'text-slate-400'}`}
+                                                title={`${completed ? 'Completed' : 'Pending'}: ${lesson.title}`}
+                                              >
+                                                <i className={`fa-solid ${completed ? 'fa-circle-check' : 'fa-circle'} mr-1`}></i>
+                                                {lesson.title}
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+                                    );
+                                  })()}
                                 </td>
 
                                 <td className="p-3.5 align-top">

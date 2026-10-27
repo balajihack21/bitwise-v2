@@ -75,9 +75,21 @@ const downloadFile = (content: string, filename: string, mimeType: string) => {
 export const exportStudentsToExcel = (
   students: StudentOverview[],
   catalogCourses: Course[],
-  filename: string = `Bitwise_Student_Progress_${new Date().toISOString().split('T')[0]}.xls`
+  filename: string = `Bitwise_Student_Progress_${new Date().toISOString().split('T')[0]}.xls`,
+  options: { courseId?: string; moduleId?: string } = {}
 ) => {
   const dateStr = new Date().toLocaleString();
+  const selectedCourse = options.courseId
+    ? catalogCourses.find(course => course.id === options.courseId)
+    : undefined;
+  const selectedModules = selectedCourse
+    ? selectedCourse.modules.filter(module => !options.moduleId || module.id === options.moduleId)
+    : [];
+  const selectedLessonIds = new Set(selectedModules.flatMap(module => module.lessons.map(lesson => lesson.id)));
+  const getStudentCourses = (student: StudentOverview) =>
+    (student.enrolledCourses || []).filter(courseProgress =>
+      !options.courseId || courseProgress.courseId === options.courseId
+    );
 
   // 1. Build XML Spreadsheet Workbook
   let xml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -241,7 +253,7 @@ export const exportStudentsToExcel = (
 `;
 
   students.forEach(s => {
-    const enrolledCourses = s.enrolledCourses || [];
+    const enrolledCourses = getStudentCourses(s);
     const activeCourses = enrolledCourses.filter(c => c.completedLessons > 0);
     const activeCourseTitles = activeCourses.length > 0 
       ? activeCourses.map(c => `${c.courseTitle} (${c.completedLessons}/${c.totalLessons})`).join(', ')
@@ -270,10 +282,17 @@ export const exportStudentsToExcel = (
     <Cell ss:StyleID="DataCellCenter"><Data ss:Type="String">${escapeXml(s.role)}</Data></Cell>
     <Cell ss:StyleID="BadgeAmber"><Data ss:Type="Number">${s.xp || 0}</Data></Cell>
     <Cell ss:StyleID="DataCellCenter"><Data ss:Type="Number">${s.streakDays || 1}</Data></Cell>
-    <Cell ss:StyleID="DataCellCenter"><Data ss:Type="Number">${s.completedLessonsCount || 0}</Data></Cell>
+    <Cell ss:StyleID="DataCellCenter"><Data ss:Type="Number">${options.courseId
+      ? (s.completedLessonIds || []).filter(lessonId => selectedLessonIds.has(lessonId)).length
+      : (s.completedLessonsCount || 0)}</Data></Cell>
     <Cell ss:StyleID="DataCellCenter"><Data ss:Type="Number">${enrolledCourses.length}</Data></Cell>
     <Cell ss:StyleID="DataCell"><Data ss:Type="String">${escapeXml(activeCourseTitles)}</Data></Cell>
-    <Cell ss:StyleID="DataCellCenter"><Data ss:Type="Number">${s.submissionsCount || s.submissions?.length || 0}</Data></Cell>
+    <Cell ss:StyleID="DataCellCenter"><Data ss:Type="Number">${options.courseId
+      ? (s.submissions || []).filter(submission =>
+          submission.courseId === options.courseId &&
+          (!options.moduleId || selectedLessonIds.has(submission.problemId))
+        ).length
+      : (s.submissionsCount || s.submissions?.length || 0)}</Data></Cell>
     <Cell ss:StyleID="DataCellCenter"><Data ss:Type="Number">${s.tabSwitchCount || 0}</Data></Cell>
     <Cell ss:StyleID="DataCellCenter"><Data ss:Type="Number">${s.focusLossCount || 0}</Data></Cell>
     <Cell ss:StyleID="DataCellCenter"><Data ss:Type="Number">${s.testExitAttempts || 0}</Data></Cell>
@@ -340,15 +359,31 @@ export const exportStudentsToExcel = (
 `;
 
   students.forEach(s => {
-    const enrolled = s.enrolledCourses || [];
+    const enrolled = getStudentCourses(s);
     enrolled.forEach(cp => {
-      const status = cp.isCompleted
+      const selectedModule = selectedModules.find(module => module.id === options.moduleId);
+      const moduleCompletedLessons = selectedModule?.lessons.filter(lesson =>
+        s.completedLessonIds?.includes(lesson.id)
+      ).length;
+      const completedLessons = moduleCompletedLessons ?? cp.completedLessons;
+      const totalLessons = selectedModule?.lessons.length ?? cp.totalLessons;
+      const progressPercentage = totalLessons > 0
+        ? Math.round((completedLessons / totalLessons) * 100)
+        : 0;
+      const moduleChallengeIds = selectedModule?.lessons
+        .filter(lesson => ['problem', 'algorithm', 'pseudocode', 'flowchart'].includes(lesson.type))
+        .map(lesson => lesson.id);
+      const problemsSolved = moduleChallengeIds
+        ? (s.completedLessonIds || []).filter(id => moduleChallengeIds.includes(id)).length
+        : cp.problemsSolved;
+      const totalProblems = moduleChallengeIds?.length ?? cp.totalProblems;
+      const status = progressPercentage === 100
         ? 'Completed (100%)'
-        : cp.completedLessons > 0
-        ? `In Progress (${cp.progressPercentage}%)`
+        : completedLessons > 0
+        ? `In Progress (${progressPercentage}%)`
         : 'Not Started (0%)';
 
-      const styleId = cp.isCompleted ? 'BadgeGreen' : cp.completedLessons > 0 ? 'BadgeBlue' : 'DataCellCenter';
+      const styleId = progressPercentage === 100 ? 'BadgeGreen' : completedLessons > 0 ? 'BadgeBlue' : 'DataCellCenter';
 
       xml += `
    <Row ss:Height="20">
@@ -356,11 +391,11 @@ export const exportStudentsToExcel = (
     <Cell ss:StyleID="DataCell"><Data ss:Type="String">${escapeXml(s.email)}</Data></Cell>
     <Cell ss:StyleID="DataCell"><Data ss:Type="String">${escapeXml(cp.courseTitle)}</Data></Cell>
     <Cell ss:StyleID="DataCellCenter"><Data ss:Type="String">${escapeXml(cp.level || 'Intermediate')}</Data></Cell>
-    <Cell ss:StyleID="DataCellCenter"><Data ss:Type="Number">${cp.completedLessons}</Data></Cell>
-    <Cell ss:StyleID="DataCellCenter"><Data ss:Type="Number">${cp.totalLessons}</Data></Cell>
-    <Cell ss:StyleID="${styleId}"><Data ss:Type="String">${cp.progressPercentage}%</Data></Cell>
-    <Cell ss:StyleID="DataCellCenter"><Data ss:Type="Number">${cp.problemsSolved}</Data></Cell>
-    <Cell ss:StyleID="DataCellCenter"><Data ss:Type="Number">${cp.totalProblems}</Data></Cell>
+    <Cell ss:StyleID="DataCellCenter"><Data ss:Type="Number">${completedLessons}</Data></Cell>
+    <Cell ss:StyleID="DataCellCenter"><Data ss:Type="Number">${totalLessons}</Data></Cell>
+    <Cell ss:StyleID="${styleId}"><Data ss:Type="String">${progressPercentage}%</Data></Cell>
+    <Cell ss:StyleID="DataCellCenter"><Data ss:Type="Number">${problemsSolved}</Data></Cell>
+    <Cell ss:StyleID="DataCellCenter"><Data ss:Type="Number">${totalProblems}</Data></Cell>
     <Cell ss:StyleID="${styleId}"><Data ss:Type="String">${escapeXml(status)}</Data></Cell>
    </Row>`;
     });
@@ -410,7 +445,7 @@ export const exportStudentsToExcel = (
 `;
 
   students.forEach(s => {
-    const enrolled = s.enrolledCourses || [];
+    const enrolled = getStudentCourses(s);
     enrolled.forEach(cp => {
       const course = catalogCourses.find(item => item.id === cp.courseId);
       const assessment = getCalculatedInternalAssessment(s, cp.courseId, course);
@@ -480,7 +515,12 @@ export const exportStudentsToExcel = (
 
   let subCount = 0;
   students.forEach(s => {
-    (s.submissions || []).forEach(sub => {
+    (s.submissions || [])
+      .filter(sub =>
+        (!options.courseId || sub.courseId === options.courseId) &&
+        (!options.moduleId || selectedLessonIds.has(sub.problemId))
+      )
+      .forEach(sub => {
       subCount++;
       const statusStyle = sub.status === 'ACCEPTED' ? 'BadgeGreen' : 'BadgeAmber';
       const switchStyle = (sub.tabSwitchesDuringTest || 0) > 0 ? 'BadgeAmber' : 'DataCellCenter';
@@ -514,6 +554,78 @@ export const exportStudentsToExcel = (
   xml += `
   </Table>
  </Worksheet>
+`;
+
+  if (selectedCourse) {
+    xml += `
+ <Worksheet ss:Name="Unit Lesson Details">
+  <Table ss:DefaultRowHeight="20">
+   <Column ss:Width="180"/><Column ss:Width="220"/><Column ss:Width="220"/>
+   <Column ss:Width="220"/><Column ss:Width="100"/><Column ss:Width="100"/>
+   <Column ss:Width="120"/><Column ss:Width="120"/><Column ss:Width="260"/>
+   <Column ss:Width="120"/><Column ss:Width="110"/><Column ss:Width="120"/>
+   <Row ss:Height="28">
+    <Cell ss:MergeAcross="11" ss:StyleID="TitleStyle">
+     <Data ss:Type="String">Unit-by-Unit Lesson Completion Details</Data>
+    </Cell>
+   </Row>
+   <Row ss:Height="18">
+    <Cell ss:MergeAcross="11" ss:StyleID="SubtitleStyle">
+     <Data ss:Type="String">${escapeXml(selectedCourse.title)}${options.moduleId ? ` | ${escapeXml(selectedModules[0]?.title || '')}` : ' | All units'} | ${students.length} filtered students</Data>
+    </Cell>
+   </Row>
+   <Row ss:Height="25">
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Student Name</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Email</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Course</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Unit</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Completed</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Total Lessons</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Challenges Completed</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Total Challenges</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Lesson</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Lesson Type</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Status</Data></Cell>
+    <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Deadline</Data></Cell>
+   </Row>`;
+
+    students.forEach(student => {
+      selectedModules.forEach(module => {
+        const completedLessons = module.lessons.filter(lesson =>
+          student.completedLessonIds?.includes(lesson.id)
+        );
+        const isChallenge = (lessonType: string) =>
+          ['problem', 'algorithm', 'pseudocode', 'flowchart'].includes(lessonType);
+        const completedChallenges = completedLessons.filter(lesson => isChallenge(lesson.type)).length;
+        const totalChallenges = module.lessons.filter(lesson => isChallenge(lesson.type)).length;
+        module.lessons.forEach(lesson => {
+          const completed = student.completedLessonIds?.includes(lesson.id) || false;
+          xml += `
+   <Row ss:Height="20">
+    <Cell ss:StyleID="DataCell"><Data ss:Type="String">${escapeXml(student.displayName)}</Data></Cell>
+    <Cell ss:StyleID="DataCell"><Data ss:Type="String">${escapeXml(student.email)}</Data></Cell>
+    <Cell ss:StyleID="DataCell"><Data ss:Type="String">${escapeXml(selectedCourse.title)}</Data></Cell>
+    <Cell ss:StyleID="DataCell"><Data ss:Type="String">${escapeXml(module.title)}</Data></Cell>
+    <Cell ss:StyleID="DataCellCenter"><Data ss:Type="Number">${completedLessons.length}</Data></Cell>
+    <Cell ss:StyleID="DataCellCenter"><Data ss:Type="Number">${module.lessons.length}</Data></Cell>
+    <Cell ss:StyleID="DataCellCenter"><Data ss:Type="Number">${completedChallenges}</Data></Cell>
+    <Cell ss:StyleID="DataCellCenter"><Data ss:Type="Number">${totalChallenges}</Data></Cell>
+    <Cell ss:StyleID="DataCell"><Data ss:Type="String">${escapeXml(lesson.title)}</Data></Cell>
+    <Cell ss:StyleID="DataCellCenter"><Data ss:Type="String">${escapeXml(lesson.type)}</Data></Cell>
+    <Cell ss:StyleID="${completed ? 'BadgeGreen' : 'DataCellCenter'}"><Data ss:Type="String">${completed ? 'Completed' : 'Pending'}</Data></Cell>
+    <Cell ss:StyleID="DataCellCenter"><Data ss:Type="String">${escapeXml(lesson.deadlineDate || '')}</Data></Cell>
+   </Row>`;
+        });
+      });
+    });
+
+    xml += `
+  </Table>
+ </Worksheet>
+`;
+  }
+
+  xml += `
 </Workbook>`;
 
   downloadFile(xml, filename, 'application/vnd.ms-excel');
@@ -525,7 +637,8 @@ export const exportStudentsToExcel = (
 export const exportStudentsToCsv = (
   students: StudentOverview[],
   catalogCourses: Course[],
-  filename: string = `Bitwise_Students_Export_${new Date().toISOString().split('T')[0]}.csv`
+  filename: string = `Bitwise_Students_Export_${new Date().toISOString().split('T')[0]}.csv`,
+  options: { courseId?: string; moduleId?: string } = {}
 ) => {
   const headers = [
     'Student Name',
@@ -536,6 +649,10 @@ export const exportStudentsToCsv = (
     'Completed Lessons',
     'Enrolled Courses Count',
     'Course Details (Title: Completed/Total - %)',
+    'Selected Unit',
+    'Unit Lessons Completed',
+    'Unit Total Lessons',
+    'Completed Lesson Names',
     'Submissions Count',
     'Tab Switches',
     'Focus Losses',
@@ -553,11 +670,27 @@ export const exportStudentsToCsv = (
 
   const escapeCsv = (str: string) => `"${str.replace(/"/g, '""')}"`;
 
+  const selectedCourse = options.courseId
+    ? catalogCourses.find(course => course.id === options.courseId)
+    : undefined;
+  const selectedModule = selectedCourse?.modules.find(module => module.id === options.moduleId);
+  const scopedLessonIds = selectedModule
+    ? new Set(selectedModule.lessons.map(lesson => lesson.id))
+    : selectedCourse
+      ? new Set(selectedCourse.modules.flatMap(module => module.lessons.map(lesson => lesson.id)))
+      : undefined;
   const rows = students.map(s => {
-    const enrolled = s.enrolledCourses || [];
-    const courseDetails = enrolled
-      .map(c => `${c.courseTitle}: ${c.completedLessons}/${c.totalLessons} (${c.progressPercentage}%)`)
-      .join(' | ');
+    const enrolled = (s.enrolledCourses || []).filter(courseProgress =>
+      !options.courseId || courseProgress.courseId === options.courseId
+    );
+    const unitCompletedLessons = selectedModule?.lessons.filter(lesson =>
+      s.completedLessonIds?.includes(lesson.id)
+    ) || [];
+    const courseDetails = selectedModule
+      ? `${selectedCourse?.title} / ${selectedModule.title}: ${unitCompletedLessons.length}/${selectedModule.lessons.length} (${selectedModule.lessons.length > 0 ? Math.round((unitCompletedLessons.length / selectedModule.lessons.length) * 100) : 0}%)`
+      : enrolled
+          .map(c => `${c.courseTitle}: ${c.completedLessons}/${c.totalLessons} (${c.progressPercentage}%)`)
+          .join(' | ');
     const internalSummary = enrolled.reduce((acc, cp) => {
       const course = catalogCourses.find(item => item.id === cp.courseId);
       const assessment = getCalculatedInternalAssessment(s, cp.courseId, course);
@@ -578,10 +711,21 @@ export const exportStudentsToCsv = (
       escapeCsv(s.role),
       s.xp || 0,
       s.streakDays || 1,
-      s.completedLessonsCount || 0,
+      scopedLessonIds
+        ? (s.completedLessonIds || []).filter(lessonId => scopedLessonIds.has(lessonId)).length
+        : (s.completedLessonsCount || 0),
       enrolled.length,
       escapeCsv(courseDetails),
-      s.submissionsCount || s.submissions?.length || 0,
+      escapeCsv(selectedModule?.title || ''),
+      selectedModule ? unitCompletedLessons.length : '',
+      selectedModule?.lessons.length ?? '',
+      escapeCsv(unitCompletedLessons.map(lesson => lesson.title).join(' | ')),
+      options.courseId
+        ? (s.submissions || []).filter(submission =>
+            submission.courseId === options.courseId &&
+            (!options.moduleId || scopedLessonIds?.has(submission.problemId))
+          ).length
+        : (s.submissionsCount || s.submissions?.length || 0),
       s.tabSwitchCount || 0,
       s.focusLossCount || 0,
       s.testExitAttempts || 0,
