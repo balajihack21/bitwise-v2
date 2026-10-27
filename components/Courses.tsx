@@ -468,21 +468,6 @@ const Courses: React.FC<CoursesProps> = ({
             </h1>
           </div>
 
-          <div className="flex items-center gap-4">
-            {/* Live Course Progress Widget */}
-            <div className="flex items-center gap-2.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl text-xs">
-              <span className="text-slate-500 font-medium">Track Progress:</span>
-              <div className="w-24 bg-slate-200 h-2 rounded-full overflow-hidden">
-                <div 
-                  className="bg-gradient-to-r from-bitwise-500 to-emerald-500 h-full rounded-full transition-all duration-300"
-                  style={{ width: `${courseStats.percentage}%` }}
-                ></div>
-              </div>
-              <span className="font-bold text-slate-800 font-mono">{courseStats.percentage}%</span>
-              <span className="text-slate-400">({courseStats.completed}/{courseStats.total})</span>
-            </div>
-
-          </div>
         </div>
 
         {/* Locked Notice Alert Banner */}
@@ -1019,7 +1004,6 @@ const Courses: React.FC<CoursesProps> = ({
                     <div className="space-y-1 mb-4">
                       <div className="flex justify-between text-[11px] font-semibold text-slate-600">
                         <span>{stats.problemsSolved}/{stats.totalProblems} Challenges Solved</span>
-                        <span className="text-bitwise-600 font-bold">{stats.percentage}%</span>
                       </div>
                       <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
                         <div 

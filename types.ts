@@ -7,7 +7,8 @@ export enum ViewState {
   ABOUT = 'ABOUT',
   AUTH = 'AUTH',
   ADMIN = 'ADMIN',
-  INSTRUCTOR = 'INSTRUCTOR'
+  INSTRUCTOR = 'INSTRUCTOR',
+  ISSUES = 'ISSUES'
 }
 
 export type SupportedLanguage = 'en' | 'ta' | 'te' | 'hi' | 'es' | 'fr';

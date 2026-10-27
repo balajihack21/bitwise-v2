@@ -20,6 +20,11 @@ import {
   exportFirestoreToJSON,
   sanitizeStudentAssignments,
   recoverCompletionsFromAcceptedSubmissions,
+  fetchIssueReports,
+  getIssueReportScreenshotUrl,
+  updateIssueReportStatus,
+  IssueReport,
+  IssueReportStatus,
 } from '../services/firebase';
 import { parseSeedFile, SeedStudentRow } from '../services/seedParser';
 import { MOCK_COURSES } from '../constants';
@@ -50,7 +55,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const isInstructor = currentUser?.role === 'instructor';
   const canManageCourseTests = currentUser?.role === 'instructor' || currentUser?.role === 'admin';
   const canViewInternalMarks = currentUser?.role === 'instructor' || currentUser?.role === 'admin';
-  const [activeTab, setActiveTab] = useState<'courses' | 'instructors' | 'students' | 'instructor-progress' | 'submissions' | 'coding-tests' | 'practice-problems'>('courses');
+  const [activeTab, setActiveTab] = useState<'courses' | 'instructors' | 'students' | 'instructor-progress' | 'submissions' | 'coding-tests' | 'practice-problems' | 'issues'>('courses');
   const [practiceCourseId, setPracticeCourseId] = useState('');
   const [practiceTopic, setPracticeTopic] = useState('');
   const [practiceTitle, setPracticeTitle] = useState('');
@@ -122,6 +127,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [isLoadingStudents, setIsLoadingStudents] = useState<boolean>(false);
   const [isLoadingSubmissions, setIsLoadingSubmissions] = useState<boolean>(false);
   const [exportSuccessMessage, setExportSuccessMessage] = useState<string | null>(null);
+  const [issueReports, setIssueReports] = useState<IssueReport[]>([]);
+  const [isLoadingIssueReports, setIsLoadingIssueReports] = useState(false);
+  const [issueReportsError, setIssueReportsError] = useState<string | null>(null);
+  const [updatingIssueReportId, setUpdatingIssueReportId] = useState<string | null>(null);
+  const [issueScreenshotUrls, setIssueScreenshotUrls] = useState<Record<string, string>>({});
+  const [loadingIssueScreenshotId, setLoadingIssueScreenshotId] = useState<string | null>(null);
 
   // Instructors state
   const [instructors, setInstructors] = useState<InstructorAccount[]>([]);
@@ -391,6 +402,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       loadStudents();
     } else if (activeTab === 'submissions') {
       loadSubmissions();
+    } else if (activeTab === 'issues' && !isInstructor) {
+      loadIssueReports();
     } else if (activeTab === 'instructors' && !isInstructor) {
       fetchInstructorsList().then(setInstructors).catch(() => setInstructors([]));
     }
@@ -1000,6 +1013,51 @@ public class Main {
       console.error('Failed to load submissions:', e);
     } finally {
       setIsLoadingSubmissions(false);
+    }
+  };
+
+  const loadIssueReports = async () => {
+    setIsLoadingIssueReports(true);
+    setIssueReportsError(null);
+    try {
+      setIssueReports(await fetchIssueReports());
+    } catch (error) {
+      console.error('Failed to load student issue reports:', error);
+      setIssueReportsError('Could not load issue reports. Check Firestore access and try again.');
+    } finally {
+      setIsLoadingIssueReports(false);
+    }
+  };
+
+  const handleIssueStatusChange = async (report: IssueReport, status: IssueReportStatus) => {
+    setUpdatingIssueReportId(report.id);
+    setIssueReportsError(null);
+    try {
+      await updateIssueReportStatus(report.id, status);
+      setIssueReports(previous => previous.map(item =>
+        item.id === report.id
+          ? { ...item, status, updatedAt: new Date().toISOString() }
+          : item
+      ));
+    } catch (error) {
+      console.error('Failed to update student issue status:', error);
+      setIssueReportsError(`Could not update "${report.title}". Check Firestore access and try again.`);
+    } finally {
+      setUpdatingIssueReportId(null);
+    }
+  };
+
+  const handleLoadIssueScreenshot = async (report: IssueReport) => {
+    setLoadingIssueScreenshotId(report.id);
+    setIssueReportsError(null);
+    try {
+      const url = await getIssueReportScreenshotUrl(report.screenshotPath);
+      setIssueScreenshotUrls(previous => ({ ...previous, [report.id]: url }));
+    } catch (error) {
+      console.error(`Failed to load screenshot for issue "${report.id}":`, error);
+      setIssueReportsError(`Could not load the screenshot for "${report.title}". Check Firebase Storage permissions and try again.`);
+    } finally {
+      setLoadingIssueScreenshotId(null);
     }
   };
 
@@ -1637,6 +1695,24 @@ solve()`
 
           {!isInstructor && (
             <button
+              onClick={() => { setActiveTab('issues'); setEditingCourse(null); }}
+              className={`flex-1 py-2.5 px-4 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2 ${
+                activeTab === 'issues' ? 'bg-rose-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <i className="fa-solid fa-triangle-exclamation"></i> Student Issues
+              {issueReports.filter(report => report.status === 'OPEN').length > 0 && (
+                <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${
+                  activeTab === 'issues' ? 'bg-white/20 text-white' : 'bg-rose-100 text-rose-700'
+                }`}>
+                  {issueReports.filter(report => report.status === 'OPEN').length}
+                </span>
+              )}
+            </button>
+          )}
+
+          {!isInstructor && (
+            <button
               onClick={() => { setActiveTab('practice-problems'); setEditingCourse(null); }}
               className={`flex-1 min-w-[170px] py-2.5 px-4 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2 ${
                 activeTab === 'practice-problems' ? 'bg-sky-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
@@ -1647,6 +1723,109 @@ solve()`
           )}
 
         </div>
+
+        {activeTab === 'issues' && !isInstructor && (
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4">
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">Student Issue Reports</h2>
+                <p className="mt-1 text-sm text-slate-500">Review student-reported application issues and update their status.</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-semibold text-slate-500">
+                  {issueReports.filter(report => report.status === 'OPEN').length} open · {issueReports.filter(report => report.status === 'IN_PROGRESS').length} in progress · {issueReports.filter(report => report.status === 'CLOSED').length} closed
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void loadIssueReports()}
+                  disabled={isLoadingIssueReports}
+                  className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  <i className={`fa-solid fa-rotate mr-1.5 ${isLoadingIssueReports ? 'fa-spin' : ''}`}></i>
+                  Refresh
+                </button>
+              </div>
+            </div>
+
+            {issueReportsError && (
+              <div role="alert" className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+                {issueReportsError}
+              </div>
+            )}
+            {isLoadingIssueReports ? (
+              <div className="py-12 text-center text-sm text-slate-500">
+                <i className="fa-solid fa-circle-notch fa-spin mr-2"></i>Loading student reports…
+              </div>
+            ) : issueReports.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-slate-300 py-12 text-center text-sm text-slate-500">
+                {issueReportsError ? 'Reports could not be loaded. Use Refresh to try again.' : 'No student issue reports have been submitted.'}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {issueReports.map(report => (
+                  <article key={report.id} className="rounded-xl border border-slate-200 p-4">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="font-bold text-slate-900">{report.title}</h3>
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase text-slate-600">{report.category}</span>
+                        </div>
+                        <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">{report.description}</p>
+                        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+                          <span><i className="fa-solid fa-user mr-1"></i>{report.studentName}</span>
+                          <span><i className="fa-solid fa-envelope mr-1"></i>{report.studentEmail || 'No email provided'}</span>
+                          {report.registrationNumber && <span>Reg. no: {report.registrationNumber}</span>}
+                          {(report.department || report.section || report.year) && (
+                            <span>{[report.department, report.section, report.year].filter(Boolean).join(' · ')}</span>
+                          )}
+                          <span>Submitted: {new Date(report.createdAt).toLocaleString()}</span>
+                          {report.updatedAt !== report.createdAt && (
+                            <span>Updated: {new Date(report.updatedAt).toLocaleString()}</span>
+                          )}
+                        </div>
+                        <div className="mt-3">
+                          {issueScreenshotUrls[report.id] ? (
+                            <a
+                              href={issueScreenshotUrls[report.id]}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 text-xs font-bold text-bitwise-700 hover:underline"
+                            >
+                              <i className="fa-solid fa-image"></i> View attached screenshot ({report.screenshotName})
+                            </a>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={loadingIssueScreenshotId === report.id}
+                              onClick={() => void handleLoadIssueScreenshot(report)}
+                              className="inline-flex items-center gap-1.5 text-xs font-bold text-bitwise-700 hover:underline disabled:opacity-50"
+                            >
+                              <i className={`fa-solid ${loadingIssueScreenshotId === report.id ? 'fa-spinner fa-spin' : 'fa-image'}`}></i>
+                              {loadingIssueScreenshotId === report.id ? 'Loading screenshot…' : `View attached screenshot (${report.screenshotName})`}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <label className="shrink-0 text-xs font-semibold text-slate-600">
+                        Status
+                        <select
+                          value={report.status}
+                          disabled={updatingIssueReportId === report.id}
+                          onChange={event => void handleIssueStatusChange(report, event.target.value as IssueReportStatus)}
+                          className="mt-1 block min-w-36 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 disabled:opacity-60"
+                        >
+                          <option value="OPEN">Open</option>
+                          <option value="IN_PROGRESS">In progress</option>
+                          <option value="CLOSED">Closed</option>
+                        </select>
+                      </label>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
 
         {activeTab === 'practice-problems' && !isInstructor && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">

@@ -30,6 +30,7 @@ import {
   writeBatch,
   serverTimestamp
 } from 'firebase/firestore';
+import { deleteObject, getDownloadURL, getStorage, ref, uploadBytes } from 'firebase/storage';
 import { User, UserProgress, Course, SubmissionRecord, CourseProgressDetail, ProctorStatus, InstructorAccount, CourseInstructorAssignment, CourseInternalAssessment, StudentProfile } from '../types';
 import { MOCK_COURSES } from '../constants';
 
@@ -49,6 +50,7 @@ export const firebaseConfig = {
 export const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+export const storage = getStorage(app);
 export { onAuthStateChanged };
 
 // Admin account details used by the local/demo fallback.
@@ -2207,6 +2209,114 @@ export const fetchAllSubmissionsFromFirestore = async (limitCount: number = 50):
       return [];
     }
   }
+};
+
+export type IssueReportStatus = 'OPEN' | 'IN_PROGRESS' | 'CLOSED';
+
+export interface IssueReport {
+  id: string;
+  userId: string;
+  studentName: string;
+  studentEmail: string;
+  registrationNumber?: string;
+  department?: string;
+  section?: string;
+  year?: string;
+  title: string;
+  description: string;
+  category: string;
+  screenshotPath: string;
+  screenshotName: string;
+  status: IssueReportStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const submitIssueReport = async (
+  user: User,
+  title: string,
+  description: string,
+  category: string,
+  screenshot: File
+): Promise<void> => {
+  if (!user.uid || user.role !== 'student') {
+    throw new Error('Sign in with a student account to submit an issue.');
+  }
+  const cleanTitle = title.trim();
+  const cleanDescription = description.trim();
+  if (!cleanTitle || !cleanDescription) {
+    throw new Error('Enter both a title and a description for the issue.');
+  }
+  if (!screenshot || !['image/png', 'image/jpeg', 'image/webp'].includes(screenshot.type)) {
+    throw new Error('Attach a PNG, JPEG, or WebP screenshot to submit the issue.');
+  }
+  if (screenshot.size > 5 * 1024 * 1024) {
+    throw new Error('The screenshot must be 5 MB or smaller.');
+  }
+
+  const now = new Date().toISOString();
+  const screenshotPath = `issue-reports/${user.uid}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}-${screenshot.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+  const screenshotRef = ref(storage, screenshotPath);
+  await uploadBytes(screenshotRef, screenshot, { contentType: screenshot.type });
+  try {
+    await addDoc(collection(db, 'issue_reports'), sanitizeForFirestore({
+      userId: user.uid,
+      studentName: user.username,
+      studentEmail: user.email || '',
+      registrationNumber: user.regNo || '',
+      department: user.dept || '',
+      section: user.section || '',
+      year: user.year || '',
+      title: cleanTitle.slice(0, 120),
+      description: cleanDescription.slice(0, 4000),
+      category: category.trim().slice(0, 60) || 'Other',
+      screenshotPath,
+      screenshotName: screenshot.name.slice(0, 255),
+      status: 'OPEN' satisfies IssueReportStatus,
+      createdAt: now,
+      updatedAt: now
+    }));
+  } catch (error) {
+    await deleteObject(screenshotRef).catch(cleanupError => {
+      console.error('Failed to remove issue screenshot after report creation failed:', cleanupError);
+    });
+    throw error;
+  }
+};
+
+export const getIssueReportScreenshotUrl = async (screenshotPath: string): Promise<string> => {
+  if (!screenshotPath.startsWith('issue-reports/')) {
+    throw new Error('Invalid issue screenshot path.');
+  }
+  return getDownloadURL(ref(storage, screenshotPath));
+};
+
+export const fetchIssueReports = async (): Promise<IssueReport[]> => {
+  const snapshot = await getDocs(collection(db, 'issue_reports'));
+  return snapshot.docs
+    .map(reportDoc => ({ id: reportDoc.id, ...reportDoc.data() } as IssueReport))
+    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+};
+
+export const fetchStudentIssueReports = async (userId: string): Promise<IssueReport[]> => {
+  if (!userId) return [];
+  const snapshot = await getDocs(query(collection(db, 'issue_reports'), where('userId', '==', userId)));
+  return snapshot.docs
+    .map(reportDoc => ({ id: reportDoc.id, ...reportDoc.data() } as IssueReport))
+    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+};
+
+export const updateIssueReportStatus = async (
+  reportId: string,
+  status: IssueReportStatus
+): Promise<void> => {
+  if (!reportId || !['OPEN', 'IN_PROGRESS', 'CLOSED'].includes(status)) {
+    throw new Error('A valid issue report and status are required.');
+  }
+  await updateDoc(doc(db, 'issue_reports', reportId), {
+    status,
+    updatedAt: new Date().toISOString()
+  });
 };
 
 export const fetchStudentPracticeSubmissionsFromFirestore = async (userId: string): Promise<SubmissionRecord[]> => {

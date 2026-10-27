@@ -53,9 +53,16 @@ const Header: React.FC<HeaderProps> = ({
     { label: 'Home', view: ViewState.HOME, icon: 'fa-house' },
     { label: 'Courses & Problems', view: ViewState.COURSES, icon: 'fa-book-open' },
     { label: 'Playground', view: ViewState.PLAYGROUND, icon: 'fa-code' },
-    { label: 'My Progress', view: ViewState.PROGRESS, icon: 'fa-chart-pie' },
     { label: 'Practice Problems', view: ViewState.PRACTICE, icon: 'fa-dumbbell' },
   ];
+
+  if (user?.role !== 'student') {
+    navItems.splice(3, 0, { label: 'My Progress', view: ViewState.PROGRESS, icon: 'fa-chart-pie' });
+  }
+
+  if (user?.role === 'student') {
+    navItems.push({ label: 'Report an Issue', view: ViewState.ISSUES, icon: 'fa-triangle-exclamation' });
+  }
 
   if (user?.role === 'admin') {
     navItems.push({ label: 'Admin Dashboard', view: ViewState.ADMIN, icon: 'fa-gear' });
@@ -123,7 +130,7 @@ const Header: React.FC<HeaderProps> = ({
             })}
 
             {/* XP & Streak Widget (Only available for logged-in students/admins) */}
-            {user && (
+            {user && user.role !== 'student' && (
               <div 
                 onClick={() => setView(ViewState.PROGRESS)}
                 className="flex items-center gap-2 px-2.5 py-1 bg-slate-100/90 hover:bg-slate-200/70 rounded-lg cursor-pointer transition-colors border border-slate-200/80 text-xs font-mono"
@@ -258,11 +265,13 @@ const Header: React.FC<HeaderProps> = ({
                         <div className="text-[10px] text-slate-500 font-mono uppercase">{user.role} Account</div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 text-xs font-mono">
-                      <span className="text-bitwise-700 font-semibold">{progress.xp} XP</span>
-                      <span className="text-slate-300">|</span>
-                      <span className="text-amber-700 font-semibold">{progress.streakDays}d</span>
-                    </div>
+                    {user.role !== 'student' && (
+                      <div className="flex items-center gap-2 text-xs font-mono">
+                        <span className="text-bitwise-700 font-semibold">{progress.xp} XP</span>
+                        <span className="text-slate-300">|</span>
+                        <span className="text-amber-700 font-semibold">{progress.streakDays}d</span>
+                      </div>
+                    )}
                   </div>
                   {user.role === 'student' && supportsDocumentFullscreen && (
                     <button

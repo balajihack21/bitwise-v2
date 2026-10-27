@@ -4,6 +4,7 @@ import Footer from './components/Footer';
 import Hero from './components/Hero';
 import Courses from './components/Courses';
 import ProgressDashboard from './components/ProgressDashboard';
+import StudentIssueReports from './components/StudentIssueReports';
 import CodeEditor from './components/CodeEditor';
 import PracticeProblems from './components/PracticeProblems';
 import Login from './components/Login';
@@ -472,7 +473,7 @@ const App: React.FC = () => {
 
   const renderContent = () => {
     // Strict Access Control Guard for Protected Views
-    if (!user && (currentView === ViewState.COURSES || currentView === ViewState.PRACTICE || currentView === ViewState.PLAYGROUND || currentView === ViewState.PROGRESS || currentView === ViewState.ADMIN || currentView === ViewState.INSTRUCTOR)) {
+    if (!user && (currentView === ViewState.COURSES || currentView === ViewState.PRACTICE || currentView === ViewState.PLAYGROUND || currentView === ViewState.PROGRESS || currentView === ViewState.ISSUES || currentView === ViewState.ADMIN || currentView === ViewState.INSTRUCTOR)) {
       return (
         <Login 
           onLogin={handleLogin} 
@@ -542,6 +543,11 @@ const App: React.FC = () => {
             onNavigateToCertificates={() => setCurrentView(ViewState.HOME)}
           />
         );
+
+      case ViewState.ISSUES:
+        return user?.role === 'student'
+          ? <StudentIssueReports user={user} />
+          : <div className="container mx-auto max-w-3xl px-4 py-12 text-center text-slate-600">Issue reporting is available to student accounts.</div>;
 
       case ViewState.PRACTICE:
         return user ? (
