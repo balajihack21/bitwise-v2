@@ -25,6 +25,7 @@ import {
   where, 
   orderBy, 
   limit, 
+  documentId,
   deleteDoc, 
   addDoc,
   writeBatch,
@@ -235,6 +236,34 @@ const normalizeIdentityToken = (value?: string): string =>
     .replace(/\s+/g, '')
     .replace(/[^a-z0-9]/g, '');
 
+const firestoreReadCache = new Map<string, { expiresAt: number; value: unknown }>();
+const firestoreReadRequests = new Map<string, Promise<unknown>>();
+
+const withFirestoreReadCache = async <T>(
+  key: string,
+  load: () => Promise<T>,
+  ttlMs = 60_000
+): Promise<T> => {
+  const cached = firestoreReadCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.value as T;
+
+  const pending = firestoreReadRequests.get(key);
+  if (pending) return pending as Promise<T>;
+
+  const request = load().then(value => {
+    firestoreReadCache.set(key, { value, expiresAt: Date.now() + ttlMs });
+    return value;
+  }).finally(() => {
+    firestoreReadRequests.delete(key);
+  });
+  firestoreReadRequests.set(key, request);
+  return request;
+};
+
+const clearFirestoreReadCache = (key: string): void => {
+  firestoreReadCache.delete(key);
+};
+
 const findStoredStudentByIdentity = (email?: string, regNo?: string) => {
   const accounts = getStoredAccounts();
   const normalizedEmail = normalizeIdentityToken(email);
@@ -256,16 +285,25 @@ const findFirestoreStudentByIdentity = async (email?: string, regNo?: string) =>
   try {
     const candidateDocs = [] as any[];
     if (normalizedEmail) {
-      const emailSnap = await getDocs(query(collection(db, 'users'), where('email', '==', email?.trim().toLowerCase())));
+      const emailSnap = await getDocs(query(
+        collection(db, 'users'),
+        where('email', '==', email?.trim().toLowerCase())
+      ));
       candidateDocs.push(...emailSnap.docs);
     }
-
-    const allUsers = await getDocs(collection(db, 'users'));
-    const byReg = allUsers.docs.filter(docSnap => {
-      const data = docSnap.data();
-      return normalizedRegNo && normalizeIdentityToken(data.regNo) === normalizedRegNo;
-    });
-    candidateDocs.push(...byReg);
+    if (normalizedRegNo) {
+      const regNoSnap = await getDocs(query(
+        collection(db, 'users'),
+        where('regNo', '==', regNo?.trim())
+      ));
+      candidateDocs.push(...regNoSnap.docs);
+      if (candidateDocs.length === 0) {
+        const allUsers = await getDocs(collection(db, 'users'));
+        candidateDocs.push(...allUsers.docs.filter(docSnap =>
+          normalizeIdentityToken(docSnap.data().regNo) === normalizedRegNo
+        ));
+      }
+    }
 
     const unique = new Map<string, any>();
     candidateDocs.forEach(docSnap => {
@@ -1252,31 +1290,59 @@ export const loadUserProgressFromFirestore = async (userId: string): Promise<Use
       if (raw) activeUser = JSON.parse(raw);
     } catch (e) { /* ignore */ }
 
-    const canonicalUid = await resolveCanonicalStudentUid(userId, activeUser?.email, activeUser?.regNo);
     const normalizedEmail = String(activeUser?.email || '').trim().toLowerCase();
     const normalizedRegNo = String(activeUser?.regNo || '').trim();
-    let matchingUserIds: string[] = [];
+    const userCandidates = new Map<string, any>();
     try {
-      const usersSnap = await getDocs(collection(db, 'users'));
-      matchingUserIds = usersSnap.docs
-        .filter(userDoc => {
-          const data = userDoc.data();
-          const sameUid = userDoc.id === userId || userDoc.id === canonicalUid;
-          const sameEmail = normalizedEmail &&
-            String(data.email || '').trim().toLowerCase() === normalizedEmail;
-          const sameRegNo = normalizedRegNo &&
-            String(data.regNo || '').trim() === normalizedRegNo;
-          return sameUid || sameEmail || sameRegNo;
-        })
-        .map(userDoc => userDoc.id);
+      const lookups = [
+        getDoc(doc(db, 'users', userId)),
+        ...(normalizedEmail
+          ? [getDocs(query(collection(db, 'users'), where('email', '==', normalizedEmail)))]
+          : []),
+        ...(normalizedRegNo
+          ? [getDocs(query(collection(db, 'users'), where('regNo', '==', normalizedRegNo)))]
+          : [])
+      ];
+      const snapshots = await Promise.all(lookups);
+      snapshots.forEach(snapshot => {
+        if ('docs' in snapshot) {
+          snapshot.docs.forEach(userDoc => userCandidates.set(userDoc.id, userDoc));
+        } else if (snapshot.exists()) {
+          userCandidates.set(snapshot.id, snapshot);
+        }
+      });
     } catch (usersError) {
-      console.warn('Could not enumerate student identities while loading progress:', usersError);
+      console.warn('Could not resolve matching student identities while loading progress:', usersError);
     }
 
+    const allUserCandidates = Array.from(userCandidates.values());
+    const identityCandidates = allUserCandidates.filter(userDoc => {
+      const data = userDoc.data() || {};
+      if (normalizedEmail) {
+        return String(data.email || '').trim().toLowerCase() === normalizedEmail;
+      }
+      if (normalizedRegNo) {
+        return String(data.regNo || '').trim() === normalizedRegNo;
+      }
+      return userDoc.id === userId;
+    });
+    const canonicalUser = (identityCandidates.length > 0 ? identityCandidates : allUserCandidates).sort((a, b) => {
+      const aIsSeed = a.id.startsWith('seed_');
+      const bIsSeed = b.id.startsWith('seed_');
+      if (aIsSeed !== bIsSeed) return aIsSeed ? -1 : 1;
+      const aData = a.data() || {};
+      const bData = b.data() || {};
+      const aScore = Number((aData.assignedCourseIds || []).length) +
+        Number((aData.courseInstructorAssignments || []).length);
+      const bScore = Number((bData.assignedCourseIds || []).length) +
+        Number((bData.courseInstructorAssignments || []).length);
+      if (aScore !== bScore) return bScore - aScore;
+      return new Date(bData.createdAt || 0).getTime() - new Date(aData.createdAt || 0).getTime();
+    })[0];
     const progressIds = Array.from(new Set([
       userId,
-      canonicalUid,
-      ...matchingUserIds
+      canonicalUser?.id,
+      ...userCandidates.keys()
     ].filter(Boolean)));
     const progressSnapshots = await Promise.all(
       progressIds.map(progressId => getDoc(doc(db, 'user_progress', progressId)))
@@ -2321,7 +2387,11 @@ export const updateIssueReportStatus = async (
 
 export const fetchStudentPracticeSubmissionsFromFirestore = async (userId: string): Promise<SubmissionRecord[]> => {
   if (!userId) return [];
-  const submissionsQuery = query(collection(db, 'submissions'), where('userId', '==', userId));
+  const submissionsQuery = query(
+    collection(db, 'submissions'),
+    where('userId', '==', userId),
+    where('isPractice', '==', true)
+  );
   const snapshot = await getDocs(submissionsQuery);
   return snapshot.docs.map(submissionDoc => {
     const data = submissionDoc.data();
@@ -2332,16 +2402,23 @@ export const fetchStudentPracticeSubmissionsFromFirestore = async (userId: strin
   });
 };
 
-export const fetchAllPracticeSubmissionsFromFirestore = async (): Promise<SubmissionRecord[]> => {
-  const submissionsQuery = query(collection(db, 'submissions'), where('isPractice', '==', true));
-  const snapshot = await getDocs(submissionsQuery);
-  return snapshot.docs.map(submissionDoc => {
-    const data = submissionDoc.data();
-    return {
-      ...data,
-      id: data.id || submissionDoc.id
-    } as SubmissionRecord;
-  });
+export const fetchAllPracticeSubmissionsFromFirestore = async (courseId: string): Promise<SubmissionRecord[]> => {
+  if (!courseId) return [];
+  return withFirestoreReadCache(`practice-submissions:${courseId}`, async () => {
+    const submissionsQuery = query(
+      collection(db, 'submissions'),
+      where('isPractice', '==', true),
+      where('courseId', '==', courseId)
+    );
+    const snapshot = await getDocs(submissionsQuery);
+    return snapshot.docs.map(submissionDoc => {
+      const data = submissionDoc.data();
+      return {
+        ...data,
+        id: data.id || submissionDoc.id
+      } as SubmissionRecord;
+    });
+  }, 30_000);
 };
 
 /**
@@ -2356,25 +2433,32 @@ export const saveCoursesToFirestore = async (courses: Course[]): Promise<void> =
       updatedAt: new Date().toISOString()
     });
     await setDoc(coursesDocRef, sanitizedCourses);
+    firestoreReadCache.set('course-catalog', {
+      value: courses,
+      expiresAt: Date.now() + 60_000
+    });
   } catch (err) {
+    clearFirestoreReadCache('course-catalog');
     console.warn('Failed to save courses catalog to Firestore:', err);
   }
 };
 
 export const loadCoursesFromFirestore = async (): Promise<Course[] | null> => {
-  try {
-    const coursesDocRef = doc(db, 'config', 'course_catalog');
-    const snap = await getDoc(coursesDocRef);
-    if (snap.exists()) {
-      const data = snap.data();
-      if (Array.isArray(data.courses) && data.courses.length > 0) {
-        return data.courses as Course[];
+  return withFirestoreReadCache('course-catalog', async () => {
+    try {
+      const coursesDocRef = doc(db, 'config', 'course_catalog');
+      const snap = await getDoc(coursesDocRef);
+      if (snap.exists()) {
+        const data = snap.data();
+        if (Array.isArray(data.courses) && data.courses.length > 0) {
+          return data.courses as Course[];
+        }
       }
+    } catch (err) {
+      console.warn('Error loading courses catalog from Firestore:', err);
     }
-  } catch (err) {
-    console.warn('Error loading courses catalog from Firestore:', err);
-  }
-  return null;
+    return null;
+  });
 };
 
 export const requestCreativeChallengeRedo = async (
@@ -2819,7 +2903,7 @@ export const getDeletedInstructors = (): string[] => {
 /**
  * Fetch all registered instructors from Firestore & Local Storage
  */
-export const fetchInstructorsList = async (): Promise<InstructorAccount[]> => {
+const fetchInstructorsListUncached = async (): Promise<InstructorAccount[]> => {
   const map = new Map<string, InstructorAccount>();
   const deletedEmails = new Set(getDeletedInstructors().map(e => e.toLowerCase().trim()));
 
@@ -2964,29 +3048,40 @@ export const fetchInstructorsList = async (): Promise<InstructorAccount[]> => {
   return Array.from(map.values());
 };
 
-export const fetchStudentProfiles = async (): Promise<StudentProfile[]> => {
-  try {
-    const snap = await getDocs(collection(db, 'users'));
-    const profiles = snap.docs
-      .map(docSnapshot => {
+export const fetchInstructorsList = async (): Promise<InstructorAccount[]> =>
+  withFirestoreReadCache('instructors', fetchInstructorsListUncached, 30_000);
+
+export const fetchStudentProfiles = async (userIds: string[]): Promise<StudentProfile[]> => {
+  const uniqueIds = Array.from(new Set(userIds.filter(Boolean))).sort();
+  if (uniqueIds.length === 0) return [];
+  const cacheKey = `student-profiles:${uniqueIds.join(',')}`;
+  return withFirestoreReadCache(cacheKey, async () => {
+    const profiles: StudentProfile[] = [];
+    for (let index = 0; index < uniqueIds.length; index += 30) {
+      const uidBatch = uniqueIds.slice(index, index + 30);
+      const snap = await getDocs(query(
+        collection(db, 'users'),
+        where(documentId(), 'in', uidBatch)
+      ));
+      snap.docs.forEach(docSnapshot => {
         const data = docSnapshot.data();
-        if (data.role !== 'student') return null;
-        const profile: StudentProfile = {
+        if (data.role !== 'student') return;
+        profiles.push({
           uid: data.uid || docSnapshot.id,
           displayName: data.displayName || data.email?.split('@')[0] || 'Student',
           dept: data.dept,
           section: data.section,
           regNo: data.regNo,
-          role: 'student' as const
-        };
-        return profile;
-      })
-      .filter(profile => profile !== null);
+          role: 'student'
+        });
+      });
+    }
     return profiles;
-  } catch (error) {
-    console.warn('Failed to load student profiles for practice leaderboard:', error);
-    return [];
-  }
+  }, 30_000);
+};
+
+const invalidateInstructorReadCache = (): void => {
+  clearFirestoreReadCache('instructors');
 };
 
 /**
@@ -3086,6 +3181,7 @@ export const saveInstructorAccount = async (instructor: InstructorAccount, passw
   } catch (e) {
     console.warn('Firestore instructor save warning:', e);
   }
+  invalidateInstructorReadCache();
 };
 
 /**
@@ -3191,6 +3287,7 @@ export const deleteInstructorAccount = async (email: string, uid?: string): Prom
     }));
   } catch (e) {}
 
+  invalidateInstructorReadCache();
   return updatedCourses;
 };
 

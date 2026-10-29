@@ -16,7 +16,7 @@ const PracticeProblems: React.FC<PracticeProblemsProps> = ({ courses, user, prog
   const [topic, setTopic] = useState('ALL');
   const [completionStatus, setCompletionStatus] = useState<'ALL' | 'SOLVED' | 'UNSOLVED'>('ALL');
   const [selected, setSelected] = useState<Lesson | null>(null);
-  const [allSubmissions, setAllSubmissions] = useState<any[]>([]);
+  const [allSubmissions, setAllSubmissions] = useState<SubmissionRecord[]>([]);
   const [studentSubmissions, setStudentSubmissions] = useState<SubmissionRecord[]>([]);
   const [studentProfiles, setStudentProfiles] = useState<StudentProfile[]>([]);
   const [leaderboardLoading, setLeaderboardLoading] = useState(true);
@@ -46,8 +46,19 @@ const PracticeProblems: React.FC<PracticeProblemsProps> = ({ courses, user, prog
   React.useEffect(() => {
     let cancelled = false;
     setLeaderboardLoading(true);
-    Promise.all([fetchAllPracticeSubmissionsFromFirestore(), fetchStudentProfiles()])
-      .then(([submissions, profiles]) => {
+    if (!course?.id) {
+      setAllSubmissions([]);
+      setStudentProfiles([]);
+      setLeaderboardLoading(false);
+      return;
+    }
+
+    fetchAllPracticeSubmissionsFromFirestore(course.id)
+      .then(async submissions => {
+        const participantIds = Array.from(new Set(
+          submissions.map(submission => submission.userId).filter((uid): uid is string => Boolean(uid))
+        ));
+        const profiles = await fetchStudentProfiles(participantIds);
         if (!cancelled) {
           setAllSubmissions(submissions);
           setStudentProfiles(profiles);
@@ -62,7 +73,7 @@ const PracticeProblems: React.FC<PracticeProblemsProps> = ({ courses, user, prog
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [course?.id]);
 
   React.useEffect(() => {
     let cancelled = false;

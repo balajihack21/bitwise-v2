@@ -239,13 +239,6 @@ const App: React.FC = () => {
         };
         setUser(activeUser);
         localStorage.setItem('bitwise_active_user', JSON.stringify(activeUser));
-        try {
-          const syncedProgress = await syncProgressWithFirestore(activeUser);
-          setProgress(syncedProgress);
-        } catch (error) {
-          console.error('Failed to synchronize progress after authentication:', error);
-          setProgress(getUserProgress(activeUser.username));
-        }
       }
     });
 
@@ -313,7 +306,7 @@ const App: React.FC = () => {
       window.removeEventListener('bitwise_courses_updated', handleCoursesUpdated);
       window.removeEventListener('storage', handleStorageChange);
     };
-  }, [user]);
+  }, [user?.uid, user?.username]);
 
   // Sync progress when user changes
   useEffect(() => {
@@ -431,13 +424,6 @@ const App: React.FC = () => {
     setUser(hydratedUser);
     setAuthBanner(null);
     localStorage.setItem('bitwise_active_user', JSON.stringify(hydratedUser));
-    syncProgressWithFirestore(hydratedUser)
-      .then(p => setProgress(p))
-      .catch(error => {
-        console.error('Failed to synchronize progress after login:', error);
-        setProgress(getUserProgress(hydratedUser.username));
-      });
-
     if (pendingTargetView) {
       const target = pendingTargetView;
       setPendingTargetView(null);

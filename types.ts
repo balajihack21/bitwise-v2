@@ -204,6 +204,8 @@ export interface ProctorLogEntry {
 
 export interface SubmissionRecord {
   id: string;
+  userId?: string;
+  username?: string;
   problemId: string;
   problemTitle: string;
   courseId: string;

@@ -1,5 +1,5 @@
 // ...existing code...
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Course, Lesson, Module, ProctorStatus, User, CourseInternalAssessment, PracticeProblem } from '../types';
 import { doc, setDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
@@ -125,6 +125,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [students, setStudents] = useState<StudentOverview[]>([]);
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [isLoadingStudents, setIsLoadingStudents] = useState<boolean>(false);
+  const hasLoadedStudents = useRef(false);
+  const isLoadingStudentsRef = useRef(false);
   const [isLoadingSubmissions, setIsLoadingSubmissions] = useState<boolean>(false);
   const [exportSuccessMessage, setExportSuccessMessage] = useState<string | null>(null);
   const [issueReports, setIssueReports] = useState<IssueReport[]>([]);
@@ -864,7 +866,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setSeedResult(result);
       if (result.success > 0) {
         // Refresh student list after seeding
-        await loadStudents();
+        await loadStudents(true);
       }
     } catch (e: any) {
       setSeedResult({ success: 0, failed: seedPreviewRows.length, errors: [e?.message || 'Unexpected error'] });
@@ -882,7 +884,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     if (fileInput) fileInput.value = '';
   };
 
-  const loadStudents = async () => {
+  const loadStudents = async (force = false) => {
+    if (isLoadingStudentsRef.current || (hasLoadedStudents.current && !force)) return;
+    isLoadingStudentsRef.current = true;
     setIsLoadingStudents(true);
     try {
       const data = await fetchAllStudentsFromFirestore(
@@ -997,9 +1001,11 @@ public class Main {
       } else {
         setStudents(data);
       }
+      hasLoadedStudents.current = true;
     } catch (e) {
       console.error('Failed to load students:', e);
     } finally {
+      isLoadingStudentsRef.current = false;
       setIsLoadingStudents(false);
     }
   };
@@ -1562,7 +1568,7 @@ solve()`
                       window.alert(
                         `Progress recovery finished.\nStudents updated: ${result.studentsUpdated}\nCompletions restored: ${result.completionsAdded}\nStudent records failed after retries: ${result.errors.length}${errors}`
                       );
-                      if (result.studentsUpdated > 0) await loadStudents();
+                      if (result.studentsUpdated > 0) await loadStudents(true);
                     } catch (error) {
                       console.error('Failed to recover student progress from accepted submissions:', error);
                       window.alert(`Progress recovery failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -3512,7 +3518,7 @@ solve()`
                     </button>
 
                     <button
-                      onClick={loadStudents}
+                      onClick={() => void loadStudents(true)}
                       className="px-3 py-1.5 border border-slate-200 hover:bg-slate-50 text-xs font-bold rounded-lg text-slate-600 flex items-center gap-1.5 cursor-pointer"
                     >
                       <i className={`fa-solid fa-rotate ${isLoadingStudents ? 'fa-spin' : ''}`}></i> Refresh

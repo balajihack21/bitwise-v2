@@ -100,8 +100,26 @@ const loadCachedUserProgress = (username: string): UserProgress => {
 /**
  * Async fetch user progress from Firestore with localStorage fallback
  */
+const progressSyncRequests = new Map<string, Promise<UserProgress>>();
+
 export const syncProgressWithFirestore = async (user: User | null): Promise<UserProgress> => {
   if (!user) return getInitialProgress();
+  const requestKey = user.uid || user.username.toLowerCase();
+  const pendingRequest = progressSyncRequests.get(requestKey);
+  if (pendingRequest) return pendingRequest;
+
+  const request = syncProgressForUser(user);
+  progressSyncRequests.set(requestKey, request);
+  try {
+    return await request;
+  } finally {
+    if (progressSyncRequests.get(requestKey) === request) {
+      progressSyncRequests.delete(requestKey);
+    }
+  }
+};
+
+const syncProgressForUser = async (user: User): Promise<UserProgress> => {
   const localProgress = loadCachedUserProgress(user.username);
   
   try {
