@@ -8,7 +8,7 @@ import {
   deleteInstructorAccount,
   assignCourseToInstructor,
   unassignInstructorFromCourse,
-  fetchAllStudentsFromFirestore,
+  fetchStudentAssignmentProfilesFromFirestore,
   bulkAssignStudentsToCourse
 } from '../services/firebase';
 
@@ -358,14 +358,20 @@ export const AdminInstructorManager: React.FC<AdminInstructorManagerProps> = ({
             <button
               onClick={async () => {
                 setIsLoadingStudents(true);
-                const allStudents = await fetchAllStudentsFromFirestore();
-                const filtered = allStudents.filter(u =>
-                  (assignFilterYear ? u.year?.includes(assignFilterYear) : true) &&
-                  (assignFilterDept ? u.dept?.includes(assignFilterDept) : true) &&
-                  (assignFilterSection ? u.section?.includes(assignFilterSection) : true)
-                );
-                setStudentList(filtered);
-                setIsLoadingStudents(false);
+                try {
+                  const allStudents = await fetchStudentAssignmentProfilesFromFirestore();
+                  const filtered = allStudents.filter(u =>
+                    (assignFilterYear ? u.year?.includes(assignFilterYear) : true) &&
+                    (assignFilterDept ? u.dept?.includes(assignFilterDept) : true) &&
+                    (assignFilterSection ? u.section?.includes(assignFilterSection) : true)
+                  );
+                  setStudentList(filtered);
+                } catch (error) {
+                  console.error('Failed to search student profiles:', error);
+                  showToast(error instanceof Error ? error.message : 'Failed to load students.', 'error');
+                } finally {
+                  setIsLoadingStudents(false);
+                }
               }}
               className="bg-slate-900 text-white text-xs font-bold rounded-xl cursor-pointer"
             >

@@ -7,6 +7,7 @@ import { sanitizeForFirestore } from '../services/firebase';
 import {
   fetchAllStudentsFromFirestore,
   fetchAllSubmissionsFromFirestore,
+  fetchStudentSubmissionsForAdmin,
   requestCreativeChallengeRedo,
   changeAdminPassword,
   saveCoursesToFirestore,
@@ -125,8 +126,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [students, setStudents] = useState<StudentOverview[]>([]);
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [isLoadingStudents, setIsLoadingStudents] = useState<boolean>(false);
+  const [isLoadingStudentSubmissions, setIsLoadingStudentSubmissions] = useState(false);
+  const [studentSubmissionsLoadError, setStudentSubmissionsLoadError] = useState<string | null>(null);
   const hasLoadedStudents = useRef(false);
   const isLoadingStudentsRef = useRef(false);
+  const studentSubmissionsRequestId = useRef(0);
   const [isLoadingSubmissions, setIsLoadingSubmissions] = useState<boolean>(false);
   const [exportSuccessMessage, setExportSuccessMessage] = useState<string | null>(null);
   const [issueReports, setIssueReports] = useState<IssueReport[]>([]);
@@ -411,6 +415,48 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   }, [activeTab]);
 
+  const loadStudentSubmissionsForDetails = async (student: StudentOverview) => {
+    const requestId = ++studentSubmissionsRequestId.current;
+    setIsLoadingStudentSubmissions(true);
+    setStudentSubmissionsLoadError(null);
+    try {
+      const firestoreSubmissions = await fetchStudentSubmissionsForAdmin(
+        student.submissionOwnerUids || [student.uid]
+      );
+      const mergedSubmissions = Array.from(new Map(
+        [...(student.submissions || []), ...firestoreSubmissions].map(submission => [
+          submission.id || JSON.stringify(submission),
+          submission
+        ])
+      ).values()).sort((first, second) =>
+        new Date(second.timestamp || 0).getTime() - new Date(first.timestamp || 0).getTime()
+      );
+      const submissionsCount = firestoreSubmissions.length > 0
+        ? mergedSubmissions.length
+        : student.submissionsCount;
+
+      setStudents(previous => previous.map(current => current.uid === student.uid
+        ? { ...current, submissions: mergedSubmissions, submissionsCount }
+        : current));
+      if (studentSubmissionsRequestId.current === requestId) {
+        setSelectedStudentForDetails(previous => previous?.uid === student.uid
+          ? { ...previous, submissions: mergedSubmissions, submissionsCount }
+          : previous);
+      }
+    } catch (error) {
+      console.error('Failed to load student submissions:', error);
+      if (studentSubmissionsRequestId.current === requestId) {
+        setStudentSubmissionsLoadError(
+          error instanceof Error ? error.message : 'Failed to load student submissions.'
+        );
+      }
+    } finally {
+      if (studentSubmissionsRequestId.current === requestId) {
+        setIsLoadingStudentSubmissions(false);
+      }
+    }
+  };
+
   const openStudentDetails = (student: StudentOverview) => {
     setSelectedStudentForDetails(student);
     setExpandedCourseId(student.enrolledCourses?.[0]?.courseId || null);
@@ -418,6 +464,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setProctorNotesEdit(student.proctorNotes || '');
     setTabSwitchCountEdit(student.tabSwitchCount || 0);
     setProctorSaveSuccess(null);
+    void loadStudentSubmissionsForDetails(student);
   };
 
   const handleQuickProctorStatus = async (
@@ -4856,6 +4903,12 @@ solve()`
                       Student Code Submissions
                     </h3>
 
+                    {isLoadingStudentSubmissions && (
+                      <p className="mb-3 text-xs text-slate-500">Loading this student's submission history...</p>
+                    )}
+                    {studentSubmissionsLoadError && (
+                      <p className="mb-3 text-xs text-red-600">{studentSubmissionsLoadError}</p>
+                    )}
                     {selectedStudentForDetails.submissions && selectedStudentForDetails.submissions.length > 0 ? (
                       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
                         <table className="w-full text-left text-xs">

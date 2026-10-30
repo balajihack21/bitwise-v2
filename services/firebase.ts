@@ -16,6 +16,7 @@ import {
   getFirestore, 
   doc, 
   getDoc, 
+  getCountFromServer,
   setDoc, 
   updateDoc, 
   collection, 
@@ -1449,6 +1450,7 @@ export interface StudentOverview {
   lastActive: string;
   enrolledCourses: CourseProgressDetail[];
   submissions: SubmissionRecord[];
+  submissionOwnerUids?: string[];
   creativeSubmissions?: import('../types').CreativeChallengeSubmission[];
   redoCreativeChallengeLessonIds?: string[];
   completedLessonIds: string[];
@@ -1477,6 +1479,87 @@ export interface StudentOverview {
   }>;
   internalAssessments?: Record<string, CourseInternalAssessment>;
 }
+
+export interface StudentAssignmentProfile {
+  uid: string;
+  username: string;
+  regNo: string;
+  year?: string;
+  dept?: string;
+  section?: string;
+}
+
+export const fetchStudentAssignmentProfilesFromFirestore = async (): Promise<StudentAssignmentProfile[]> => {
+  const profilesByUid = new Map<string, StudentAssignmentProfile>();
+
+  try {
+    const snapshot = await getDocs(query(collection(db, 'users'), where('role', '==', 'student')));
+    snapshot.forEach(userDoc => {
+      const data = userDoc.data();
+      profilesByUid.set(userDoc.id, {
+        uid: userDoc.id,
+        username: data.username || data.displayName || data.email?.split('@')[0] || 'Student',
+        regNo: data.regNo || '',
+        year: data.year || '',
+        dept: data.dept || '',
+        section: data.section || ''
+      });
+    });
+  } catch (error) {
+    console.warn('Could not load student profiles from Firestore:', error);
+  }
+
+  try {
+    const rawLocalUsers = localStorage.getItem('bitwise_registered_users');
+    const localUsers = rawLocalUsers ? JSON.parse(rawLocalUsers) : [];
+    if (Array.isArray(localUsers)) {
+      localUsers.forEach(user => {
+        if (user.role !== 'student') return;
+        const uid = user.uid || user.username;
+        if (!uid || profilesByUid.has(uid)) return;
+        profilesByUid.set(uid, {
+          uid,
+          username: user.username || user.displayName || 'Student',
+          regNo: user.regNo || '',
+          year: user.year || '',
+          dept: user.dept || '',
+          section: user.section || ''
+        });
+      });
+    }
+  } catch (error) {
+    console.warn('Could not load locally registered student profiles:', error);
+  }
+
+  return Array.from(profilesByUid.values());
+};
+
+export const fetchStudentSubmissionsForAdmin = async (userIds: string[]): Promise<SubmissionRecord[]> => {
+  const uniqueIds = Array.from(new Set(userIds.filter(Boolean)));
+  if (uniqueIds.length === 0) return [];
+  const cacheKey = `admin-student-submissions:${uniqueIds.sort().join(',')}`;
+
+  return withFirestoreReadCache(cacheKey, async () => {
+    const submissions: SubmissionRecord[] = [];
+    for (let index = 0; index < uniqueIds.length; index += 30) {
+      const uidBatch = uniqueIds.slice(index, index + 30);
+      const snapshot = await getDocs(query(
+        collection(db, 'submissions'),
+        where('userId', 'in', uidBatch)
+      ));
+      snapshot.forEach(submissionDoc => {
+        const data = submissionDoc.data();
+        submissions.push({
+          ...data,
+          id: data.id || submissionDoc.id
+        } as SubmissionRecord);
+      });
+    }
+    return submissions.sort((first, second) =>
+      new Date(second.timestamp || 0).getTime() - new Date(first.timestamp || 0).getTime()
+    );
+  }, 30_000);
+};
 
 const normalizeAssignedInstructors = (userData: any, instructorCatalog: InstructorAccount[] = []): { uid: string; email?: string; name?: string }[] => {
   const entries: { uid: string; email?: string; name?: string }[] = [];
@@ -1623,74 +1706,6 @@ export const fetchAllStudentsFromFirestore = async (
   const studentsMap = new Map<string, StudentOverview>();
   const instructorCatalog = await fetchInstructorsList().catch(() => [] as InstructorAccount[]);
 
-  const mergeProgressData = (primary: UserProgress | null | undefined, secondary: UserProgress | null | undefined): UserProgress | null => {
-    if (!primary && !secondary) return null;
-    const merged: UserProgress = {
-      completedLessonIds: Array.from(new Set([...(primary?.completedLessonIds || []), ...(secondary?.completedLessonIds || [])])),
-      unlockedLessonIds: Array.from(new Set([...(primary?.unlockedLessonIds || []), ...(secondary?.unlockedLessonIds || [])])),
-      submissions: [...(primary?.submissions || []), ...(secondary?.submissions || [])],
-      xp: Math.max(primary?.xp || 0, secondary?.xp || 0),
-      streakDays: Math.max(primary?.streakDays || 1, secondary?.streakDays || 1),
-      lastActiveDate: primary?.lastActiveDate || secondary?.lastActiveDate || new Date().toISOString().split('T')[0],
-      tabSwitchCount: Math.max(primary?.tabSwitchCount || 0, secondary?.tabSwitchCount || 0),
-      focusLossCount: Math.max(primary?.focusLossCount || 0, secondary?.focusLossCount || 0),
-      testExitAttempts: Math.max(primary?.testExitAttempts || 0, secondary?.testExitAttempts || 0),
-      proctorStatus: primary?.proctorStatus || secondary?.proctorStatus || 'CLEAN',
-      proctorNotes: primary?.proctorNotes || secondary?.proctorNotes || '',
-      proctorReviewedAt: primary?.proctorReviewedAt || secondary?.proctorReviewedAt || '',
-      proctorReviewedBy: primary?.proctorReviewedBy || secondary?.proctorReviewedBy || '',
-    };
-
-    const mergedSubmissionIds = new Set((merged.submissions || []).map(s => s.id));
-    merged.submissions = (merged.submissions || []).filter(s => mergedSubmissionIds.has(s.id));
-    return merged;
-  };
-
-  const resolveCanonicalStudentUid = async (userDocs: any[], currentUid: string, currentData: any): Promise<string> => {
-    const email = String(currentData?.email || '').trim().toLowerCase();
-    if (!email) return currentUid;
-
-    const sameEmailDocs = userDocs.filter(doc => {
-      const otherEmail = String(doc.data()?.email || '').trim().toLowerCase();
-      return otherEmail && otherEmail === email;
-    });
-
-    if (sameEmailDocs.length <= 1) return currentUid;
-
-    const canonicalDoc = [...sameEmailDocs].sort((a, b) => {
-      const aIsSeed = a.id.startsWith('seed_');
-      const bIsSeed = b.id.startsWith('seed_');
-      if (aIsSeed !== bIsSeed) return aIsSeed ? -1 : 1;
-      const aCreated = new Date(a.data()?.createdAt || 0).getTime();
-      const bCreated = new Date(b.data()?.createdAt || 0).getTime();
-      return bCreated - aCreated;
-    })[0];
-
-    const canonicalUid = canonicalDoc?.id || currentUid;
-    if (canonicalUid === currentUid) return currentUid;
-
-    const primaryProgress = await getDoc(doc(db, 'user_progress', canonicalUid)).catch(() => null);
-    const duplicateProgressDocs = await Promise.all(sameEmailDocs
-      .filter(doc => doc.id !== canonicalUid)
-      .map(async doc => getDoc(doc(db, 'user_progress', doc.id)).catch(() => null)));
-
-    let mergedProgress: UserProgress | null = primaryProgress?.exists ? (primaryProgress.data() as UserProgress) : null;
-    for (const altSnap of duplicateProgressDocs) {
-      if (!altSnap || !altSnap.exists()) continue;
-      const altProgress = altSnap.data() as UserProgress;
-      mergedProgress = mergeProgressData(mergedProgress, altProgress);
-    }
-
-    if (mergedProgress) {
-      await setDoc(doc(db, 'user_progress', canonicalUid), sanitizeForFirestore({
-        ...mergedProgress,
-        updatedAt: new Date().toISOString()
-      }), { merge: true }).catch(() => {});
-    }
-
-    return canonicalUid;
-  };
-
   // 0. Load catalog of courses for progress calculation
   let catalogCourses: Course[] = customCatalog && customCatalog.length > 0 ? customCatalog : [];
   if (catalogCourses.length === 0) {
@@ -1742,37 +1757,23 @@ export const fetchAllStudentsFromFirestore = async (
       ? await getDocs(collection(db, 'users'))
       : await getDocs(query(collection(db, 'users'), where('role', '==', 'student')));
     const userDocs = usersSnap.docs;
-    // Read all progress records once instead of issuing one network request per student.
-    const progressSnap = await getDocs(collection(db, 'user_progress'));
     const progressByUid = new Map<string, UserProgress>();
-    progressSnap.forEach(progressDoc => {
-      progressByUid.set(progressDoc.id, progressDoc.data() as UserProgress);
-    });
-    const submissionRecordsByUid = new Map<string, SubmissionRecord[]>();
-    const studentUids = userDocs
-      .filter(userDoc => userDoc.data().role === 'student')
+    const progressUids = userDocs
+      .filter(userDoc => userDoc.data().role === 'student' || (includeInstructors && userDoc.data().role === 'instructor'))
       .map(userDoc => userDoc.id);
     try {
-      for (let index = 0; index < studentUids.length; index += 30) {
-        const uidBatch = studentUids.slice(index, index + 30);
-        const submissionsSnap = await getDocs(query(
-          collection(db, 'submissions'),
-          where('userId', 'in', uidBatch)
+      for (let index = 0; index < progressUids.length; index += 30) {
+        const uidBatch = progressUids.slice(index, index + 30);
+        const progressSnap = await getDocs(query(
+          collection(db, 'user_progress'),
+          where(documentId(), 'in', uidBatch)
         ));
-        submissionsSnap.docs.forEach(submissionDoc => {
-          const data = submissionDoc.data();
-          const userId = String(data.userId || '');
-          if (!userId) return;
-          const userSubmissions = submissionRecordsByUid.get(userId) || [];
-          userSubmissions.push({
-            ...data,
-            id: data.id || submissionDoc.id
-          } as SubmissionRecord);
-          submissionRecordsByUid.set(userId, userSubmissions);
+        progressSnap.forEach(progressDoc => {
+          progressByUid.set(progressDoc.id, progressDoc.data() as UserProgress);
         });
       }
-    } catch (submissionError) {
-      console.warn('Could not load Firestore student submissions for the admin dashboard:', submissionError);
+    } catch (progressError) {
+      console.warn('Could not load Firestore student progress for the admin dashboard:', progressError);
     }
     const studentsByEmail = new Map<string, any[]>();
     userDocs.forEach(userDoc => {
@@ -1783,13 +1784,57 @@ export const fetchAllStudentsFromFirestore = async (
       studentsByEmail.set(email, matches);
     });
 
+    const canonicalUidByUserId = new Map<string, string>();
+    studentsByEmail.forEach(sameEmailDocs => {
+      const canonicalDoc = [...sameEmailDocs].sort((a, b) => {
+        const aIsSeed = a.id.startsWith('seed_');
+        const bIsSeed = b.id.startsWith('seed_');
+        if (aIsSeed !== bIsSeed) return aIsSeed ? -1 : 1;
+        const aCreated = new Date(a.data()?.createdAt || 0).getTime();
+        const bCreated = new Date(b.data()?.createdAt || 0).getTime();
+        return bCreated - aCreated;
+      })[0];
+      if (canonicalDoc) {
+        sameEmailDocs.forEach(userDoc => canonicalUidByUserId.set(userDoc.id, canonicalDoc.id));
+      }
+    });
+
+    const submissionCountsByUid = new Map<string, number>();
+    let failedSubmissionCountRequests = 0;
+    let firstSubmissionCountError: unknown;
+    for (let index = 0; index < progressUids.length; index += 20) {
+      const uidBatch = progressUids.slice(index, index + 20);
+      const countResults = await Promise.all(uidBatch.map(async uid => {
+        try {
+          const countSnapshot = await getCountFromServer(query(
+            collection(db, 'submissions'),
+            where('userId', '==', uid)
+          ));
+          return [uid, countSnapshot.data().count] as const;
+        } catch (error) {
+          failedSubmissionCountRequests += 1;
+          if (!firstSubmissionCountError) firstSubmissionCountError = error;
+          return [uid, null] as const;
+        }
+      }));
+      countResults.forEach(([uid, count]) => {
+        if (count !== null) submissionCountsByUid.set(uid, count);
+      });
+    }
+    if (failedSubmissionCountRequests > 0) {
+      console.warn(
+        `Could not load exact submission counts for ${failedSubmissionCountRequests} student/instructor profiles.`,
+        firstSubmissionCountError
+      );
+    }
+
     for (const uDoc of userDocs) {
       const uData = uDoc.data();
       if (uData.role !== 'student' && !(includeInstructors && uData.role === 'instructor')) {
         continue;
       }
       const uid = uDoc.id;
-      const canonicalStudentUid = await resolveCanonicalStudentUid(userDocs, uid, uData);
+      const canonicalStudentUid = canonicalUidByUserId.get(uid) || uid;
       if (canonicalStudentUid !== uid) continue;
 
       // 2. Filter students if instructor filter provided — only show students explicitly assigned to this instructor
@@ -1912,20 +1957,6 @@ export const fetchAllStudentsFromFirestore = async (
         // ignore individual progress read error
       }
 
-      const sameEmailDocs = studentsByEmail.get(String(uData.email || '').trim().toLowerCase()) || [uDoc];
-      const allStudentSubmissions = [
-        ...submissions,
-        ...sameEmailDocs.flatMap(studentDoc => submissionRecordsByUid.get(studentDoc.id) || [])
-      ];
-      submissions = Array.from(new Map(
-        allStudentSubmissions.map(submission => [
-          submission.id || JSON.stringify(submission),
-          submission
-        ])
-      ).values()).sort((first, second) =>
-        new Date(second.timestamp || 0).getTime() - new Date(first.timestamp || 0).getTime()
-      );
-
       // Check tab switches from submissions as well
       const subsTabSwitches = submissions.reduce((acc, s) => acc + (s.tabSwitchesDuringTest || 0), 0);
       if (subsTabSwitches > tabSwitchCount) {
@@ -1960,6 +1991,7 @@ export const fetchAllStudentsFromFirestore = async (
       const enrolledCourses = computeCourseDetails(completedLessonIds, assignedIds);
 
       const assignedInstructors = normalizeAssignedInstructors(uData, instructorCatalog);
+      const sameEmailDocs = studentsByEmail.get(String(uData.email || '').trim().toLowerCase()) || [uDoc];
 
       studentsMap.set(uid, {
         uid,
@@ -1980,7 +2012,11 @@ export const fetchAllStudentsFromFirestore = async (
         xp,
         streakDays: streak,
         completedLessonsCount: completedCount,
-        submissionsCount: submissions.length,
+        submissionsCount: sameEmailDocs.reduce(
+          (total, studentDoc) => total + (submissionCountsByUid.get(studentDoc.id) ?? (progressByUid.get(studentDoc.id)?.submissions || []).length),
+          0
+        ),
+        submissionOwnerUids: sameEmailDocs.map(studentDoc => studentDoc.id),
         lastActive,
         enrolledCourses,
         submissions,
