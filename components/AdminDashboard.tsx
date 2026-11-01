@@ -55,7 +55,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 }) => {
   const isInstructor = currentUser?.role === 'instructor';
   const canManageCourseTests = currentUser?.role === 'instructor' || currentUser?.role === 'admin';
-  const canViewInternalMarks = currentUser?.role === 'instructor' || currentUser?.role === 'admin';
+  const canViewInternalMarks = currentUser?.role === 'admin';
   const [activeTab, setActiveTab] = useState<'courses' | 'instructors' | 'students' | 'instructor-progress' | 'submissions' | 'coding-tests' | 'practice-problems' | 'issues'>('courses');
   const [practiceCourseId, setPracticeCourseId] = useState('');
   const [practiceTopic, setPracticeTopic] = useState('');
@@ -3535,7 +3535,8 @@ solve()`
                       onClick={() => {
                         exportStudentsToExcel(filteredStudents, courses, undefined, {
                           courseId: selectedReportCourse?.id,
-                          moduleId: selectedReportModule?.id
+                          moduleId: selectedReportModule?.id,
+                          includeInternalMarks: !isInstructor
                         });
                         setExportSuccessMessage(`Exported ${filteredStudents.length} filtered student records to Excel${selectedReportModule ? ` for ${selectedReportModule.title}` : ''}.`);
                         setTimeout(() => setExportSuccessMessage(null), 4000);
@@ -3552,7 +3553,8 @@ solve()`
                       onClick={() => {
                         exportStudentsToCsv(filteredStudents, courses, undefined, {
                           courseId: selectedReportCourse?.id,
-                          moduleId: selectedReportModule?.id
+                          moduleId: selectedReportModule?.id,
+                          includeInternalMarks: !isInstructor
                         });
                         setExportSuccessMessage(`Exported ${filteredStudents.length} filtered student records to CSV.`);
                         setTimeout(() => setExportSuccessMessage(null), 4000);
@@ -4235,7 +4237,9 @@ solve()`
                       <div className="text-[11px] text-slate-400">🔥 {selectedStudentForDetails.streakDays} Day Streak</div>
                     </div>
                     <button
-                      onClick={() => exportStudentsToExcel([selectedStudentForDetails], courses)}
+                      onClick={() => exportStudentsToExcel([selectedStudentForDetails], courses, undefined, {
+                        includeInternalMarks: !isInstructor
+                      })}
                       title="Export this student's progress report to Excel"
                       className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer"
                     >

@@ -76,8 +76,9 @@ export const exportStudentsToExcel = (
   students: StudentOverview[],
   catalogCourses: Course[],
   filename: string = `Bitwise_Student_Progress_${new Date().toISOString().split('T')[0]}.xls`,
-  options: { courseId?: string; moduleId?: string } = {}
+  options: { courseId?: string; moduleId?: string; includeInternalMarks?: boolean } = {}
 ) => {
+  const includeInternalMarks = options.includeInternalMarks !== false;
   const dateStr = new Date().toLocaleString();
   const selectedCourse = options.courseId
     ? catalogCourses.find(course => course.id === options.courseId)
@@ -240,12 +241,14 @@ export const exportStudentsToExcel = (
     <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Tab Switches</Data></Cell>
     <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Focus Losses</Data></Cell>
     <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Exit Attempts</Data></Cell>
+    ${includeInternalMarks ? `
     <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Internal Marks</Data></Cell>
     <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Learning Score</Data></Cell>
     <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Efficiency Score</Data></Cell>
     <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Deadline Penalty</Data></Cell>
     <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Coding Test 1</Data></Cell>
     <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Coding Test 2</Data></Cell>
+    ` : ''}
     <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Proctoring Status</Data></Cell>
     <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Proctoring Notes / Review</Data></Cell>
     <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">Last Active Date</Data></Cell>
@@ -258,7 +261,7 @@ export const exportStudentsToExcel = (
     const activeCourseTitles = activeCourses.length > 0 
       ? activeCourses.map(c => `${c.courseTitle} (${c.completedLessons}/${c.totalLessons})`).join(', ')
       : 'None yet';
-    const internalSummary = enrolledCourses.reduce((acc, cp) => {
+    const internalSummary = includeInternalMarks ? enrolledCourses.reduce((acc, cp) => {
       const course = catalogCourses.find(item => item.id === cp.courseId);
       const assessment = getCalculatedInternalAssessment(s, cp.courseId, course);
       acc.total += assessment.totalInternalMarks;
@@ -269,8 +272,8 @@ export const exportStudentsToExcel = (
       acc.ct1 += assessment.codingTest1Marks;
       acc.ct2 += assessment.codingTest2Marks;
       return acc;
-    }, { total: 0, count: 0, learning: 0, efficiency: 0, penalty: 0, ct1: 0, ct2: 0 });
-    const avgTotal = internalSummary.count > 0 ? Math.round(internalSummary.total / internalSummary.count) : 0;
+    }, { total: 0, count: 0, learning: 0, efficiency: 0, penalty: 0, ct1: 0, ct2: 0 }) : null;
+    const avgTotal = internalSummary && internalSummary.count > 0 ? Math.round(internalSummary.total / internalSummary.count) : 0;
 
     const proctorStyle = s.proctorStatus === 'FLAGGED' ? 'BadgeAmber' : s.proctorStatus === 'WARNING' ? 'BadgeAmber' : s.proctorStatus === 'EXCUSED' ? 'BadgeBlue' : 'BadgeGreen';
     const proctorReviewInfo = s.proctorNotes || (s.proctorReviewedAt ? `Reviewed ${s.proctorReviewedAt} by ${s.proctorReviewedBy || 'Admin'}` : 'Normal');
@@ -296,12 +299,14 @@ export const exportStudentsToExcel = (
     <Cell ss:StyleID="DataCellCenter"><Data ss:Type="Number">${s.tabSwitchCount || 0}</Data></Cell>
     <Cell ss:StyleID="DataCellCenter"><Data ss:Type="Number">${s.focusLossCount || 0}</Data></Cell>
     <Cell ss:StyleID="DataCellCenter"><Data ss:Type="Number">${s.testExitAttempts || 0}</Data></Cell>
+    ${includeInternalMarks && internalSummary ? `
     <Cell ss:StyleID="BadgeBlue"><Data ss:Type="Number">${avgTotal}</Data></Cell>
     <Cell ss:StyleID="DataCellCenter"><Data ss:Type="Number">${internalSummary.learning || 0}</Data></Cell>
     <Cell ss:StyleID="DataCellCenter"><Data ss:Type="Number">${internalSummary.efficiency || 0}</Data></Cell>
     <Cell ss:StyleID="DataCellCenter"><Data ss:Type="Number">${internalSummary.penalty || 0}</Data></Cell>
     <Cell ss:StyleID="DataCellCenter"><Data ss:Type="String">${internalSummary.ct1 || 0}</Data></Cell>
     <Cell ss:StyleID="DataCellCenter"><Data ss:Type="String">${internalSummary.ct2 || 0}</Data></Cell>
+    ` : ''}
     <Cell ss:StyleID="${proctorStyle}"><Data ss:Type="String">${escapeXml(s.proctorStatus || 'CLEAN')}</Data></Cell>
     <Cell ss:StyleID="DataCell"><Data ss:Type="String">${escapeXml(proctorReviewInfo)}</Data></Cell>
     <Cell ss:StyleID="DataCellCenter"><Data ss:Type="String">${escapeXml(s.lastActive || 'Recent')}</Data></Cell>
@@ -406,10 +411,11 @@ export const exportStudentsToExcel = (
  </Worksheet>
 `;
 
-  // ==========================================
-  // WORKSHEET 3: Internal Assessment Summary
-  // ==========================================
-  xml += `
+  if (includeInternalMarks) {
+    // ==========================================
+    // WORKSHEET 3: Internal Assessment Summary
+    // ==========================================
+    xml += `
  <Worksheet ss:Name="Internal Assessment Summary">
   <Table ss:DefaultRowHeight="20">
    <Column ss:Width="160"/>
@@ -472,6 +478,7 @@ export const exportStudentsToExcel = (
   </Table>
  </Worksheet>
 `;
+  }
 
   // ==========================================
   // WORKSHEET 4: Submissions & Judge0 Results Log
@@ -638,8 +645,9 @@ export const exportStudentsToCsv = (
   students: StudentOverview[],
   catalogCourses: Course[],
   filename: string = `Bitwise_Students_Export_${new Date().toISOString().split('T')[0]}.csv`,
-  options: { courseId?: string; moduleId?: string } = {}
+  options: { courseId?: string; moduleId?: string; includeInternalMarks?: boolean } = {}
 ) => {
+  const includeInternalMarks = options.includeInternalMarks !== false;
   const headers = [
     'Student Name',
     'Email Address',
@@ -657,12 +665,14 @@ export const exportStudentsToCsv = (
     'Tab Switches',
     'Focus Losses',
     'Exit Attempts',
-    'Internal Total',
-    'Learning Score',
-    'Efficiency Score',
-    'Deadline Penalty',
-    'Coding Test 1 Marks',
-    'Coding Test 2 Marks',
+    ...(includeInternalMarks ? [
+      'Internal Total',
+      'Learning Score',
+      'Efficiency Score',
+      'Deadline Penalty',
+      'Coding Test 1 Marks',
+      'Coding Test 2 Marks'
+    ] : []),
     'Proctoring Status',
     'Proctoring Review / Notes',
     'Last Active'
@@ -691,7 +701,7 @@ export const exportStudentsToCsv = (
       : enrolled
           .map(c => `${c.courseTitle}: ${c.completedLessons}/${c.totalLessons} (${c.progressPercentage}%)`)
           .join(' | ');
-    const internalSummary = enrolled.reduce((acc, cp) => {
+    const internalSummary = includeInternalMarks ? enrolled.reduce((acc, cp) => {
       const course = catalogCourses.find(item => item.id === cp.courseId);
       const assessment = getCalculatedInternalAssessment(s, cp.courseId, course);
       acc.total += assessment.totalInternalMarks;
@@ -701,7 +711,7 @@ export const exportStudentsToCsv = (
       acc.ct1 += assessment.codingTest1Marks;
       acc.ct2 += assessment.codingTest2Marks;
       return acc;
-    }, { total: 0, learning: 0, efficiency: 0, penalty: 0, ct1: 0, ct2: 0 });
+    }, { total: 0, learning: 0, efficiency: 0, penalty: 0, ct1: 0, ct2: 0 }) : null;
 
     const proctorReviewInfo = s.proctorNotes || (s.proctorReviewedAt ? `Reviewed ${s.proctorReviewedAt} by ${s.proctorReviewedBy || 'Admin'}` : 'Normal');
 
@@ -729,12 +739,14 @@ export const exportStudentsToCsv = (
       s.tabSwitchCount || 0,
       s.focusLossCount || 0,
       s.testExitAttempts || 0,
-      internalSummary.total,
-      internalSummary.learning,
-      internalSummary.efficiency,
-      internalSummary.penalty,
-      internalSummary.ct1,
-      internalSummary.ct2,
+      ...(internalSummary ? [
+        internalSummary.total,
+        internalSummary.learning,
+        internalSummary.efficiency,
+        internalSummary.penalty,
+        internalSummary.ct1,
+        internalSummary.ct2
+      ] : []),
       escapeCsv(s.proctorStatus || 'CLEAN'),
       escapeCsv(proctorReviewInfo),
       escapeCsv(s.lastActive || 'Recent')
