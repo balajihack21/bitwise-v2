@@ -1,4 +1,5 @@
 import { Course } from './types';
+import { ADDITIONAL_PYTHON_PRACTICE_PROBLEMS } from './pythonPracticeProblems';
 
 export const MOCK_COURSES: Course[] = [
   {
@@ -5127,7 +5128,8 @@ int main() {
         starterTemplates: { python: 'import sys\nlines = sys.stdin.read().splitlines()\n# Build the graph and count connected components' },
         solutionCode: { python: 'import sys\nlines = sys.stdin.read().splitlines()\nadjacency = {}\nfor line in lines:\n    if line == "?":\n        break\n    first, second = line.split("-")\n    adjacency.setdefault(first, set()).add(second)\n    adjacency.setdefault(second, set()).add(first)\nseen = set()\ncomponents = 0\nfor vertex in adjacency:\n    if vertex not in seen:\n        components += 1\n        stack = [vertex]\n        seen.add(vertex)\n        while stack:\n            current = stack.pop()\n            for neighbor in adjacency[current]:\n                if neighbor not in seen:\n                    seen.add(neighbor)\n                    stack.append(neighbor)\nprint(components)' }
       }
-    }
+    },
+    ...ADDITIONAL_PYTHON_PRACTICE_PROBLEMS
   ]
 }
 ];

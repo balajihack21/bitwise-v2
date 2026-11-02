@@ -41,11 +41,15 @@ const mergeDefaultPracticeProblems = (courses: Course[]): Course[] => {
   const defaultProblems = MOCK_COURSES.find(course => course.id === 'python-programming')?.practiceProblems;
   if (!defaultProblems?.length) return courses;
 
-  return courses.map(course => (
-    course.id === 'python-programming' && !course.practiceProblems?.length
-      ? { ...course, practiceProblems: defaultProblems }
-      : course
-  ));
+  return courses.map(course => {
+    if (course.id !== 'python-programming') return course;
+    const existingProblems = course.practiceProblems || [];
+    const existingIds = new Set(existingProblems.map(problem => problem.id));
+    const missingDefaults = defaultProblems.filter(problem => !existingIds.has(problem.id));
+    return missingDefaults.length > 0
+      ? { ...course, practiceProblems: [...existingProblems, ...missingDefaults] }
+      : course;
+  });
 };
 
 const getProgressSyncErrorMessage = (error: unknown): string => {
@@ -78,6 +82,35 @@ const App: React.FC = () => {
       return null;
     }
   });
+  const [showPracticeAnnouncement, setShowPracticeAnnouncement] = useState(false);
+
+  useEffect(() => {
+    if (user?.role !== 'student' || currentView !== ViewState.COURSES) {
+      setShowPracticeAnnouncement(false);
+      return;
+    }
+
+    const identity = user.uid || user.username.toLowerCase();
+    const announcementKey = `bitwise_practice_problems_40_announcement_${identity}`;
+    try {
+      setShowPracticeAnnouncement(localStorage.getItem(announcementKey) !== 'true');
+    } catch (error) {
+      console.error('Could not check the practice announcement dismissal:', error);
+      setShowPracticeAnnouncement(true);
+    }
+  }, [currentView, user?.role, user?.uid, user?.username]);
+
+  const dismissPracticeAnnouncement = () => {
+    if (user) {
+      const identity = user.uid || user.username.toLowerCase();
+      try {
+        localStorage.setItem(`bitwise_practice_problems_40_announcement_${identity}`, 'true');
+      } catch (error) {
+        console.error('Could not save the practice announcement dismissal:', error);
+      }
+    }
+    setShowPracticeAnnouncement(false);
+  };
 
   // Active navigation params for Courses view
   const [activeCourseId, setActiveCourseId] = useState<string | undefined>(undefined);
@@ -715,6 +748,51 @@ const App: React.FC = () => {
         )}
         {renderContent()}
       </main>
+
+      {showPracticeAnnouncement && user?.role === 'student' && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="practice-announcement-title"
+            className="relative w-full max-w-md overflow-hidden rounded-3xl border border-sky-100 bg-white shadow-2xl"
+          >
+            <div className="bg-gradient-to-br from-sky-600 to-indigo-700 px-7 py-8 text-center text-white">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-white/15 text-3xl">
+                <i className="fa-solid fa-gift"></i>
+              </div>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-sky-100">A little more to explore</p>
+              <h2 id="practice-announcement-title" className="mt-2 text-2xl font-extrabold">
+                40 new practice problems!
+              </h2>
+            </div>
+            <div className="px-7 py-6 text-center">
+              <p className="text-sm leading-6 text-slate-600">
+                Hi {user.username}! We’ve added 40 problems across the topics you’ve been learning. Take on a few whenever you’re ready—practice submissions won’t affect your grades.
+              </p>
+              <div className="mt-6 flex flex-col-reverse justify-center gap-2 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={dismissPracticeAnnouncement}
+                  className="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50"
+                >
+                  Maybe later
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    dismissPracticeAnnouncement();
+                    setCurrentView(ViewState.PRACTICE);
+                  }}
+                  className="rounded-xl bg-sky-600 px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-sky-700"
+                >
+                  Explore problems
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
 
       {currentView !== ViewState.PLAYGROUND && currentView !== ViewState.PRACTICE && currentView !== ViewState.AUTH && currentView !== ViewState.ADMIN && currentView !== ViewState.COURSES && <Footer />}
     </div>

@@ -42,6 +42,9 @@ const PracticeProblems: React.FC<PracticeProblemsProps> = ({ courses, user, prog
       || (completionStatus === 'UNSOLVED' && !solved);
     return matchesTopic && matchesStatus;
   });
+  const topicProblemCount = practiceProblems.filter(problem =>
+    topic === 'ALL' || problem.topic === topic
+  ).length;
 
   React.useEffect(() => {
     let cancelled = false;
@@ -211,6 +214,15 @@ const PracticeProblems: React.FC<PracticeProblemsProps> = ({ courses, user, prog
           <option value="SOLVED">Solved</option>
           <option value="UNSOLVED">Unsolved</option>
         </select>
+      </div>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2 text-sm text-slate-600" aria-live="polite">
+        <span>
+          Showing <strong className="text-slate-900">{visibleProblems.length}</strong> of{' '}
+          <strong className="text-slate-900">{topicProblemCount}</strong> problems
+        </span>
+        <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-bold text-sky-700">
+          Total in course: {practiceProblems.length}
+        </span>
       </div>
       <section className="mb-6 bg-white border border-amber-200 rounded-2xl shadow-sm overflow-hidden">
         <div className="px-5 py-4 bg-gradient-to-r from-amber-50 to-orange-50 border-b border-amber-100 flex items-center justify-between">
