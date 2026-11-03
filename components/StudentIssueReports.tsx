@@ -1,6 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { User } from '../types';
-import { fetchStudentIssueReports, IssueReport, submitIssueReport } from '../services/firebase';
+import {
+  fetchStudentIssueReports,
+  getIssueReportScreenshotUrl,
+  IssueReport,
+  submitIssueReport
+} from '../services/firebase';
 
 interface StudentIssueReportsProps {
   user: User;
@@ -16,6 +21,9 @@ const StudentIssueReports: React.FC<StudentIssueReportsProps> = ({ user }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [screenshotUrls, setScreenshotUrls] = useState<Record<string, string>>({});
+  const [loadingScreenshotId, setLoadingScreenshotId] = useState<string | null>(null);
+  const [screenshotErrors, setScreenshotErrors] = useState<Record<string, string>>({});
   const screenshotInputRef = useRef<HTMLInputElement>(null);
 
   const loadReports = useCallback(async () => {
@@ -64,6 +72,23 @@ const StudentIssueReports: React.FC<StudentIssueReportsProps> = ({ user }) => {
         : 'Could not submit your issue. Check your connection and Firestore permissions, then try again.');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleViewScreenshot = async (report: IssueReport) => {
+    setLoadingScreenshotId(report.id);
+    setScreenshotErrors(previous => ({ ...previous, [report.id]: '' }));
+    try {
+      const url = await getIssueReportScreenshotUrl(report.screenshotPath);
+      setScreenshotUrls(previous => ({ ...previous, [report.id]: url }));
+    } catch (screenshotError) {
+      console.error(`Failed to load screenshot for issue "${report.id}":`, screenshotError);
+      setScreenshotErrors(previous => ({
+        ...previous,
+        [report.id]: 'Could not load this screenshot. Please try again.'
+      }));
+    } finally {
+      setLoadingScreenshotId(null);
     }
   };
 
@@ -206,6 +231,47 @@ const StudentIssueReports: React.FC<StudentIssueReportsProps> = ({ user }) => {
                   </span>
                 </div>
                 <p className="mt-3 whitespace-pre-wrap text-sm text-slate-700">{report.description}</p>
+                {(report.adminComments || []).length > 0 && (
+                  <div className="mt-4 space-y-2">
+                    <h4 className="text-xs font-bold uppercase tracking-wide text-slate-500">Admin response</h4>
+                    {report.adminComments?.map((comment, index) => (
+                      <div key={`${comment.createdAt}-${index}`} className="rounded-lg bg-blue-50 px-3 py-2">
+                        <p className="whitespace-pre-wrap text-sm text-slate-700">{comment.text}</p>
+                        <p className="mt-1 text-[11px] text-slate-500">
+                          {comment.author} · {new Date(comment.createdAt).toLocaleString()}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="mt-3">
+                  {screenshotUrls[report.id] ? (
+                    <a
+                      href={screenshotUrls[report.id]}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm font-bold text-bitwise-700 hover:underline"
+                    >
+                      View attached screenshot ({report.screenshotName})
+                    </a>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={loadingScreenshotId === report.id}
+                      onClick={() => void handleViewScreenshot(report)}
+                      className="text-sm font-bold text-bitwise-700 hover:underline disabled:opacity-50"
+                    >
+                      {loadingScreenshotId === report.id
+                        ? 'Loading screenshot…'
+                        : `View attached screenshot (${report.screenshotName})`}
+                    </button>
+                  )}
+                  {screenshotErrors[report.id] && (
+                    <p role="alert" className="mt-1 text-xs text-rose-700">
+                      {screenshotErrors[report.id]}
+                    </p>
+                  )}
+                </div>
               </article>
             ))}
           </div>

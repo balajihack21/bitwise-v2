@@ -21,6 +21,7 @@ import {
   exportFirestoreToJSON,
   sanitizeStudentAssignments,
   recoverCompletionsFromAcceptedSubmissions,
+  addIssueReportComment,
   fetchIssueReports,
   getIssueReportScreenshotUrl,
   updateIssueReportStatus,
@@ -139,6 +140,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [updatingIssueReportId, setUpdatingIssueReportId] = useState<string | null>(null);
   const [issueScreenshotUrls, setIssueScreenshotUrls] = useState<Record<string, string>>({});
   const [loadingIssueScreenshotId, setLoadingIssueScreenshotId] = useState<string | null>(null);
+  const [issueCommentDrafts, setIssueCommentDrafts] = useState<Record<string, string>>({});
+  const [savingIssueCommentId, setSavingIssueCommentId] = useState<string | null>(null);
 
   // Instructors state
   const [instructors, setInstructors] = useState<InstructorAccount[]>([]);
@@ -1100,6 +1103,31 @@ public class Main {
     }
   };
 
+  const handleAddIssueComment = async (report: IssueReport) => {
+    const text = issueCommentDrafts[report.id] || '';
+    if (!text.trim() || !currentUser || currentUser.role !== 'admin') return;
+    setSavingIssueCommentId(report.id);
+    setIssueReportsError(null);
+    try {
+      const comment = await addIssueReportComment(report.id, currentUser.username, text);
+      setIssueReports(previous => previous.map(item =>
+        item.id === report.id
+          ? {
+              ...item,
+              adminComments: [...(item.adminComments || []), comment],
+              updatedAt: comment.createdAt
+            }
+          : item
+      ));
+      setIssueCommentDrafts(previous => ({ ...previous, [report.id]: '' }));
+    } catch (error) {
+      console.error(`Failed to add a comment to issue "${report.id}":`, error);
+      setIssueReportsError(`Could not add a comment to "${report.title}". Check Firestore access and try again.`);
+    } finally {
+      setSavingIssueCommentId(null);
+    }
+  };
+
   const handleLoadIssueScreenshot = async (report: IssueReport) => {
     setLoadingIssueScreenshotId(report.id);
     setIssueReportsError(null);
@@ -1108,7 +1136,7 @@ public class Main {
       setIssueScreenshotUrls(previous => ({ ...previous, [report.id]: url }));
     } catch (error) {
       console.error(`Failed to load screenshot for issue "${report.id}":`, error);
-      setIssueReportsError(`Could not load the screenshot for "${report.title}". Check Firebase Storage permissions and try again.`);
+      setIssueReportsError(`Could not load the screenshot for "${report.title}". Check screenshot storage access and try again.`);
     } finally {
       setLoadingIssueScreenshotId(null);
     }
@@ -1858,8 +1886,49 @@ solve()`
                             </button>
                           )}
                         </div>
+                        {(report.adminComments || []).length > 0 && (
+                          <div className="mt-4 space-y-2">
+                            <h4 className="text-xs font-bold uppercase tracking-wide text-slate-500">Admin comments</h4>
+                            {report.adminComments?.map((comment, index) => (
+                              <div key={`${comment.createdAt}-${index}`} className="rounded-lg bg-blue-50 px-3 py-2">
+                                <p className="whitespace-pre-wrap text-sm text-slate-700">{comment.text}</p>
+                                <p className="mt-1 text-[11px] text-slate-500">
+                                  {comment.author} · {new Date(comment.createdAt).toLocaleString()}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {currentUser?.role === 'admin' && (
+                          <div className="mt-4">
+                            <label htmlFor={`issue-comment-${report.id}`} className="block text-xs font-bold text-slate-600">
+                              Add a comment for the student
+                            </label>
+                            <textarea
+                              id={`issue-comment-${report.id}`}
+                              maxLength={2000}
+                              rows={2}
+                              value={issueCommentDrafts[report.id] || ''}
+                              onChange={event => setIssueCommentDrafts(previous => ({
+                                ...previous,
+                                [report.id]: event.target.value
+                              }))}
+                              placeholder="Write an update or ask the student for more information…"
+                              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                            />
+                            <button
+                              type="button"
+                              disabled={!issueCommentDrafts[report.id]?.trim() || savingIssueCommentId === report.id}
+                              onClick={() => void handleAddIssueComment(report)}
+                              className="mt-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {savingIssueCommentId === report.id ? 'Posting…' : 'Post comment'}
+                            </button>
+                          </div>
+                        )}
                       </div>
-                      <label className="shrink-0 text-xs font-semibold text-slate-600">
+                      <div className="shrink-0">
+                      <label className="block text-xs font-semibold text-slate-600">
                         Status
                         <select
                           value={report.status}
@@ -1872,6 +1941,17 @@ solve()`
                           <option value="CLOSED">Closed</option>
                         </select>
                       </label>
+                      {report.status !== 'CLOSED' && currentUser?.role === 'admin' && (
+                        <button
+                          type="button"
+                          disabled={updatingIssueReportId === report.id}
+                          onClick={() => void handleIssueStatusChange(report, 'CLOSED')}
+                          className="mt-2 w-full rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+                        >
+                          {updatingIssueReportId === report.id ? 'Closing…' : 'Close issue'}
+                        </button>
+                      )}
+                      </div>
                     </div>
                   </article>
                 ))}

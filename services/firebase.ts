@@ -20,7 +20,8 @@ import {
   setDoc, 
   updateDoc, 
   collection, 
-  getDocs, 
+  arrayUnion,
+  getDocs,
   runTransaction,
   query, 
   where, 
@@ -2329,10 +2330,20 @@ export interface IssueReport {
   category: string;
   screenshotPath: string;
   screenshotName: string;
+  adminComments?: IssueReportComment[];
   status: IssueReportStatus;
   createdAt: string;
   updatedAt: string;
 }
+
+export interface IssueReportComment {
+  author: string;
+  text: string;
+  createdAt: string;
+}
+
+const CLOUDINARY_CLOUD_NAME = 'jxs8uwij';
+const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
 
 export const submitIssueReport = async (
   user: User,
@@ -2355,42 +2366,63 @@ export const submitIssueReport = async (
   if (screenshot.size > 5 * 1024 * 1024) {
     throw new Error('The screenshot must be 5 MB or smaller.');
   }
+  if (!CLOUDINARY_UPLOAD_PRESET) {
+    throw new Error('Screenshot uploads are not configured. Set the Cloudinary upload preset and try again.');
+  }
 
   const now = new Date().toISOString();
-  const screenshotPath = `issue-reports/${user.uid}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}-${screenshot.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-  const screenshotRef = ref(storage, screenshotPath);
-  await uploadBytes(screenshotRef, screenshot, { contentType: screenshot.type });
-  try {
-    await addDoc(collection(db, 'issue_reports'), sanitizeForFirestore({
-      userId: user.uid,
-      studentName: user.username,
-      studentEmail: user.email || '',
-      registrationNumber: user.regNo || '',
-      department: user.dept || '',
-      section: user.section || '',
-      year: user.year || '',
-      title: cleanTitle.slice(0, 120),
-      description: cleanDescription.slice(0, 4000),
-      category: category.trim().slice(0, 60) || 'Other',
-      screenshotPath,
-      screenshotName: screenshot.name.slice(0, 255),
-      status: 'OPEN' satisfies IssueReportStatus,
-      createdAt: now,
-      updatedAt: now
-    }));
-  } catch (error) {
-    await deleteObject(screenshotRef).catch(cleanupError => {
-      console.error('Failed to remove issue screenshot after report creation failed:', cleanupError);
-    });
-    throw error;
+  const uploadData = new FormData();
+  uploadData.append('file', screenshot);
+  uploadData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+  const uploadResponse = await fetch(
+    `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
+    { method: 'POST', body: uploadData }
+  );
+  const uploadResult = await uploadResponse.json() as {
+    secure_url?: string;
+    error?: { message?: string };
+  };
+  if (!uploadResponse.ok || !uploadResult.secure_url) {
+    throw new Error(uploadResult.error?.message || 'Cloudinary could not upload the screenshot. Check the upload preset and try again.');
   }
+  const screenshotPath = uploadResult.secure_url;
+
+  await addDoc(collection(db, 'issue_reports'), sanitizeForFirestore({
+    userId: user.uid,
+    studentName: user.username,
+    studentEmail: user.email || '',
+    registrationNumber: user.regNo || '',
+    department: user.dept || '',
+    section: user.section || '',
+    year: user.year || '',
+    title: cleanTitle.slice(0, 120),
+    description: cleanDescription.slice(0, 4000),
+    category: category.trim().slice(0, 60) || 'Other',
+    screenshotPath,
+    screenshotName: screenshot.name.slice(0, 255),
+    status: 'OPEN' satisfies IssueReportStatus,
+    createdAt: now,
+    updatedAt: now
+  }));
 };
 
 export const getIssueReportScreenshotUrl = async (screenshotPath: string): Promise<string> => {
-  if (!screenshotPath.startsWith('issue-reports/')) {
-    throw new Error('Invalid issue screenshot path.');
+  if (screenshotPath.startsWith('issue-reports/')) {
+    return getDownloadURL(ref(storage, screenshotPath));
   }
-  return getDownloadURL(ref(storage, screenshotPath));
+  try {
+    const url = new URL(screenshotPath);
+    if (
+      url.protocol === 'https:' &&
+      url.hostname === 'res.cloudinary.com' &&
+      url.pathname.startsWith(`/${CLOUDINARY_CLOUD_NAME}/image/upload/`)
+    ) {
+      return url.toString();
+    }
+  } catch {
+    // Report data may contain an invalid URL; reject it below.
+  }
+  throw new Error('Invalid issue screenshot path.');
 };
 
 export const fetchIssueReports = async (): Promise<IssueReport[]> => {
@@ -2419,6 +2451,30 @@ export const updateIssueReportStatus = async (
     status,
     updatedAt: new Date().toISOString()
   });
+};
+
+export const addIssueReportComment = async (
+  reportId: string,
+  author: string,
+  text: string
+): Promise<IssueReportComment> => {
+  const cleanText = text.trim();
+  if (!reportId || !author.trim() || !cleanText) {
+    throw new Error('A report, admin name, and comment are required.');
+  }
+  if (cleanText.length > 2000) {
+    throw new Error('Comments must be 2,000 characters or fewer.');
+  }
+  const comment: IssueReportComment = {
+    author: author.trim().slice(0, 120),
+    text: cleanText,
+    createdAt: new Date().toISOString()
+  };
+  await updateDoc(doc(db, 'issue_reports', reportId), {
+    adminComments: arrayUnion(comment),
+    updatedAt: comment.createdAt
+  });
+  return comment;
 };
 
 export const fetchStudentPracticeSubmissionsFromFirestore = async (userId: string): Promise<SubmissionRecord[]> => {
